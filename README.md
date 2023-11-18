@@ -19,6 +19,7 @@ This project requires the installation of the **mariadb** (required by the maria
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*Position*<br/>
   From the **Skills** table by filling all the tables with your data!
+6. Run: `pip install -r requrements.txt`
 
 ## Execute
 1. `python pylaform.py --help`
