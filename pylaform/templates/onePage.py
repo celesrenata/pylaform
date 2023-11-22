@@ -47,10 +47,10 @@ class Generator:
         
         # Start Page
         # Contact Information
-        self.common.contact_header(self.doc)
+        self.common.modern_contact_header(self.doc)
 
         # Summary
-        self.common.summary_details(self.doc)
+        self.common.modern_summary_details(self.doc)
         
         # Skills
         with self.doc.create(Section("Skills", False)):

@@ -1,5 +1,5 @@
 from pylaform.utilities.argParse import argument_parser
-from pylaform.templates import onePage
+from pylaform.templates import hybrid, onePage
 
 
 def main():
@@ -15,9 +15,8 @@ def main():
             generator = onePage.Generator()
             generator.run()
         case "hybrid":
-            # generator = onePager.Generator()
-            # generator.run()
-            print("Coming Soon!")
+            generator = hybrid.Generator()
+            generator.run()
         case "chronological":
             # generator = onePager.Generator()
             # generator.run()

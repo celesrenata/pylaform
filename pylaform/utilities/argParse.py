@@ -11,7 +11,7 @@ def argument_parser():
         "--template",
         type=str,
         required=False,
-        choices=['one-page', 'hybrid' 'chronological', 'functional'],
+        choices=['one-page', 'hybrid', 'chronological', 'functional'],
         help="specifies which template type to generate",
     )
 

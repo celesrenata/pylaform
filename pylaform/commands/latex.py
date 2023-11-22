@@ -43,7 +43,7 @@ class Commands:
         return datetime.strftime(date_date, "%B %Y")
 
     @staticmethod
-    def hyperlink(url, text):
+    def hyperlink(text, url):
         """
         Create a hyperlink in the document
         :param str url:
@@ -71,10 +71,11 @@ class Commands:
     def hspace(size):
         return NoEscape(r"\nobreak\hspace{" + str(size) + r" em}")
 
-    def glossary_inject(self, text):
+    def glossary_inject(self, text, link_type):
         """
         Scan source text for matching substrings and add pdfcomments to them.
         :param str text: source text
+        :param str link_type: available options are modern and retro
         :return: Any
         """
 
@@ -87,8 +88,13 @@ class Commands:
                 rez = [m.groupdict() for m in term_sub.finditer(updated_text)]
                 for item in rez:
                     print(item["all"])
-                updated_text = updated_text.replace(
-                    term, Commands.textbox(
-                        term, [sub['description'] for sub in glossary if sub['term'] == term][0]))
+                if link_type == "modern":
+                    updated_text = updated_text.replace(
+                        term, Commands.textbox(
+                            term, [sub['description'] for sub in glossary if sub['term'] == term][0]))
+                else:
+                    updated_text = updated_text.replace(
+                        term, Commands.hyperlink(
+                            term, [sub['url'] for sub in glossary if sub['term'] == term][0]))
 
         return updated_text

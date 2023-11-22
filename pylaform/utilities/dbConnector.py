@@ -70,7 +70,6 @@ class Queries:
 
         return self.result_identification
 
-
     def summary(self):
         """
             Return glossary list objects from database
@@ -93,6 +92,7 @@ class Queries:
                 })
 
         return self.result_summary
+
     def skills(self):
         """
             Return unrefined skills list from database
@@ -102,14 +102,15 @@ class Queries:
         if len(self.result_skills) == 0:
             result = self.query(
                 """
-                    SELECT category, position, short_description, long_description
+                    SELECT category, subcategory, position, short_description, long_description
                     FROM skills
                     ORDER BY category, short_description ASC
                 """
             )
 
-            for category, position, short_desc, long_desc in result:
+            for category, subcategory, position, short_desc, long_desc in result:
                 self.result_skills.append({
+                    "subcategory": subcategory,
                     "category": category,
                     "position": position,
                     "short_desc": short_desc,
