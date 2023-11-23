@@ -1,4 +1,5 @@
 from pylaform.commands.latex import Commands
+from pylaform.utilities.commands import flatten
 from pylaform.utilities.dbCommands import Queries
 from pylatex import Document, Itemize, NewLine, Package, Section, Subsection, Tabular, Tabularx
 from pylatex.utils import bold, italic, NoEscape
@@ -21,48 +22,52 @@ class Common:
         :return:
         """
 
-        phone = self.resume_data.get_identification()["phone"]
-        with doc.create(Section(self.resume_data.get_identification()["name"], False)):
+        data = flatten(self.resume_data.get_identification())
+        phone = data['phone']["value"]
+        phone_number = f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}",
+        with doc.create(Section(data["name"]["value"] if data["name"]["state"] else "", False)):
             doc.append(self.cmd.vspace("-0.12"))
             with doc.create(Tabularx("X X")) as table1:
                 table1.add_hline()
                 table1.add_row((
                     self.cmd.hyperlink(
-                        self.resume_data.get_identification()["www"],
+                        data["www"]["value"] if data["www"]["state"] else "",
                         "https://"
-                        + self.resume_data.get_identification()["www"]),
+                        + data["www"]["value"] if data["www"]["state"] else ""),
                     "",
                 ))
             doc.append(self.cmd.vspace("-0.1"))
             doc.append(self.cmd.hspace("-24.0"))
             with doc.create(Tabular("r r r")) as table2:
                 table2.add_row((
-                    f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}",
-                    f"{self.resume_data.get_identification()['email']}",
-                    f"{self.resume_data.get_identification()['location']}"))
+                    f"{phone_number if data['phone']['state'] else ''}",
+                    f"{data['email']['value'] if data['email']['state'] else ''}",
+                    f"{data['location']['value'] if data['location']['state'] else ''}"))
 
     def retro_contact_header(self, doc):
         """
         Print header containing the retro contact information
         :return:
         """
-        phone_sub = self.resume_data.get_identification()['phone']
-        phone_number = italic("Phone:  ") + f"({phone_sub[0:3]}) {phone_sub[3:6]}-{phone_sub[6:10]}"
+
+        data = flatten(self.resume_data.get_identification())
+        name = data['name']['value']
+        phone = data['phone']["value"]
+        phone_number = italic("Phone:  ") + f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}"
         email = italic("E-mail:  ") + self.cmd.hyperlink(
-                self.resume_data.get_identification()['email'], "mailto:" + self.resume_data.get_identification()['email'])
+                data['email']['value'], "mailto:" + data['email']['value'])
         www = italic("WWW: ") + self.cmd.hyperlink(
-            self.resume_data.get_identification()['www'], "https://" + self.resume_data.get_identification()['www'])
+            data['www']['value'], "https://" + data['www']['value'])
 
         # Start Writing
-        doc.append(NoEscape(r"\name{" + self.resume_data.get_identification()['name'] + r"}") + self.cmd.vspace("0.1"))
-
+        doc.append(NoEscape(r"\name{" + f"{name if data['name']['state'] else ''}" + r"}") + self.cmd.vspace("0.1"))
         doc.append(NoEscape(r"\begin{resume}"))
         doc.append(NoEscape(r"\section{\sc Contact Information}"))
         doc.append(self.cmd.vspace(".05"))
         with doc.create(Tabular("l")) as table1:
-            table1.add_row([NoEscape(phone_number)])
-            table1.add_row([NoEscape(email)])
-            table1.add_row([NoEscape(www)])
+            table1.add_row([NoEscape(phone_number if data['phone']['state'] else '')])
+            table1.add_row([NoEscape(email if data['email']['state'] else '')])
+            table1.add_row([NoEscape(www if data['www']['state'] else '')])
 
     def modern_summary_details(self, doc):
         """
@@ -91,7 +96,6 @@ class Common:
             doc.append(NoEscape(
                 r"\textbf{" + summary["short_desc"] + r":} " + self.cmd.glossary_inject(summary["long_desc"], "retro")))
             doc.append(NewLine())
-        doc.append(NoEscape(r"\end{itemize}"))
 
     def retro_skills(self, doc):
         """
@@ -161,12 +165,13 @@ class Common:
                     doc.append(NoEscape(
                         r"{\em "
                         + position['position']
-                        + r"} \hfill {\textbf {"
+                        + r"} \hfill {"
+                        + r"\textbf {"
                         + self.cmd.format_date(position['start_date'])
                         + r" {--} "
                         + self.cmd.format_date(position['end_date'])
                         + r"}}"))
-                    # doc.append(NewLine())
+                    #doc.append(NewLine())
                     doc.append(NoEscape(r"\begin{list2}"))
                     for achievement in self.resume_data.get_achievements():
                         if employer == achievement["employer"] and position["position"] == achievement["position"]:

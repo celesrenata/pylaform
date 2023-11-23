@@ -78,4 +78,4 @@ class Generator:
         :return: 
         """
         
-        self.doc.generate_pdf('full', clean_tex=True)
+        self.doc.generate_pdf('data/one-page', clean_tex=True)

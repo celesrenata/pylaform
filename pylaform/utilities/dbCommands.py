@@ -59,10 +59,8 @@ class Queries:
         if len(self.result_certification) == 0:
             result = self.query(
                 """
-                    SELECT c.certification, c.year, en.state
-                    FROM certifications AS c
-                    JOIN enabled AS en on c.id = en.id
-                    WHERE en.group_name = "certification"
+                    SELECT certification, year, state
+                    FROM certifications
                 """)
 
             for certification, year, state in result:
@@ -83,22 +81,20 @@ class Queries:
         if len(self.result_positions) == 0:
             result = self.query(
                 """
-                    SELECT s.school, s.focus, f.start_date, f.end_date
+                    SELECT s.school, s.state, f.focus, f.start_date, f.end_date, f.state
                     FROM schools AS s
                     JOIN focus AS f on s.id = f.school
-                    JOIN enabled AS en on s.id = en.id
-                    WHERE en.gruop_name = "education"
                     ORDER BY f.start_date DESC
                 """
             )
 
-            for school, focus, start_date, end_date, enabled in result:
+            for school, focus, start_date, end_date, state in result:
                 self.result_positions.append({
                     "school": school,
                     "focus": focus,
                     "start_date": start_date,
                     "end_date": end_date,
-                    "enabled": enabled,
+                    "state": state,
                 })
 
         return self.result_positions
@@ -113,10 +109,8 @@ class Queries:
         if len(self.result_identification) == 0:
             result = self.query(
                 """
-                    SELECT i.attr, i.value, en.state
-                    FROM identification AS i
-                    JOIN enabled AS en on i.id = en.id
-                    WHERE en.group_name = "identification"
+                    SELECT attr, value, state
+                    FROM identification
                 """)
 
             for attr, value, state in result:
@@ -137,11 +131,9 @@ class Queries:
         if len(self.result_summary) == 0:
             result = self.query(
                 """
-                    SELECT s.short_desc, s.long_desc, en.state
-                    FROM summary AS s
-                    JOIN enabled AS en on s.id = en.id
-                    WHERE en.group_name = "summary"
-                    ORDER BY s.order ASC
+                    SELECT short_desc, long_desc, state
+                    FROM summary
+                    ORDER BY summaryorder ASC
                 """
             )
 
@@ -163,11 +155,9 @@ class Queries:
         if len(self.result_skills) == 0:
             result = self.query(
                 """
-                    SELECT s.category, s.subcategory, s.position, s.short_description, s.long_description, en.state
-                    FROM skills AS s
-                    JOIN enabled AS en on s.id = en.id
-                    WHERE en.group_name = "skills"
-                    ORDER BY s.categoryorder, s.skillorder ASC
+                    SELECT category, subcategory, position, short_description, long_description, state
+                    FROM skills
+                    ORDER BY categoryorder, skillorder ASC
                 """
             )
 
@@ -192,11 +182,9 @@ class Queries:
         if len(self.result_glossary) == 0:
             result = self.query(
                 """
-                    SELECT g.term, g.url, g.description, en.state
-                    FROM glossary AS g
-                    JOIN enabled AS en on g.id = en.id
-                    WHERE en.group_name = "glossary"
-                    ORDER BY g.term ASC
+                    SELECT term, url, description, state
+                    FROM glossary
+                    ORDER BY term ASC
                 """
             )
 
@@ -219,22 +207,21 @@ class Queries:
         if len(self.result_positions) == 0:
             result = self.query(
                 """
-                    SELECT e.employer, p.position, p.start_date, p.end_date, en.state
+                    SELECT e.employer, e.state, p.position, p.start_date, p.end_date, p.state
                     FROM employers AS e
                     JOIN positions AS p on e.id = p.employer
-                    JOIN enabled as en on p.id = en.id
-                    WHERE en.group_name = "positions"
                     ORDER BY p.start_date DESC
                 """
             )
 
-            for employer, position, start_date, end_date, state in result:
+            for employer, employer_state, position, start_date, end_date, position_state in result:
                 self.result_positions.append({
                     "employer": employer,
+                    "employer_state": employer_state,
                     "position": position,
                     "start_date": start_date,
                     "end_date": end_date,
-                    "state": state,
+                    "position_state": position_state,
                 })
 
         return self.result_positions
@@ -248,12 +235,10 @@ class Queries:
         if len(self.result_achievements) == 0:
             result = self.query(
                 """
-                    SELECT e.employer, p.position, a.short_description, a.long_description, en.state
+                    SELECT e.employer, p.position, a.short_description, a.long_description, a.state
                     FROM employers AS e
                     JOIN positions AS p ON e.id = p.employer
                     JOIN achievements AS a ON p.id = a.position
-                    JOIN enabled AS en ON a.id = en.id
-                    WHERE en.group_name = "achievements"
                     ORDER BY p.start_date DESC
                 """
             )
@@ -285,10 +270,14 @@ class Queries:
             )
 
             for group, row_id, state in result:
+                if state == 1:
+                    state_bool = True
+                else:
+                    state_bool = False
                 self.result_enabled.append({
                     "group": group,
                     "id": row_id,
-                    "state": state,
+                    "state": state_bool,
                 })
 
         return self.result_enabled

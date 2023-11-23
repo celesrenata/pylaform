@@ -122,5 +122,5 @@ class Generator:
         :return:
         """
 
-        self.doc.generate_pdf('full', clean_tex=True)
-        self.doc.generate_tex('tex')
+        self.doc.generate_pdf('data/hybrid', clean_tex=True)
+        self.doc.generate_tex('data/hybrid')

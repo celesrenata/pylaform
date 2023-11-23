@@ -83,11 +83,7 @@ class Commands:
         search_terms = Commands.unique([sub['term'] for sub in glossary])
         updated_text = r"" + text
         for term in search_terms:
-            if re.search(term, text):
-                term_sub = re.compile(r'(?P<all>(\w*)\s*' + re.escape(term) + r'\s*(\w*))')
-                rez = [m.groupdict() for m in term_sub.finditer(updated_text)]
-                for item in rez:
-                    print(item["all"])
+            if re.search(f" {term} ", text):
                 if link_type == "modern":
                     updated_text = updated_text.replace(
                         term, Commands.textbox(

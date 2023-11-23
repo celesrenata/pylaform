@@ -12,7 +12,7 @@
             <input type="checkbox" name="name_enabled" {{ "checked" if name['state'] }} %}>
             <br>
 
-            <label for="Phone Number"></label>
+            <label for="phone">Phone Number</label>
             <br>
             <input type="text" name="phone"
                    placeholder="1234567890"
@@ -21,7 +21,7 @@
             <input type="checkbox" name="phone_enabled" {{ "checked" if phone['state'] }} %}>
             <br>
 
-            <label for="Website"></label>
+            <label for="www">Website</label>
             <br>
             <input type="text" name="www"
                    placeholder="example.com"
@@ -30,6 +30,8 @@
             <input type="checkbox" name="www_enabled" {{ "checked" if www['state'] }} %}>
             <br>
 
+            <label for="description">Resume Description</label>
+            <br>
             <textarea name="description"
                       placeholder="Purpose of this resume/CV"
                       rows="15"
@@ -37,7 +39,7 @@
                       >{{ description['value'] }}</textarea>
             <br>
 
-            <label for="email"></label>
+            <label for="email">Email</label>
             <br>
             <input type="text" name="email"
                    placeholder="john@example.com"
@@ -46,7 +48,7 @@
             <input type="checkbox" name="email_enabled" {{ "checked" if email['state'] }} %}>
             <br>
 
-            <label for="location"></label>
+            <label for="location">Location</label>
             <br>
             <input type="text" name="location"
                    placeholder="Seattle, WA"

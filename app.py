@@ -1,6 +1,9 @@
+import os
+
 from pylaform.utilities.dbCommands import Queries
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, send_from_directory
 from pylaform.utilities.commands import flatten
+from pylaform.latex_templates import hybrid, onePage
 
 app = Flask(__name__,
             static_url_path="",
@@ -8,6 +11,7 @@ app = Flask(__name__,
             template_folder="pylaform/templates")
 
 resume_data = Queries()
+uploads = os.path.join(app.root_path, 'data')
 
 
 @app.route("/")
@@ -52,36 +56,19 @@ def glossary():
     return render_template("glossary.html", **flatten(resume_data.get_glossary()))
 
 
+@app.route("/generate/one-page", methods=["GET"])
+def one_page_doc():
+    generator = onePage.Generator()
+    generator.run()
+    return send_from_directory(uploads, 'one-page.pdf')
+
+
+@app.route("/generate/hybrid", methods=["GET"])
+def hybrid_doc():
+    generator = hybrid.Generator()
+    generator.run()
+    return send_from_directory(uploads, 'hybrid.pdf')
+
+
 if __name__ == '__main__':
     app.run(debug=True)
-
-# def main():
-#     """
-#     Pylaform is a resume generator backed by mariadb
-#     :return: None
-#     """
-#
-#     args = argument_parser()
-#
-#     match str(args.template):
-#         case "one-page":
-#             generator = onePage.Generator()
-#             generator.run()
-#         case "hybrid":
-#             generator = hybrid.Generator()
-#             generator.run()
-#         case "chronological":
-#             # generator = onePager.Generator()
-#             # generator.run()
-#             print("Coming Soon!")
-#         case "functional":
-#             # generator = onePager.Generator()
-#             # generator.run()
-#             print("Coming Soon!")
-#         case _:
-#             print("Run --help argument for options")
-#
-#
- # if __name__ == "__main__":
-     # main()
-
