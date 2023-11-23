@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% if name is not defined %}
+    {% set title = "Welcome" %}
+{% else %}
+    {% set title = name['value'] %}
+{% endif %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>Welcome to Pylaform!</h1>
+    <p>The purpose of this application is to help you improve your resume and your resume skills by leveraging
+    scripted templates and chatGPT</p>
+    <div class="container align-items-center">
+        <div class="row align-items-center">
+            <ul style="list-style-type:none;">
+                <li>
+                    <h2 class="text-center">Resume Notes</h2>
+                </li>
+                <li>
+                    <p class="text-center"><b>{{ description['value'] }}</b></p>
+                </li>
+                <li>
+                    <h2 class="text-center">Generate Resume/CV</h2>
+                </li>
+                <li>
+                    <p class="text-center">
+                        <a href="#" class="btn btn-lg btn-secondary">Short</a>
+                    </p>
+                </li>
+                <li>
+                    <p class="text-center">
+                        <a href="#" class="btn btn-lg btn-secondary">Hybrid</a>
+                    </p>
+                </li>
+            </ul>
+        </div>
+    </div>
+{% endblock %}

@@ -1,5 +1,5 @@
 from pylaform.commands.latex import Commands
-from pylaform.utilities.dbConnector import Queries
+from pylaform.utilities.dbCommands import Queries
 from pylatex import Document, Package, Section, Subsection
 from pylatex.utils import NoEscape
 from tenacity import stop_after_delay, retry
@@ -54,11 +54,11 @@ class Generator:
         
         # Skills
         with self.doc.create(Section("Skills", False)):
-            categories = self.cmd.unique([sub['category'] for sub in self.resume_data.skills()])
+            categories = self.cmd.unique([sub['category'] for sub in self.resume_data.get_skills()])
             for category in categories:
                 with self.doc.create(Subsection(category, False)) as skill_sub:
                     skill_sub.append(NoEscape(r'\begin{itemize*}'))
-                    for skill in self.resume_data.skills():
+                    for skill in self.resume_data.get_skills():
                         if category == skill['category']:
                             skill_sub.append(NoEscape(r'\item'))
                             skill_sub.append(self.cmd.textbox(skill['short_desc'], skill['long_desc']))

@@ -1,5 +1,5 @@
 from datetime import datetime
-from pylaform.utilities.dbConnector import Queries
+from pylaform.utilities.dbCommands import Queries
 from pylatex import escape_latex, NoEscape
 import re
 
@@ -79,7 +79,7 @@ class Commands:
         :return: Any
         """
 
-        glossary = self.queries.glossary()
+        glossary = self.queries.get_glossary()
         search_terms = Commands.unique([sub['term'] for sub in glossary])
         updated_text = r"" + text
         for term in search_terms:
