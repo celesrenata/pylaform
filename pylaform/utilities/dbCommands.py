@@ -1,7 +1,9 @@
 import json
+
 import mariadb
+from datetime import datetime
 from tenacity import retry, stop_after_delay
-from werkzeug.datastructures import ImmutableMultiDict
+from .commands import transform_get_id
 
 
 class Queries:
@@ -55,22 +57,28 @@ class Queries:
         Return certification list from database
         :return: list
         """
-
         if len(self.result_certification) == 0:
             result = self.query(
                 """
-                    SELECT certification, year, state
+                    SELECT id, certification, year, state
                     FROM certifications
                 """)
 
-            for certification, year, state in result:
+            for certification_id, certification, year, state in result:
                 self.result_certification.append({
-                    "certification": certification,
-                    "year": year,
+                    "id": certification_id,
+                    "attr": "certification",
+                    "value": certification,
+                    "state": state,
+                })
+                self.result_certification.append({
+                    "id": certification_id,
+                    "attr": "year",
+                    "value": year,
                     "state": state,
                 })
 
-            return self.result_certification
+        return self.result_certification
 
     def get_education(self):
         """
@@ -81,16 +89,18 @@ class Queries:
         if len(self.result_positions) == 0:
             result = self.query(
                 """
-                    SELECT s.school, s.state, f.focus, f.start_date, f.end_date, f.state
+                    SELECT s.id, s.school, s.state, f.id, f.focus, f.start_date, f.end_date, f.state
                     FROM schools AS s
                     JOIN focus AS f on s.id = f.school
                     ORDER BY f.start_date DESC
                 """
             )
 
-            for school, focus, start_date, end_date, state in result:
+            for school_id, school, focus_id, focus, start_date, end_date, state in result:
                 self.result_positions.append({
+                    "school_id": school_id,
                     "school": school,
+                    "focus_id": focus_id,
                     "focus": focus,
                     "start_date": start_date,
                     "end_date": end_date,
@@ -109,12 +119,13 @@ class Queries:
         if len(self.result_identification) == 0:
             result = self.query(
                 """
-                    SELECT attr, value, state
+                    SELECT id, attr, value, state
                     FROM identification
                 """)
 
-            for attr, value, state in result:
+            for identification_id, attr, value, state in result:
                 self.result_identification.append({
+                    "id": identification_id,
                     "attr": attr,
                     "value": value,
                     "state": state,
@@ -131,16 +142,23 @@ class Queries:
         if len(self.result_summary) == 0:
             result = self.query(
                 """
-                    SELECT short_desc, long_desc, state
+                    SELECT id, shortdesc, longdesc, state
                     FROM summary
                     ORDER BY summaryorder ASC
                 """
             )
 
-            for short_desc, long_desc, state in result:
+            for summary_id, shortdesc, longdesc, state in result:
                 self.result_summary.append({
-                    "short_desc": short_desc,
-                    "long_desc": long_desc,
+                    "id": summary_id,
+                    "attr": "shortdesc",
+                    "value": shortdesc,
+                    "state": state,
+                })
+                self.result_summary.append({
+                    "id": summary_id,
+                    "attr": "longdesc",
+                    "value": longdesc,
                     "state": state,
                 })
 
@@ -155,19 +173,20 @@ class Queries:
         if len(self.result_skills) == 0:
             result = self.query(
                 """
-                    SELECT category, subcategory, position, short_description, long_description, state
+                    SELECT id, category, subcategory, position, shortdescription, longdescription, state
                     FROM skills
                     ORDER BY categoryorder, skillorder ASC
                 """
             )
 
-            for category, subcategory, position, short_desc, long_desc, state in result:
+            for skills_id, category, subcategory, position, shortdesc, longdesc, state in result:
                 self.result_skills.append({
+                    "id": skills_id,
                     "subcategory": subcategory,
                     "category": category,
                     "position": position,
-                    "short_desc": short_desc,
-                    "long_desc": long_desc,
+                    "shortdesc": shortdesc,
+                    "longdesc": longdesc,
                     "state": state
                 })
 
@@ -182,17 +201,29 @@ class Queries:
         if len(self.result_glossary) == 0:
             result = self.query(
                 """
-                    SELECT term, url, description, state
+                    SELECT id, term, url, description, state
                     FROM glossary
                     ORDER BY term ASC
                 """
             )
 
-            for term, url, description, state in result:
+            for glossary_id, term, url, description, state in result:
                 self.result_glossary.append({
-                    "term": term,
-                    "url": url,
-                    "description": description,
+                    "id": glossary_id,
+                    "attr": "term",
+                    "value": term,
+                    "state": state,
+                })
+                self.result_glossary.append({
+                    "id": glossary_id,
+                    "attr": "url",
+                    "value": url,
+                    "state": state,
+                })
+                self.result_glossary.append({
+                    "id": glossary_id,
+                    "attr": "description",
+                    "value": description,
                     "state": state,
                 })
 
@@ -207,17 +238,19 @@ class Queries:
         if len(self.result_positions) == 0:
             result = self.query(
                 """
-                    SELECT e.employer, e.state, p.position, p.start_date, p.end_date, p.state
+                    SELECT e.id, e.employer, e.state, p.id, p.position, p.start_date, p.end_date, p.state
                     FROM employers AS e
                     JOIN positions AS p on e.id = p.employer
                     ORDER BY p.start_date DESC
                 """
             )
 
-            for employer, employer_state, position, start_date, end_date, position_state in result:
+            for employer_id, employer, employer_state, position_id, position, start_date, end_date, position_state in result:
                 self.result_positions.append({
+                    "employer_id": employer_id,
                     "employer": employer,
                     "employer_state": employer_state,
+                    "position_id": position_id,
                     "position": position,
                     "start_date": start_date,
                     "end_date": end_date,
@@ -235,7 +268,7 @@ class Queries:
         if len(self.result_achievements) == 0:
             result = self.query(
                 """
-                    SELECT e.employer, p.position, a.short_description, a.long_description, a.state
+                    SELECT e.id, e.employer, p.id, p.position, a.id, a.shortdesc, a.longdesc, a.state
                     FROM employers AS e
                     JOIN positions AS p ON e.id = p.employer
                     JOIN achievements AS a ON p.id = a.position
@@ -243,12 +276,15 @@ class Queries:
                 """
             )
 
-            for employer, position, short_desc, long_desc, state in result:
+            for employer_id, employer, position_id, position, achievment_id, shortdesc, longdesc, state in result:
                 self.result_achievements.append({
+                    "employer_id": employer_id,
                     "employer": employer,
+                    "position_id": position_id,
                     "position": position,
-                    "short_desc": short_desc,
-                    "long_desc": long_desc,
+                    "achievement_id": achievment_id,
+                    "shortdesc": shortdesc,
+                    "longdesc": longdesc,
                     "state": state,
                 })
 
@@ -289,11 +325,42 @@ class Queries:
         :return: None
         """
 
-        for i, name in enumerate(form_data):
-            if "_enabled" not in name:
+        form_data = transform_get_id(form_data)
+        for item in form_data:
+            self.cursor.execute(
+                f"""
+                    UPDATE identification
+                    SET value = '{item['value']}',
+                    state = {item['state']}
+                    WHERE id = {item['id']}
+                """)
+        self.conn.commit()
+        self.result_identification = []
+
+    def update_certifications(self, form_data):
+        """
+        Update certification table
+        :return: list
+        """
+
+        form_data = transform_get_id(form_data)
+        certifications = [{sub['id']: {"certification": sub['certification'], "year": datetime(sub['year']).isoformat(), "state": sub['state'], "is_new": sub['is_new']}} for sub in form_data]
+        for certification in certifications:
+            if cert['is_new']:
+                self.cursor.execute(
+                    f"""INSERT INTO certifications (id, certification, year, state)
+                    VALUES (cert['id'], cert['certification'], cert['year'], cert['state'])"""
+                )
+            else:
                 self.cursor.execute(
                     f"""
-                    UPDATE `identification`
-                    SET `value` = '{self.conn.escape_string(list(form_data.listvalues())[i][0])}'
-                    WHERE `attr` = '{name}';""")
-                self.result_identification = []
+                        UPDATE certifications
+                        SET certification = '{cert['certification']}',
+                        year = '{cert['year']}',
+                        state = {sub['state']}
+                        WHERE id = {cert['id']}
+                    """
+                )
+
+        self.conn.commit()
+        self.result_certification = []

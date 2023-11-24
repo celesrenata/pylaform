@@ -7,16 +7,18 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+" crossorigin="anonymous"></script>
-    <title>{% block title %}{% endblock %}</title>
+    {% set ns = namespace(title="Welcome") %}
+    {% for item in payload %}
+        {% if item['attr'] == 'name' %}
+            {% if item['value'] is defined %}
+                {% set ns.title = item['value'] %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+    <title>{{ ns.title }}</title>
 </head>
 <body>
-
-
-
-
     <link rel=stylesheet type=text/css href="{{ url_for('static', filename='/styles/theme.scss') }}">
-
-
 
     <div class="container-fluid">
         <div class="row flex-nowrap">
@@ -37,32 +39,37 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="education.html" class="nav-link align-middle px-0">
+                            <a href="/summary" class="nav-link align-middle px-0">
+                                <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Summary</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/education" class="nav-link align-middle px-0">
                                 <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Education</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="certifications.html" class="nav-link align-middle px-0">
+                            <a href="/certifications" class="nav-link align-middle px-0">
                                 <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Certifications</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="skills.html" class="nav-link align-middle px-0">
+                            <a href="/skills" class="nav-link align-middle px-0">
                                 <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Skills</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="employment.html" class="nav-link align-middle px-0">
+                            <a href="/employment" class="nav-link align-middle px-0">
                                 <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Employment History</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="achievements.html" class="nav-link align-middle px-0">
+                            <a href="/achievements" class="nav-link align-middle px-0">
                                 <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Achievements</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="glossary.html" class="nav-link align-middle px-0">
+                            <a href="/glossary" class="nav-link align-middle px-0">
                                 <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Highlighted Terms</span>
                             </a>
                         </li>

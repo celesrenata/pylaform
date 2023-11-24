@@ -1,11 +1,14 @@
 {% extends "base.html" %}
-{% if name is not defined %}
-    {% set title = "Welcome" %}
-{% else %}
-    {% set title = name['value'] %}
-{% endif %}
+{% set nst = namespace(description="To be filled in by you") %}
+{{ ns.description }}
+{% for item in payload %}
+    {% if item['attr'] == 'description' %}
+        {% if item['value'] is defined %}
+            {% set nst.description = item['value'] %}
+        {% endif %}
+    {% endif %}
+{% endfor %}
 
-{% block title %}{{ title }}{% endblock %}
 {% block content %}
 <h1>Welcome to Pylaform!</h1>
     <p>The purpose of this application is to help you improve your resume and your resume skills by leveraging
@@ -17,7 +20,7 @@
                     <h2 class="text-center">Resume Notes</h2>
                 </li>
                 <li>
-                    <p class="text-center"><b>{{ description['value'] }}</b></p>
+                    <p class="text-center"><b>{{ nst.description }}</b></p>
                 </li>
                 <li>
                     <h2 class="text-center">Generate Resume/CV</h2>

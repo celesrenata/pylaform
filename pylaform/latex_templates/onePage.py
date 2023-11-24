@@ -61,11 +61,11 @@ class Generator:
                     for skill in self.resume_data.get_skills():
                         if category == skill['category']:
                             skill_sub.append(NoEscape(r'\item'))
-                            skill_sub.append(self.cmd.textbox(skill['short_desc'], skill['long_desc']))
+                            skill_sub.append(self.cmd.textbox(skill['shortdesc'], skill['longdesc']))
                     skill_sub.append(NoEscape(r'\end{itemize*}'))
         
         # Work History
-        self.common.work_history(self.doc)
+        self.common.modern_work_history(self.doc)
         
         # End Page
         self.doc.create(NoEscape(r'\end{document}'))
@@ -79,3 +79,4 @@ class Generator:
         """
         
         self.doc.generate_pdf('data/one-page', clean_tex=True)
+        self.doc.generate_tex('data/one-page')

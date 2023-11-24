@@ -1,63 +1,30 @@
 {% extends "base.html" %}
-{% block title %}{{ name }}{% endblock %}
 {% block content %}
     <div class="d-flex align-items-bottom justify-content-center">
         <form method="post">
-            <label for="name">Name</label>
-            <br>
-            <input type="text" name="name"
-                   placeholder="Your name"
-                   value="{{ name['value'] }}"></input>
-            <label for="name_enabled">Enabled</label>
-            <input type="checkbox" name="name_enabled" {{ "checked" if name['state'] }} %}>
-            <br>
-
-            <label for="phone">Phone Number</label>
-            <br>
-            <input type="text" name="phone"
-                   placeholder="1234567890"
-                   value="{{ phone['value'] }}"></input>
-            <label for="phone_enabled">Enabled</label>
-            <input type="checkbox" name="phone_enabled" {{ "checked" if phone['state'] }} %}>
-            <br>
-
-            <label for="www">Website</label>
-            <br>
-            <input type="text" name="www"
-                   placeholder="example.com"
-                   value="{{ www['value'] }}"></input>
-            <label for="www_enabled">Enabled</label>
-            <input type="checkbox" name="www_enabled" {{ "checked" if www['state'] }} %}>
-            <br>
-
-            <label for="description">Resume Description</label>
-            <br>
-            <textarea name="description"
-                      placeholder="Purpose of this resume/CV"
-                      rows="15"
-                      cols="60"
-                      >{{ description['value'] }}</textarea>
-            <br>
-
-            <label for="email">Email</label>
-            <br>
-            <input type="text" name="email"
-                   placeholder="john@example.com"
-                   value="{{ email['value'] }}"></input>
-            <label for="email_enabled">Enabled</label>
-            <input type="checkbox" name="email_enabled" {{ "checked" if email['state'] }} %}>
-            <br>
-
-            <label for="location">Location</label>
-            <br>
-            <input type="text" name="location"
-                   placeholder="Seattle, WA"
-                   value="{{ location['value'] }}"></input>
-            <label for="location_enabled">Enabled</label>
-            <input type="checkbox" name="location_enabled" {{ "checked" if location['state'] }} %}>
-            <br>
-
-            <button type="submit">Submit</button>
+        <ul>
+            {% for item in payload %}
+                <li>
+                    <label for="{{ item['attr'] }}">{{ item['attr'] }}</label>
+                    <br>
+                    {% if item['attr'] == 'description' %}
+                        <textarea name="{{item['id']}}_{{item['attr']}}"
+                                id="{{ item['id'] }}"
+                                rows="10"
+                                cols="60"
+                        >{{ item['value'] if item['value'] is defined else '' }}</textarea>
+                    {% else %}
+                        <input type="text" name="{{item['id']}}_{{item['attr']}}" id="{{ item['id'] }}"
+                               value="{{ item['value'] if item['value'] is defined else '' }}">
+                    {% endif %}
+                    <br>
+                    <label for="{{ item['attr'] }}_enabled">Displayed</label>
+                    <input type="checkbox" name="{{item['id']}}_{{item['attr']}}_enabled"
+                            {{ "checked" if item['state'] }}>
+                </li>
+            {% endfor %}
+        </ul>
+        <button type="submit">Submit</button>
         </form>
     </div>
 {% endblock %}
