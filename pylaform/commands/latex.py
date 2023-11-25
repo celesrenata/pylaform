@@ -40,8 +40,9 @@ class Commands:
         :param Any date_date:
         :return: str
         """
-        if date_date is None:
-            return "Present"
+
+        if datetime.strftime(date_date, "%Y-%m-%d") == '9999-01-01':
+            return ""
         return datetime.strftime(date_date, "%B %Y")
 
     @staticmethod

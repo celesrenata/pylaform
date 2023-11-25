@@ -7,8 +7,8 @@
                 <li>
                     <label for="{{ item['id'] }}_{{ item['attr'] }}">{{ item['attr'] }}</label>
                     <br>
-                    <textarea name="{{item['id']}}_{{ item['attr'] }}"{{ item['value'] }}
-                              id="{{ item['id'] }}"
+                    <textarea name="{{item['id']}}_{{ item['attr'] }}"
+                              id="{{ item['id'] }}_{{ item['attr'] }}"
                               rows="2"
                               cols="100"
                     >{{ item['value'] if item['value'] is defined else '' }}</textarea>

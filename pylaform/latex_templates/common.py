@@ -1,5 +1,7 @@
+from itertools import count
+
 from pylaform.commands.latex import Commands
-from pylaform.utilities.commands import fatten, contact_flatten, listify
+from pylaform.utilities.commands import fatten, contact_flatten, listify, unique
 from pylaform.utilities.dbCommands import Queries
 from pylatex import Document, Itemize, NewLine, Package, Section, Subsection, Tabular, Tabularx
 from pylatex.utils import bold, italic, NoEscape
@@ -76,12 +78,12 @@ class Common:
         :return: object
         """
 
-        summaries = listify(self.resume_data.get_summary())
+        summaries = listify([{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_summary()])
         with (doc.create(Section("Summary", False))) as summary_sub:
-            summary_sub.append(NoEscape(r"\begin{itemize}"))
             for summary in summaries:
+                summary_sub.append(NoEscape(r"\begin{itemize}"))
                 summary_sub.append(NoEscape(r"\item\textbf{" + summary["shortdesc"] + r":} " + self.cmd.glossary_inject(summary["longdesc"], "modern")))
-            summary_sub.append(NoEscape(r"\end{itemize}"))
+                summary_sub.append(NoEscape(r"\end{itemize}"))
 
     def retro_summary_details(self, doc):
         """
@@ -97,9 +99,57 @@ class Common:
                 r"\textbf{" + summary["shortdesc"] + r":} " + self.cmd.glossary_inject(summary["longdesc"], "retro")))
             doc.append(NewLine())
 
+    def modern_skills(self, doc):
+        """
+        Print detailed modern professional_experience.
+        :param object doc: doc handler
+        :return: object
+        """
+
+        categories = unique([{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in
+             self.resume_data.get_skills()])
+        skills = listify(self.resume_data.get_skills())
+        category_item_count = []
+        skill_item_count = []
+        for item in categories:
+            category_item_count.append(item["attr"])
+        for item in skills:
+            skill_item_count.append(item['subcategory'])
+        unique_list = unique(skill_item_count)
+        counts_dict = {}
+        for item in unique_list:
+            counts_dict.update({item: self.count_instances(self, skill_item_count, item)})
+
+        last_run = len(unique(category_item_count))
+        with doc.create(Section("Skills", False)):
+            categories = listify(
+                [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in
+                 self.resume_data.get_skills()])
+            current_subcategory = ''
+            sub_category = {}
+            for i, category in enumerate(categories, 1):
+                if category['subcategory'] != current_subcategory:
+                    current_subcategory = category['subcategory']
+                    subcategory_counter = 0
+                    # if i % last_run == 0:
+                    with doc.create(Subsection(category['subcategory'], False)) as skill_sub:
+                        if subcategory_counter != i:
+                            skill_sub.append(NoEscape(r'\begin{itemize*}'))
+                            subcategory_counter = i
+                        skill_counter = 1
+                        for i_sub, skill in enumerate(skills, 1):
+                            if skill['category'] == category['category'] and skill['subcategory'] == category['subcategory']:
+                                skill_sub.append(NoEscape(r'\item'))
+                                skill_sub.append(self.cmd.textbox(skill['shortdesc'], skill['longdesc']))
+                                if skill_counter == counts_dict[item]:
+                                    skill_sub.append(NoEscape(r'\end{itemize*}'))
+                                    break
+                                else:
+                                    skill_counter = skill_counter + 1
+
     def retro_skills(self, doc):
         """
-        Print detailed retro professional_experience.
+        Print detailed retro professional_experience.se
         :param object doc: doc handler
         :return: object
         """
@@ -126,24 +176,25 @@ class Common:
         :return:
         """
 
-        with (doc.create(Section("Employment", False))):
-            companies = self.cmd.unique([sub["employer"] for sub in self.resume_data.get_achievements()])
+        with doc.create(Section("Employment", False)):
+            companies = self.cmd.unique(listify(
+                [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_achievements()]))
             for employer in companies:
-                with doc.create(Subsection(employer, False)) as employer_sub:
-                    for position in self.resume_data.get_positions():
-                        if employer == position["employer"]:
+                with doc.create(Subsection(employer['employer'], False)) as employer_sub:
+                    for position in listify(self.resume_data.get_positions()):
+                        if employer['employer'] == position["employer"]:
                             with doc.create(Subsection(position["position"], False)) as position_sub:
                                 position_sub.append(self.cmd.vspace("-0.25"))
                                 position_sub.append(NoEscape(
                                     r"\hfill{\textbf{"
-                                    + f"{self.cmd.format_date(position['start_date'])} "
+                                    + f"{self.cmd.format_date(position['startdate'])} "
                                     + r"{--} "
-                                    + f" {self.cmd.format_date(position['end_date'])}"
+                                    + f" {self.cmd.format_date(position['enddate'])}"
                                     + r"}}"))
 
                                 position_sub.append(NewLine())
-                                for achievement in self.resume_data.get_achievements():
-                                    if employer == achievement["employer"] and position["position"] == achievement["position"]:
+                                for achievement in listify(self.resume_data.get_achievements()):
+                                    if employer["employer"] == achievement["employer"] and position["position"] == achievement["position"]:
                                         with doc.create(Itemize()) as itemize:
                                             itemize.add_item(NoEscape(
                                                 self.cmd.glossary_inject(achievement["shortdesc"], "modern")))
@@ -177,3 +228,11 @@ class Common:
                         if employer == achievement["employer"] and position["position"] == achievement["position"]:
                             doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(achievement['longdesc'], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))
+
+    @staticmethod
+    def count_instances(self, instance_list, x):
+        count_int = 0
+        for element in instance_list:
+            if element == x:
+                count_int = count_int + 1
+        return count_int

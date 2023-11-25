@@ -19,7 +19,6 @@ def landing():
     return render_template("landing.html", **fatten(resume_data.get_identification()))
 
 
-@app.route("/information", methods=["GET", "POST"])
 def information():
     if request.method == 'POST':
         resume_data.update_identification(request.form)
@@ -33,21 +32,29 @@ def summary():
     return render_template("information.html", **fatten(resume_data.get_summary()))
 @app.route("/education", methods=["GET", "POST"])
 def education():
+    if request.method == 'POST':
+        resume_data.update_education(request.form)
     return render_template("education.html", **fatten(resume_data.get_education()))
 
 
 @app.route("/certifications", methods=["GET", "POST"])
 def certifications():
+    if request.method == 'POST':
+        resume_data.update_certifications(request.form)
     return render_template("certifications.html", **fatten(resume_data.get_certifications()))
 
 
 @app.route("/skills", methods=["GET", "POST"])
 def skills():
+    if request.method == 'POST':
+        resume_data.update_skills(request.form)
     return render_template("skills.html", **fatten(resume_data.get_skills()))
 
 
 @app.route("/employment", methods=["GET", "POST"])
-def employment():
+def positions():
+    if request.method == 'POST':
+        resume_data.update_positions(request.form)
     return render_template("employment.html", **fatten(resume_data.get_positions()))
 
 
@@ -58,6 +65,8 @@ def achievements():
 
 @app.route("/glossary", methods=["GET", "POST"])
 def glossary():
+    if request.method == 'POST':
+        resume_data.update_glossary(request_form)
     return render_template("glossary.html", **fatten(resume_data.get_glossary()))
 
 

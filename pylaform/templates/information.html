@@ -4,7 +4,7 @@
         <form method="post">
         <ul>
             {% for item in payload %}
-                <li>
+                <li class="">
                     <label for="{{ item['attr'] }}">{{ item['attr'] }}</label>
                     <br>
                     {% if item['attr'] == 'description' %}

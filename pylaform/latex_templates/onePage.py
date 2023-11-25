@@ -1,4 +1,5 @@
 from pylaform.commands.latex import Commands
+from pylaform.utilities.commands import fatten, listify
 from pylaform.utilities.dbCommands import Queries
 from pylatex import Document, Package, Section, Subsection
 from pylatex.utils import NoEscape
@@ -53,19 +54,10 @@ class Generator:
         self.common.modern_summary_details(self.doc)
         
         # Skills
-        with self.doc.create(Section("Skills", False)):
-            categories = self.cmd.unique([sub['category'] for sub in self.resume_data.get_skills()])
-            for category in categories:
-                with self.doc.create(Subsection(category, False)) as skill_sub:
-                    skill_sub.append(NoEscape(r'\begin{itemize*}'))
-                    for skill in self.resume_data.get_skills():
-                        if category == skill['category']:
-                            skill_sub.append(NoEscape(r'\item'))
-                            skill_sub.append(self.cmd.textbox(skill['shortdesc'], skill['longdesc']))
-                    skill_sub.append(NoEscape(r'\end{itemize*}'))
+        self.common.modern_skills(self.doc)
         
         # Work History
-        self.common.modern_work_history(self.doc)
+        #self.common.modern_work_history(self.doc)
         
         # End Page
         self.doc.create(NoEscape(r'\end{document}'))

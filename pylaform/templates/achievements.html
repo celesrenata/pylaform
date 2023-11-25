@@ -1,10 +1,75 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
-
-</body>
-</html>
+{% extends "base.html" %}
+{% block content %}
+    {% set nas = namespace(category='startvalue') %}
+    {% set nai = namespace(displayed='startvalue') %}
+    {% set nad = namespace(loop='startvalue') %}
+    <div class="lead d-flex align-items-bottom justify-content-center">
+        <form method="post">
+        {% for item in payload %}
+            {% if item['attr'] == 'employer' %}
+                {% if nad.loop in ['done', 'startvalue'] %}
+            <div>
+                <div class="container align-items-center">
+                    <table>
+                        <tr>
+            {% endif %}
+            {% if nas.category != item['value'] %}
+                {% set nas.category = item['value'] %}
+                {% if nai.displayed != item['value'] %}
+                    {% set nai.displayed = item['value'] %}
+                        {% if nad.loop in ['done', 'startvalue'] %}
+                            {% set nad.loop = 'startvalue' %}
+                            <td>
+                                <label for="{{ item['id'] }}_{{ item['attr'] }}">{{ item['attr'] }}</label>
+                                <br>
+                                <input type="text" name="{{item['id']}}_{{item['attr']}}" id="{{ item['id'] }}_{{ item['attr'] }}"
+                                       value="{{ item['value'] if item['value'] is defined else '' }}">
+                                <br>
+                                <label for="{{ item['id'] }}_{{ item['attr'] }}_enabled">Displayed</label>
+                                <input type="checkbox" name="{{item['id']}}_{{ item['attr'] }}_enabled"
+                                        {{ "checked" if item['state'] }}>
+                            </td>
+                {% endif %}
+            {% endif %}
+            {% endif %}
+                {% elif item['attr'] == 'position' %}
+                            <td>
+                                <label for="{{ item['id'] }}_{{ item['attr'] }}">{{ item['attr'] }}</label>
+                                <br>
+                                <input type="text" name="{{ item['id'] }}_{{ item['attr'] }}" id="{{ item['id'] }}_{{ item['attr'] }}"
+                                       value="{{ item['value'] if item['value'] is defined else '' }}">
+                                <br>
+                                <label for="{{ item['id'] }}_{{ item['attr'] }}_enabled">Displayed</label>
+                                <input type="checkbox" name="{{item['id']}}_{{ item['attr'] }}_enabled"
+                                        {{ "checked" if item['state'] }}>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                {% elif 'desc' in item['attr'] %}
+                {% if item['attr'] == 'shortdesc' %}
+                <div>
+                    <ul>
+                {% endif %}
+                        <li>
+                            <label for="{{ item['id'] }}_{{ item['attr'] }}">{{ item['attr'] }}</label>
+                            <br>
+                            <input type="text" name="{{item['id']}}_{{item['attr']}}" id="{{ item['id'] }}_{{ item['attr'] }}"
+                                   value="{{ item['value'] if item['value'] is defined else '' }}">
+                            <br>
+                            <label for="{{ item['id'] }}_{{ item['attr'] }}_enabled">Displayed</label>
+                            <input type="checkbox" name="{{item['id']}}_{{ item['attr'] }}_enabled"
+                                    {{ "checked" if item['state'] }}>
+                        </li>
+                {% if item['attr'] == 'longdesc' %}
+                    {% set nad.loop = "done" %}
+                    </ul>
+                </div>
+                {%  endif %}
+            {% endif %}
+        {% endfor %}
+        </div>
+        <button type="submit">Submit</button>
+        </form>
+    </div>
+{% endblock %}
