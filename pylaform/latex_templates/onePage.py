@@ -57,7 +57,7 @@ class Generator:
         self.common.modern_skills(self.doc)
         
         # Work History
-        #self.common.modern_work_history(self.doc)
+        self.common.modern_work_history(self.doc)
         
         # End Page
         self.doc.create(NoEscape(r'\end{document}'))

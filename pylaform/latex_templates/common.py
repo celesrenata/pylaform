@@ -126,10 +126,11 @@ class Common:
                 [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in
                  self.resume_data.get_skills()])
             current_subcategory = ''
-            sub_category = {}
+            sub_category = []
             for i, category in enumerate(categories, 1):
-                if category['subcategory'] != current_subcategory:
+                if category['subcategory'] != current_subcategory and category['subcategory'] not in sub_category:
                     current_subcategory = category['subcategory']
+                    sub_category.append(category['subcategory'])
                     subcategory_counter = 0
                     # if i % last_run == 0:
                     with doc.create(Subsection(category['subcategory'], False)) as skill_sub:
@@ -137,11 +138,10 @@ class Common:
                             skill_sub.append(NoEscape(r'\begin{itemize*}'))
                             subcategory_counter = i
                         skill_counter = 1
-                        for i_sub, skill in enumerate(skills, 1):
+                        for skill in skills:
                             if skill['category'] == category['category'] and skill['subcategory'] == category['subcategory']:
-                                skill_sub.append(NoEscape(r'\item'))
-                                skill_sub.append(self.cmd.textbox(skill['shortdesc'], skill['longdesc']))
-                                if skill_counter == counts_dict[item]:
+                                skill_sub.append(NoEscape(r'\item') + self.cmd.textbox(skill['shortdesc'], skill['longdesc']))
+                                if skill_counter == counts_dict[category['subcategory']]:
                                     skill_sub.append(NoEscape(r'\end{itemize*}'))
                                     break
                                 else:
@@ -155,8 +155,8 @@ class Common:
         """
 
         doc.append(NoEscape(r"\section{\sc Experience}"))
-        categories = self.cmd.unique([sub['category'] for sub in self.resume_data.get_skills()])
-        subcategories = self.cmd.unique([{"subcategory": sub['subcategory'], "category": sub['category']} for sub in self.resume_data.get_skills()])
+        categories = self.cmd.unique([sub['category'] for sub in listify(self.resume_data.get_skills())])
+        subcategories = self.cmd.unique([{"subcategory": sub['subcategory'], "category": sub['category']} for sub in listify(self.resume_data.get_skills())])
         for category in categories:
             doc.append(bold(category))
             for subcategory in subcategories:
@@ -164,7 +164,7 @@ class Common:
                     doc.append(NewLine())
                     doc.append(NoEscape(r"{\textit {" + subcategory['subcategory'] + r"}}"))
                     doc.append(NoEscape(r"\begin{list2}"))
-                    for skill in self.resume_data.get_skills():
+                    for skill in listify(self.resume_data.get_skills()):
                         if subcategory['subcategory'] == skill['subcategory']:
                             doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(skill['longdesc'], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))
@@ -179,25 +179,30 @@ class Common:
         with doc.create(Section("Employment", False)):
             companies = self.cmd.unique(listify(
                 [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_achievements()]))
+            current_subcategory = ''
+            sub_category = []
             for employer in companies:
-                with doc.create(Subsection(employer['employer'], False)) as employer_sub:
-                    for position in listify(self.resume_data.get_positions()):
-                        if employer['employer'] == position["employer"]:
-                            with doc.create(Subsection(position["position"], False)) as position_sub:
-                                position_sub.append(self.cmd.vspace("-0.25"))
-                                position_sub.append(NoEscape(
-                                    r"\hfill{\textbf{"
-                                    + f"{self.cmd.format_date(position['startdate'])} "
-                                    + r"{--} "
-                                    + f" {self.cmd.format_date(position['enddate'])}"
-                                    + r"}}"))
-
-                                position_sub.append(NewLine())
-                                for achievement in listify(self.resume_data.get_achievements()):
-                                    if employer["employer"] == achievement["employer"] and position["position"] == achievement["position"]:
-                                        with doc.create(Itemize()) as itemize:
-                                            itemize.add_item(NoEscape(
-                                                self.cmd.glossary_inject(achievement["shortdesc"], "modern")))
+                if employer['employer'] != current_subcategory and employer['employer'] not in sub_category:
+                    current_subcategory = employer['employer']
+                    sub_category.append(employer['employer'])
+                    subcategory_counter = 0
+                    with doc.create(Subsection(employer['employer'], False)) as employer_sub:
+                        for position in unique(listify(self.resume_data.get_positions())):
+                            if employer['employer'] == position["employer"]:
+                                with doc.create(Subsection(position["position"], False)) as position_sub:
+                                    position_sub.append(self.cmd.vspace("-0.25"))
+                                    position_sub.append(NoEscape(
+                                        r"\hfill{\textbf{"
+                                        + f"{self.cmd.format_date(position['startdate'])} "
+                                        + r"{--} "
+                                        + f"{'Present' if self.cmd.format_date(position['enddate']) == '' else self.cmd.format_date(position['enddate'])}"
+                                        + r"}}"))
+                                    position_sub.append(NewLine())
+                                    for achievement in unique(listify(self.resume_data.get_achievements())):
+                                        if position["employer"] == achievement["employer"] and position["position"] == achievement["position"]:
+                                            with doc.create(Itemize()) as itemize:
+                                                itemize.add_item(NoEscape(
+                                                    self.cmd.glossary_inject(achievement["shortdesc"], "modern")))
 
     def retro_work_history(self, doc):
         """
@@ -206,11 +211,11 @@ class Common:
         :return:
         """
         doc.append(NoEscape(r"\section{\sc Employment}"))
-        companies = self.cmd.unique([sub["employer"] for sub in self.resume_data.get_achievements()])
+        companies = self.cmd.unique([sub["employer"] for sub in listify(self.resume_data.get_achievements())])
         for employer in companies:
             doc.append(bold(employer))
             doc.append(NewLine())
-            for position in self.resume_data.get_positions():
+            for position in listify(self.resume_data.get_positions()):
                 if employer == position["employer"]:
                     # doc.append(self.cmd.vspace("-0.16"))
                     doc.append(NoEscape(
@@ -218,13 +223,13 @@ class Common:
                         + position['position']
                         + r"} \hfill {"
                         + r"\textbf {"
-                        + self.cmd.format_date(position['start_date'])
+                        + self.cmd.format_date(position['startdate'])
                         + r" {--} "
-                        + self.cmd.format_date(position['end_date'])
+                        + self.cmd.format_date(position['enddate'])
                         + r"}}"))
                     #doc.append(NewLine())
                     doc.append(NoEscape(r"\begin{list2}"))
-                    for achievement in self.resume_data.get_achievements():
+                    for achievement in listify(self.resume_data.get_achievements()):
                         if employer == achievement["employer"] and position["position"] == achievement["position"]:
                             doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(achievement['longdesc'], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))
