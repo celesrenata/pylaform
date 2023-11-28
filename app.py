@@ -19,6 +19,7 @@ def landing():
     return render_template("landing.html", **fatten(resume_data.get_identification()))
 
 
+@app.route("/information", methods=["GET", "POST"])
 def information():
     if request.method == 'POST':
         resume_data.update_identification(request.form)
@@ -30,6 +31,7 @@ def summary():
     if request.method == 'POST':
         resume_data.update_summary(request.form)
     return render_template("information.html", **fatten(resume_data.get_summary()))
+
 @app.route("/education", methods=["GET", "POST"])
 def education():
     if request.method == 'POST':

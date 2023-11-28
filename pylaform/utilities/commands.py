@@ -85,24 +85,12 @@ def transform_get_id(form_data):
     result = []
     sub_result = {}
     form_data_len = len(form_data)
-    for i, item in enumerate(form_data, 1):
-        if len(sub_result) == 4:
-            result.append(sub_result)
-            sub_result = {}
+    for item in form_data:
         item_split = str(item).split("_")
         if "_enabled" in item:
-            if form_data[item] == 'on':
-                sub_result.update({"state": True})
-            else:
-                sub_result.update({"state": False})
-        else:
-            sub_result.update({"value": form_data[item]})
-        if "id" not in sub_result:
-            sub_result.update({"id": int(item_split[0])})
-        if "name" not in sub_result:
-            sub_result.update({"attr": item_split[1]})
-        if i == form_data_len:
-            result.append(sub_result)
+            result[-1].update({"state": True})
+        if "_enabled" not in item:
+            result.append({"id": int(item_split[0]), "attr": item_split[1], "value": form_data[item], "state": False})
 
     return result
 
