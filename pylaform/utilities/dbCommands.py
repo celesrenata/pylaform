@@ -440,6 +440,8 @@ class Queries:
                 if "date" in item['attr']:
                     if item['value'] == '':
                         item['value'] = datetime.strptime('9999-01-01', '%Y-%m-%d')
+                    if item['value'] == 'hidden':
+                        item['value'] = datetime.strptime('0001-01-01', '%Y-%m-%d')
                 self.cursor.execute(
                     f"""
                         UPDATE positions
@@ -450,7 +452,7 @@ class Queries:
                 )
 
         self.conn.commit()
-        self.result_certification = []
+        self.result_positions = []
 
     def update_skills(self, form_data):
         """
@@ -511,6 +513,12 @@ class Queries:
                 )
 
             else:
+                if "date" in item['attr']:
+                    if item['value'] == '':
+                        item['value'] = datetime.strptime('9999-01-01', '%Y-%m-%d')
+                    if item['value'] == 'hidden':
+                        item['value'] = datetime.strptime('0001-01-01', '%Y-%m-%d')
+
                 self.cursor.execute(
                     f"""
                          UPDATE focus
