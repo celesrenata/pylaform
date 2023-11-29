@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from pylaform.utilities.commands import listify
-from pylaform.utilities.dbCommands import Queries
+from pylaform.commands.db.query import Get
 from pylatex import escape_latex, NoEscape
 import re
 
@@ -13,7 +13,7 @@ class Commands:
     """
 
     def __init__(self):
-        self.queries = Queries()
+        self.queries = Get()
 
     @staticmethod
     def unique(list1):
@@ -40,9 +40,11 @@ class Commands:
         :param Any date_date:
         :return: str
         """
-
+        if isinstance(date_date, str):
+            date_date = datetime.strptime(date_date, "%Y-%m-%d")
         if datetime.strftime(date_date, "%Y-%m-%d") == '9999-01-01':
             return ""
+
         return datetime.strftime(date_date, "%B %Y")
 
     @staticmethod

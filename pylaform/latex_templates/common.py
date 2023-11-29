@@ -2,7 +2,7 @@ from itertools import count
 
 from pylaform.commands.latex import Commands
 from pylaform.utilities.commands import fatten, contact_flatten, listify, unique
-from pylaform.utilities.dbCommands import Queries
+from pylaform.commands.db.query import Get
 from pylatex import Document, Itemize, NewLine, Package, Section, Subsection, Tabular, Tabularx
 from pylatex.utils import bold, italic, NoEscape
 from pylaform.commands.latex import Commands
@@ -15,7 +15,7 @@ class Common:
     """
 
     def __init__(self):
-        self.resume_data = Queries()
+        self.resume_data = Get()
         self.cmd = Commands()
 
     def modern_contact_header(self, doc):
@@ -78,7 +78,12 @@ class Common:
         :return: object
         """
 
-        summaries = listify([{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_summary()])
+        bloated_summaries = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_summary()]
+        for bloated_summary in bloated_summaries:
+            if not bloated_summary['state']:
+                bloated_summaries.remove(bloated_summary)
+
+        summaries = listify(bloated_summaries)
         with (doc.create(Section("Summary", False))) as summary_sub:
             for summary in summaries:
                 summary_sub.append(NoEscape(r"\begin{itemize}"))
@@ -92,7 +97,13 @@ class Common:
         :return: object
         """
 
-        summaries = listify(self.resume_data.get_summary())
+        bloated_summaries = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for
+                             sub in self.resume_data.get_summary()]
+        for bloated_summary in bloated_summaries:
+            if not bloated_summary['state']:
+                bloated_summaries.remove(bloated_summary)
+
+        summaries = listify(bloated_summaries)
         doc.append(NoEscape(r"\section{\sc Summary}"))
         for summary in summaries:
             doc.append(NoEscape(
@@ -122,9 +133,16 @@ class Common:
 
         last_run = len(unique(category_item_count))
         with doc.create(Section("Skills", False)):
-            categories = listify(
-                [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in
-                 self.resume_data.get_skills()])
+            categories = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in
+                 self.resume_data.get_skills()]
+
+            # Remove all items designated to be hidden
+            bloated_categories = self.resume_data.get_skills()
+            for bloated_category in bloated_categories:
+                if not bloated_category['state']:
+                    bloated_categories.remove(bloated_category)
+            categories = listify(bloated_categories)
+
             current_subcategory = ''
             sub_category = []
             for i, category in enumerate(categories, 1):
@@ -155,7 +173,14 @@ class Common:
         """
 
         doc.append(NoEscape(r"\section{\sc Experience}"))
-        categories = self.cmd.unique([sub['category'] for sub in listify(self.resume_data.get_skills())])
+        bloated_categories = self.resume_data.get_skills()
+
+        # Remove all items designated to be hidden
+        for bloated_category in bloated_categories:
+            if not bloated_category['state']:
+                bloated_categories.remove(bloated_category)
+
+        categories = self.cmd.unique([sub['category'] for sub in listify(bloated_categories)])
         subcategories = self.cmd.unique([{"subcategory": sub['subcategory'], "category": sub['category']} for sub in listify(self.resume_data.get_skills())])
         for category in categories:
             doc.append(bold(category))
@@ -177,8 +202,14 @@ class Common:
         """
 
         with doc.create(Section("Employment", False)):
-            companies = self.cmd.unique(listify(
-                [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_achievements()]))
+            
+            # Remove all items designated to be hidden
+            bloated_companies = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_achievements()]
+            for bloated_company in bloated_companies:
+                if not bloated_company['state']:
+                    bloated_companies.remove(bloated_company)
+            
+            companies = self.cmd.unique(listify(bloated_companies))
             current_subcategory = ''
             sub_category = []
             for employer in companies:
@@ -225,7 +256,7 @@ class Common:
                         + r"\textbf {"
                         + self.cmd.format_date(position['startdate'])
                         + r" {--} "
-                        + self.cmd.format_date(position['enddate'])
+                        + f"{'Present' if self.cmd.format_date(position['enddate']) == '' else self.cmd.format_date(position['enddate'])}"
                         + r"}}"))
                     #doc.append(NewLine())
                     doc.append(NoEscape(r"\begin{list2}"))

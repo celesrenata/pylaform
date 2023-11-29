@@ -1,5 +1,5 @@
 from pylaform.commands.latex import Commands
-from pylaform.utilities.dbCommands import Queries
+from pylaform.commands.db.query import Get
 from pylatex import Command, Document, Package, Section, Subsection
 from pylatex.utils import NoEscape
 from tenacity import stop_after_delay, retry
@@ -13,7 +13,7 @@ class Generator:
     """
 
     def __init__(self):
-        self.resume_data = Queries()
+        self.resume_data = Get()
         self.cmd = Commands()
         self.common = Common()
         self.doc = Document()
