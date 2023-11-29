@@ -3,26 +3,23 @@ from datetime import datetime
 
 def fatten(full_list):
     """
-    Flattens the list into a FAT dictionary for kwargs
+    Flattens the list into a F A T dictionary for kwargs
     :param full_list:
     :return:dict
     """
 
     result = []
-    attrs = []
     for item in full_list:
         sub_result = {}
-        attrs.append(item['attr'])
         for sub_key in item:
             sub_result.update({sub_key: item[sub_key]})
         result.append(sub_result)
-
-    return {"payload": result, "attrs": attrs}
+    return {"payload": result}
 
 
 def contact_flatten(full_list):
     """
-    Flattens the list into a FLAT dictionary of contact details for latex
+    Flattens the list into a F L A T dictionary of contact details for latex
     :param full_list:
     :return: dict
     """
