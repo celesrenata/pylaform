@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% from "employment_iter.html" import form_group with context %}
+{% from "achievements_iter.html" import form_group with context %}
 {% block content %}
     <div class="lead d-flex align-items-bottom justify-content-center">
         <form method="post">
 
         {% for i in payload %}
-            {{ form_group(i["employer_id"], i["employer"], i["employer_state"], i["position_id"], i["position"], i["position_state"], i["achievement_id"], i["shortdesc"], i["longdesc"], i["achievement_state"]) }}
+            {{ form_group(i["employer"], i["employername"], i["employerstate"], i["position"], i["positionname"], i["positionstate"], i["achievement"], i["shortdesc"], i["longdesc"], i["achievementstate"]) }}
         {% endfor %}
         <div id="newinput"></div>
         <button id="rowAdder" type="button" class="btn btn-dark">
@@ -24,7 +24,7 @@
         clicks = 0;
         $("#rowAdder").click(function () {
             clicks += 1;
-            newRowAdd = `{{ form_group("new", "", "", "", "", "", "", "", "", true) }}`;
+            newRowAdd = `{{ form_group("new", "", true, "", "", true, "", "", "", true) }}`;
             $('#newinput').append(newRowAdd);
         });
         $("body").on("click", "#deleteRow", function () {

@@ -1,0 +1,56 @@
+{% macro form_group(employerid, employer, employerstate, positionid, position, positionstate, achievementid, shortdesc, longdesc, achievementstate) %}
+    {% if employerid == "new" %}
+        {% set employerid = "new` + clicks + `"|safe %}
+        {% set positionid = "new` + clicks + `"|safe %}
+        {% set achievementid = "new` + clicks + `"|safe %}
+    {% endif %}
+    <div id="{{ achievementid }}" class="lead d-flex align-items-bottom justify-content-center">
+        <table>
+            <tr>
+                <td>
+                    <label for="{{ achievementid }}_employer">Employer Name</label>
+                    <br>
+                    <input type="text" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
+                           value="{{ employer if employer is defined else '' }}">
+                </td>
+                <td>
+                    <label for="{{ achievementid }}_position">Position Held</label>
+                    <br>
+                    <input type="text" name="{{ achievementid }}_position" id="{{ employerid }}_position"
+                           value="{{ position if position is defined else '' }}">
+                </td>
+                <td>
+                    <label for="{{ position }}_position_enabled">Displayed</label>
+                    <input type="checkbox" name="{{ achievementid }}_position_enabled"
+                    {{ "checked" if positionstate }}>
+                </td>
+            </tr>
+            <tr>
+                <td class="align-items-center">
+                    <label for="{{ achievementid }}_shortdesc">Achievement Short Description</label>
+                    <br>
+                    <input type="text" name="{{ achievementid }}_shortdesc" id="{{ achievementid }}_shortdesc"
+                           value="{{ shortdesc if shortdesc is defined else '' }}">
+                </td>
+                <td>
+                    <label for="{{ achievementid }}_longdesc">Achievement Long Description</label>
+                    <br>
+                    <input type="text" name="{{ positionid }}_longdesc" id="{{ achievementid }}_longdesc"
+                           value="{{ longdesc if longdesc is defined else '' }}">
+                    <br>
+                    <label for="{{ achievementid }}_longdesc_enabled">Displayed</label>
+                    <input type="checkbox" name="{{ achievementid }}_enddate_enabled"
+                            {{ "checked" if achievementstate }}>
+                </td>
+                <td>
+                    <button class="btn btn-danger"
+                                    id="deleteRow"
+                                    type="button">
+                                <i class="bi bi-trash"></i>
+                                Delete
+                    </button>
+                </td>
+            </tr>
+        </table>
+    </div>
+{%- endmacro %}

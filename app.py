@@ -67,7 +67,7 @@ def positions():
     if request.method == 'POST':
         resume_update.update_positions(request.form)
         resume_query.purge_cache("employment")
-    return render_template("employment.html", **fatten(resume_query.get_positions()))
+    return render_template("employment_index.html", **fatten(resume_query.get_positions()))
 
 
 @app.route("/achievements", methods=["GET", "POST"])
@@ -75,7 +75,7 @@ def achievements():
     if request.method == 'POST':
         resume_update.update_achievements(request.form)
         resume_query.purge_cache("achievements")
-    return render_template("achievements.html", **fatten(resume_query.get_achievements()))
+    return render_template("achievements_index.html", **fatten(resume_query.get_achievements()))
 
 
 @app.route("/glossary", methods=["GET", "POST"])

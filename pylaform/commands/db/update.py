@@ -85,33 +85,134 @@ class Post:
         Update employment table
         :return: list
         """
-
+        
         form_data = transform_get_id(form_data)
+        counter = ""
+        result = {}
         for item in form_data:
-            if item['attr'] == "employer":
+            if counter != item['id']:
+                counter = item['id']
+                result = {}
+            if "delete" in item['attr']:
+                get_employer = self.cursor.execute(
+                    f"""
+                        SELECT `employer`
+                        FROM `positions`
+                        WHERE `id` = '{item["id"]}';
+                    """)
                 self.cursor.execute(
                     f"""
-                           UPDATE employers
-                           SET {item['attr']} = '{item['value']}',
-                           state = {item['state']}
-                           WHERE id = {item['id']}
-                       """
-                )
-
-            else:
-                if "date" in item['attr']:
-                    if item['value'] == '':
-                        item['value'] = datetime.strptime('9999-01-01', '%Y-%m-%d')
-                    if item['value'] == 'hidden':
-                        item['value'] = datetime.strptime('0001-01-01', '%Y-%m-%d')
+                    DELETE FROM `positions`
+                    WHERE `id` = {int(item['id'])};
+                    """)
+                if len(get_employer.fetchall()) <= 1:
+                    self.cursor.execute(
+                        f"""
+                    DELETE FROM `employers`
+                    WHERE `id` = {int(item['id'])};
+                    """)
                 self.cursor.execute(
                     f"""
-                        UPDATE positions
-                        SET {item['attr']} = '{item['value']}',
-                        state = {item['state']}
-                        WHERE id = {item['id']}
+                    DELETE FROM `positions`
+                    WHERE `id` = {int(item['id'])};
                     """
                 )
+            elif "new" in item['id'] and ("employer" in item['attr'] or "location" in item['attr']):
+                match item['attr']:
+                    case 'location':
+                        result.update({"location": item["value"], "state": int(item["state"])})
+                    case 'employer':
+                        result.update({"employer": item["value"], "state": int(item["state"])})
+                if len(result) == 3:
+                    if "date" in item['attr']:
+                        if item['value'] == '':
+                            item['value'] = datetime.strptime('9999-01-01', '%Y-%m-%d')
+                        if item['value'] == 'hidden':
+                            item['value'] = datetime.strptime('0001-01-01', '%Y-%m-%d')
+                    check_employer = self.cursor.execute(
+                        f"""
+                            SELECT *
+                            FROM `employers`
+                            WHERE `employer` = '{result["employer"]}'
+                        """)
+                    if len(check_employer.fetchall()) == 0:
+                        self.cursor.execute(
+                            f"""
+                                INSERT INTO `employers`
+                                (`employer`, `location`, `state`)
+                                VALUES ('{result["employer"]}', '{result["location"]}', '{result["state"]}');
+                            """)
+                        self.conn.commit()
+
+            elif "new" in item['id']:
+
+                match item['attr']:
+                    case 'employer':
+                        if item["attr"] == "employer":
+                            item["value"] = self.query.query_id(item["value"], "employer")
+                        result.update({"employer": item["value"]})
+                    case 'position':
+                        result.update({"position": item["value"]})
+                    case 'startdate':
+                        result.update({"startdate": item["value"]})
+                    case 'enddate':
+                        result.update({"enddate": item["value"], "state": int(item["state"])})
+                if len(result) == 6:
+                    if "date" in item['attr']:
+                        if item['value'] == '':
+                            item['value'] = datetime.strptime('9999-01-01', '%Y-%m-%d')
+                        if item['value'] == 'hidden':
+                            item['value'] = datetime.strptime('0001-01-01', '%Y-%m-%d')
+                        result["employer"] = self.query.query_id(result["employer"], "employer")
+                    print(
+                        f"""
+                            INSERT INTO `positions`
+                            (`employer`, `position`, `startdate`, `enddate`, `state`)
+                            VALUES ('{result["employer"]}', '{result["position"]}', '{result["startdate"]}', '{result["enddate"]}', '{result["state"]}');
+                        """)
+                    self.cursor.execute(
+                        f"""
+                            INSERT INTO `positions`
+                            (`employer`, `position`, `startdate`, `enddate`, `state`)
+                            VALUES ('{result["employer"]}', '{result["position"]}', '{result["startdate"]}', '{result["enddate"]}', '{result["state"]}');
+                        """)
+            else:
+                if len(result) == 6:
+                    if "date" in item['attr']:
+                        if item['value'] == '':
+                            item['value'] = datetime.strptime('9999-01-01', '%Y-%m-%d')
+                        if item['value'] == 'hidden':
+                            item['value'] = datetime.strptime('0001-01-01', '%Y-%m-%d')
+                    if item["attr"] == "employer":
+                        check_employer = self.cursor.execute(
+                            f"""
+                                SELECT *
+                                FROM `employers`
+                                WHERE `employer` = '{item["id"]}'
+                            """)
+                        if len(check_employer.fetchall()) == 0:
+                            self.cursor.execute(
+                                f"""
+                                    INSERT INTO `employers`
+                                    (`employer`, `location`, `state`)
+                                    VALUES ('{result["employer"]}', '{result["location"]}', '{result["state"]}');
+                                """)
+                if "location" in item["attr"] or "employer" in item["attr"]:
+                    self.cursor.execute(
+                        f"""
+                                UPDATE `employers`
+                                SET {item['attr']} = '{item['value']}',
+                                state = {item['state']}
+                                WHERE id = {int(item['id'])}
+                            """)
+                elif "delete" not in item['attr'] and "new" not in item['attr']:
+                    self.cursor.execute(
+                        f"""
+                             UPDATE `positions`
+                             SET {item['attr']} = '{item['value']}',
+                             state = {item['state']}
+                             WHERE id = {int(item['id'])}
+                         """)
 
         self.conn.commit()
         return
@@ -231,14 +332,24 @@ class Post:
             if counter != item['id']:
                 counter = item['id']
                 result = {}
-            if "delete" in item['attr'] and "school" in item['id']:
+            if "delete" in item['attr']:
+                get_school = self.cursor.execute(
+                    f"""
+                        SELECT `school`
+                        FROM `focus`
+                        WHERE `id` = '{item["id"]}';
+                    """)
                 self.cursor.execute(
                     f"""
-                    DELETE FROM `school`
+                    DELETE FROM `focus`
                     WHERE `id` = {int(item['id'])};
-                    """
-                )
-            elif "delete" in item['attr'] and "focus" in item['id']:
+                    """)
+                if len(get_school.fetchall()) <= 1:
+                    self.cursor.execute(
+                        f"""
+                    DELETE FROM `schools`
+                    WHERE `id` = {int(item['id'])};
+                    """)
                 self.cursor.execute(
                     f"""
                     DELETE FROM `focus`
@@ -270,12 +381,11 @@ class Post:
                                 (`school`, `location`, `state`)
                                 VALUES ('{result["school"]}', '{result["location"]}', '{result["state"]}');
                             """)
+                        self.conn.commit()
             elif "new" in item['id']:
-
                 match item['attr']:
                     case 'school':
-                        if item["attr"] == "school":
-                            item["value"] = self.query.query_id(item["value"], "school")
+                        item["value"] = self.query.query_id(item["value"], "school")
                         result.update({"school": item["value"]})
                     case 'focus':
                         result.update({"focus": item["value"]})
@@ -324,6 +434,71 @@ class Post:
                              state = {item['state']}
                              WHERE id = {int(item['id'])}
                          """)
+
+        self.conn.commit()
+        return
+
+    def update_achievements(self, form_data):
+        """
+        Update employment table
+        :return: list
+        """
+
+        form_data = transform_get_id(form_data)
+        counter = ""
+        result = {}
+        for item in form_data:
+            if counter != item['id']:
+                counter = item['id']
+                result = {}
+            if "delete" in item['attr']:
+                self.cursor.execute(
+                    f"""
+                     DELETE FROM `achievements`
+                     WHERE `id` = {int(item['id'])};
+                     """)
+            elif "new" in item['id']:
+                match item['attr']:
+                    case 'position':
+                        item["value"] = self.query.query_id(item["value"], "position")
+                        result.update({"position": item["value"], "state": int(item["state"])})
+                    case 'employer':
+                        item["value"] = self.query.query_id(item["value"], "employer")
+                        result.update({"employer": item["value"], "state": int(item["state"])})
+                    case 'achievement':
+                        result.update({"achievement": item["value"]})
+                    case 'shortdesc':
+                        result.update({"shortdesc": item["value"]})
+                    case 'longdesc':
+                        result.update({"longdesc": item["value"], "state": int(item["state"])})
+
+                if len(result) == 5:
+                    print(
+                        f"""
+                             INSERT INTO `achievements`
+                             (`position`, `employer`, `shortdesc`, `longdesc`, `state`)
+                             VALUES ('{result["employer"]}', '{result["position"]}', '{result["shortdesc"]}', '{result["longdesc"]}', '{result["state"]}');
+                         """)
+                    self.cursor.execute(
+                        f"""
+                             INSERT INTO `achievements`
+                             (`position`, `employer`, `shortdesc`, `longdesc`, `state`)
+                             VALUES ('{result["employer"]}', '{result["position"]}', '{result["shortdesc"]}', '{result["longdesc"]}', '{result["state"]}');
+                         """)
+
+            else:
+                match item['attr']:
+                    case 'position':
+                        item["value"] = self.query.query_id(item["value"], "position")
+                    case 'employer':
+                        item["value"] = self.query.query_id(item["value"], "employer")
+                self.cursor.execute(
+                    f"""
+                         UPDATE `achievements`
+                         SET {item['attr']} = '{item['value']}',
+                         state = {item['state']}
+                         WHERE id = {int(item['id'])}
+                     """)
 
         self.conn.commit()
         return

@@ -1,5 +1,5 @@
 # pylaform
-## This branch is currently in development and will not support adding and removing items yet! ##
+## This branch is currently in development and does not have any guardrails! ##
 
 PDF resume/cv generator based on sqlite3, Python3.10 and PyLaTeX
 
@@ -16,6 +16,5 @@ This project **NO LONGER requires** the installation of the **mariadb**
 ## Todo
 * Find a way to implement nested URLs.
 * Implement additional templates
-* Implement Add/Remove
 * Implement Bootstrap
 * Containerize

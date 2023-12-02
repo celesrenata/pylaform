@@ -84,7 +84,8 @@ def listify(full_list):
                 sub_mask_group_count.append(re.sub("[^A-Za-z]", "", item["id"]))
             sub_mask_count = len(unique(sub_mask_group_count))
             # if sub_mask_count % len(sub_mask_group) == 0:
-            if i % (len(attrs) / sub_mask_count) == 0:
+            # if i % (len(attrs) / sub_mask_count) == 0:
+            if all(x in working_result for x in attrs):
                 result.append(working_result)
                 sub_mask_count = 0
                 working_result = {}

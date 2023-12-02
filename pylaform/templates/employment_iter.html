@@ -1,0 +1,56 @@
+{% macro form_group(employerid, employer, location, employerstate, positionid, position, startdate, enddate, positionstate) %}
+    {% if employerid == "new" %}
+        {% set employerid = "new` + clicks + `"|safe %}
+        {% set positionid = "new` + clicks + `"|safe %}
+    {% endif %}
+    <div id="{{ positionid }}" class="container align-items-center">
+        <table>
+            <tr>
+                <td>
+                    <label for="{{ employerid }}_employer">Employer Name</label>
+                    <br>
+                    <input type="text" name="{{ employerid }}_employer" id="{{ employerid }}_employer"
+                           value="{{ employer if employer is defined else '' }}">
+                    <br>
+                    <label for="{{ employerid }}_employer">Employer Location</label>
+                    <br>
+                    <input type="text" name="{{ employerid }}_location" id="{{ employerid }}_location"
+                           value="{{ location if location is defined else '' }}">
+                    <br>
+                    <label for="{{ employerid }}_employer_enabled">Displayed</label>
+                    <input type="checkbox" name="{{ employerid }}_employer_enabled"
+                    {{ "checked" if employerstate }}>
+                </td>
+                <td class="align-items-center">
+                    <label for="{{ positionid }}_position">Position Held</label>
+                    <br>
+                    <input type="text" name="{{ positionid }}_position" id="{{ positionid }}_position"
+                           value="{{ position if position is defined else '' }}">
+                </td>
+                <td>
+                    <label for="{{ positionid }}_startdate">Start Date</label>
+                    <br>
+                    <input type="text" name="{{ positionid }}_startdate" id="{{ positionid }}_startdate"
+                           value="{{ startdate if startdate is defined else '' }}">
+                    <br>
+                    <label for="{{ positionid }}_enddate">End Date</label>
+                    <br>
+                    <input type="text" name="{{ positionid }}_enddate" id="{{ positionid }}_enddate"
+                           value="{{ enddate if enddate is defined else '' }}">
+                    <br>
+                    <label for="{{ positionid }}_enddate_enabled">Displayed</label>
+                    <input type="checkbox" name="{{ positionid }}_enddate_enabled"
+                            {{ "checked" if positionstate }}>
+                </td>
+                <td>
+                    <button class="btn btn-danger"
+                                    id="deleteRow"
+                                    type="button">
+                                <i class="bi bi-trash"></i>
+                                Delete
+                    </button>
+                </td>
+            </tr>
+        </table>
+    </div>
+{%- endmacro %}

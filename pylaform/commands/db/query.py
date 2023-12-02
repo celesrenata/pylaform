@@ -36,7 +36,7 @@ class Get:
                 self.result_achievements = []
             case "glossary":
                 self.result_glossary = []
-            case "positions":
+            case "employment":
                 self.result_positions = []
             case "summary":
                 self.result_summary = []
@@ -318,31 +318,36 @@ class Get:
         if len(self.result_positions) == 0:
             result = self.query(
                 """
-                    SELECT e.id, e.employer, e.state, p.id, p.position, p.startdate, p.enddate, p.state
+                    SELECT e.id, e.employer, e.location, e.state, p.id, p.position, p.startdate, p.enddate, p.state
                     FROM employers AS e
                     JOIN positions AS p on e.id = p.employer
                     ORDER BY p.startdate DESC
                 """
             )
 
-            for employer_id, employer, employer_state, position_id, position, start_date, end_date, position_state in result:
+            for employer_id, employer, location, employer_state, position_id, position, start_date, end_date, position_state in result:
                 self.result_positions.append({
-                    "id": employer_id,
-                    "attr": "employer",
+                    "id": "employer_" + str(employer_id),
+                    "attr": "employername",
                     "value": employer,
                     "state": employer_state})
                 self.result_positions.append({
-                    "id": position_id,
-                    "attr": "position",
+                    "id": "employer_" + str(employer_id),
+                    "attr": "location",
+                    "value": location,
+                    "state": employer_state})
+                self.result_positions.append({
+                    "id": "position_" + str(position_id),
+                    "attr": "positionname",
                     "value": position,
                     "state": position_state})
                 self.result_positions.append({
-                    "id": position_id,
+                    "id": "position_" + str(position_id),
                     "attr": "startdate",
                     "value": start_date,
                     "state": position_state})
                 self.result_positions.append({
-                    "id": position_id,
+                    "id": "position_" + str(position_id),
                     "attr": "enddate",
                     "value": end_date,
                     "state": position_state,
@@ -368,25 +373,25 @@ class Get:
 
             for employer_id, employer, employer_state, position_id, position, position_state, achievement_id, shortdesc, longdesc, achievement_state in result:
                 self.result_achievements.append({
-                    "id": employer_id,
-                    "attr": "employer",
+                    "id": "employer_" + str(employer_id),
+                    "attr": "employername",
                     "value": employer,
                     "state": employer_state,
                 })
                 self.result_achievements.append({
-                    "id": position_id,
-                    "attr": "position",
+                    "id": "position_" + str(position_id),
+                    "attr": "positionname",
                     "value": position,
                     "state": position_state,
                 })
                 self.result_achievements.append({
-                    "id": achievement_id,
+                    "id": "achievement_" + str(achievement_id),
                     "attr": "shortdesc",
                     "value": shortdesc,
                     "state": achievement_state,
                 })
                 self.result_achievements.append({
-                    "id": achievement_id,
+                    "id": "achievement_" + str(achievement_id),
                     "attr": "longdesc",
                     "value": longdesc,
                     "state": achievement_state,

@@ -3,9 +3,8 @@
 {% block content %}
     <div class="lead d-flex align-items-bottom justify-content-center">
         <form method="post">
-
         {% for i in payload %}
-            {{ form_group(i["employer_id"], i["employer"], i["employer_state"], i["position_id"], i["position"], i["start_date"], i["end_date"], i["position_state"]) }}
+            {{ form_group(i["employer"], i["employername"] ,i["location"], i["employerstate"], i["position"], i["positionname"], i["startdate"], i["enddate"], i["positionstate"]) }}
         {% endfor %}
         <div id="newinput"></div>
         <button id="rowAdder" type="button" class="btn btn-dark">
@@ -24,7 +23,7 @@
         clicks = 0;
         $("#rowAdder").click(function () {
             clicks += 1;
-            newRowAdd = `{{ form_group("new", "", "", "", "", "", "", true) }}`;
+            newRowAdd = `{{ form_group("new", "", "", true, "", "", "", "", true) }}`;
             $('#newinput').append(newRowAdd);
         });
         $("body").on("click", "#deleteRow", function () {
