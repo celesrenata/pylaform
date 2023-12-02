@@ -202,10 +202,20 @@ class Get:
                 """)
 
             for identification_id, attr, value, state in result:
+                if state == 1:
+                    state = True
+                else:
+                    state = False
                 self.result_identification.append({
                     "id": identification_id,
                     "attr": attr,
                     "value": value,
+                    "state": state,
+                })
+                self.result_identification.append({
+                    "id": identification_id,
+                    "attr": "contacttype",
+                    "value": attr,
                     "state": state,
                 })
 

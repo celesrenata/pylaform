@@ -27,10 +27,10 @@ class Post:
         for item in form_data:
             self.cursor.execute(
                 f"""
-                    UPDATE identification
-                    SET value = '{item['value']}',
-                    state = {item['state']}
-                    WHERE id = {item['id']}
+                    UPDATE `identification`
+                    SET `value` = '{item['value']}',
+                    `state` = {int(item['state'])}
+                    WHERE `id` = {item['id']};
                 """)
         self.conn.commit()
         return

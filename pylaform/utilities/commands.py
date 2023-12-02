@@ -43,7 +43,8 @@ def listify(full_list):
     :param full_list:
     :return: list
     """
-    attrs = [sub["attr"] for sub in full_list]
+    attrs = unique([sub["attr"] for sub in full_list])
+    attrs_per_id = 0
     sub_mask_working_group = [''.join(x for x in str(sub["id"]) if x.isalpha()) if ''.join(x for x in str(sub["id"]) if x.isalpha()) != "" else "" for sub in full_list]
     sub_mask_group = unique(sub_mask_working_group)
     sub_mask_group_count = []
@@ -60,11 +61,9 @@ def listify(full_list):
             else:
                 item_split = item["id"].split("_")
             if item["id"] not in sub_mask and len(item_split) == 1:
-                result.append(working_result)
-                item_split = []
-                working_result = {}
-
+                sub_mask.append(item["id"])
         if isinstance(item["id"], int):
+            attrs_per_id = len(unique([sub["attr"] if sub["id"] == item["id"] else '' for sub in full_list]))
             item_split = str(item["id"])
         else:
             item_split = item["id"].split("_")
@@ -74,21 +73,20 @@ def listify(full_list):
             working_result.update({"id": item["id"], item["attr"]: item["value"], "state": False})
         if item['state'] == 1 and len(item_split) == 2:
             working_result.update({item_split[0].replace('id', '') + "state": True})
-        elif i % len(attrs) == 0:
+        elif item['state'] == 1 and len(item_split) == 1:
             working_result.update({"state": True})
-            if i % len(attrs) == 0:
-                result.append(working_result)
         if len(item_split) == 2:
             if item["id"] not in sub_mask:
                 sub_mask.append(item["id"])
                 sub_mask_group_count.append(re.sub("[^A-Za-z]", "", item["id"]))
             sub_mask_count = len(unique(sub_mask_group_count))
-            # if sub_mask_count % len(sub_mask_group) == 0:
-            # if i % (len(attrs) / sub_mask_count) == 0:
             if all(x in working_result for x in attrs):
                 result.append(working_result)
                 sub_mask_count = 0
                 working_result = {}
+        if len(item_split) == 1 and len(working_result) == attrs_per_id + 2:
+            result.append(working_result)
+            working_result = {}
 
     return result
 
@@ -125,6 +123,8 @@ def unique(list1):
     # traverse for all elements
     for x in list1:
         # check if exists in unique_list or not
+        if x == '':
+            continue
         if x not in unique_list:
             unique_list.append(x)
 

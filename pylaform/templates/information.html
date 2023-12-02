@@ -2,29 +2,37 @@
 {% block content %}
     <div class="d-flex align-items-bottom justify-content-center">
         <form method="post">
-        <ul>
+        <table>
             {% for item in payload %}
-                <li class="">
-                    <label for="{{ item['id'] }}_{{ item['attr'] }}">{{ item['attr'] }}</label>
-                    <br>
-                    {% if item['attr'] == 'description' %}
-                        <textarea name="{{ item['id'] }}_{{ item['attr'] }}"
-                                id="{{ item['id'] }}_{{ item['attr'] }}"
-                                rows="10"
-                                cols="60"
-                        >{{ item['value'] if item['value'] is defined else '' }}</textarea>
-                    {% else %}
-                        <input type="text" name="{{ item['id'] }}_{{ item['attr'] }}" id="{{ item['id'] }}_{{ item['attr'] }}"
-                               value="{{ item['value'] if item['value'] is defined else '' }}">
-                    {% endif %}
-                    <br>
-                    <label for="{{ item['id'] }}_{{ item['attr'] }}_enabled">Displayed</label>
-                    <input type="checkbox" name="{{ item['id'] }}_{{ item['attr'] }}_enabled"
-                            {{ "checked" if item['state'] }}>
-                </li>
+                {% set attr = item['contacttype'] %}
+                <tr>
+                    <td>
+                        <label for="{{ item['id'] }}_{{ item['contacttype'] }}">{{ item['contacttype'].capitalize() }}</label>
+                        <br>
+                        {% if item['contacttype'] == 'description' %}
+                            <textarea name="{{ item['id'] }}_{{  item['contacttype'] }}"
+                                    id="{{ item['id'] }}_{{ item['contacttype'] }}"
+                                    rows="10"
+                                    cols="60"
+                            >{{ item[attr] if item[attr] is defined else '' }}</textarea>
+                        {% else %}
+                            <input type="text" name="{{ item['id'] }}_{{ item['contacttype'] }}" id="{{ item['id'] }}_{{ item['contacttype'] }}"
+                                   value="{{ item[attr] if item[attr] is defined else '' }}">
+                        {% endif %}
+                        <br>
+                        {% if item['conacttype'] != 'description' %}
+                        <label for="{{ item['id'] }}_{{ item['contacttype'] }}_enabled">Displayed</label>
+                        <input type="checkbox" name="{{ item['id'] }}_{{ item['contacttype'] }}_enabled"
+                                {{ "checked" if item['state'] }}>
+                        {% endif %}
+                    </td>
+                </tr>
             {% endfor %}
-        </ul>
-        <button type="submit">Submit</button>
+        </table>
+        <button type="submit" type="button" class="btn btn-success">
+                <span class="bi bi-plus-square-dotted">
+                </span> SUBMIT
+        </button>
         </form>
     </div>
 {% endblock %}
