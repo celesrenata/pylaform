@@ -217,10 +217,12 @@ class Common:
                     current_subcategory = employer['employer']
                     sub_category.append(employer['employer'])
                     subcategory_counter = 0
-                    with doc.create(Subsection(employer['employer'], False)) as employer_sub:
+                    employer_name = self.resume_data.query_name(employer['employer'], "employer")
+                    with doc.create(Subsection(employer_name, False)) as employer_sub:
                         for position in unique(listify(self.resume_data.get_positions())):
                             if employer['employer'] == position["employer"]:
-                                with doc.create(Subsection(position["position"], False)) as position_sub:
+                                position_name = self.resume_data.query_name(position['position'], "position")
+                                with doc.create(Subsection(position_name, False)) as position_sub:
                                     position_sub.append(self.cmd.vspace("-0.25"))
                                     position_sub.append(NoEscape(
                                         r"\hfill{\textbf{"
@@ -244,14 +246,16 @@ class Common:
         doc.append(NoEscape(r"\section{\sc Employment}"))
         companies = self.cmd.unique([sub["employer"] for sub in listify(self.resume_data.get_achievements())])
         for employer in companies:
-            doc.append(bold(employer))
+            employer_name = self.resume_data.query_name(employer, "employer")
+            doc.append(bold(employer_name))
             doc.append(NewLine())
             for position in listify(self.resume_data.get_positions()):
                 if employer == position["employer"]:
                     # doc.append(self.cmd.vspace("-0.16"))
+                    position_name = self.resume_data.query_name(position['position'], "position")
                     doc.append(NoEscape(
                         r"{\em "
-                        + position['position']
+                        + position_name
                         + r"} \hfill {"
                         + r"\textbf {"
                         + self.cmd.format_date(position['startdate'])

@@ -82,6 +82,27 @@ class Get:
             result = int(item[0])
         return result
 
+    def query_name(self, value, attr):
+        if attr == "employer":
+            sub_result = self.query(
+                f"""
+                    SELECT `employer`
+                    FROM `employers`
+                    WHERE `id` = '{value}';
+                """
+            )
+        if attr == "position":
+            sub_result = self.query(
+                f"""
+                    SELECT `position`
+                    FROM positions
+                    WHERE `id` = '{value}'
+                """
+            )
+        for item in sub_result:
+            result = item[0]
+        return result
+
     def get_certifications(self):
         """
         Return certification list from database
