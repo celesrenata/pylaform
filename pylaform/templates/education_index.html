@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "education_iter.html" import form_group with context %}
+{% block content %}
+    <div class="lead d-flex align-items-bottom justify-content-center">
+        <form method="post">
+        {% for i in payload %}
+            {% if i|length > 0 %}
+                {{ form_group(i["school"], i["schoolname"], i["schoolstate"], i["location"], i["focusid"], i["focus"], i["startdate"], i["enddate"], i["focusstate"]) }}
+            {% endif %}
+        {% endfor %}
+        <div id="newinput"></div>
+        <button id="rowAdder" type="button" class="btn btn-dark">
+                        <span class="bi bi-plus-square-dotted">
+                        </span> ADD
+                    </button>
+        <button type="submit" type="button" class="btn btn-success">
+                        <span class="bi bi-plus-square-dotted">
+                        </span> SUBMIT
+                    </button>
+        </form>
+    </div>
+{% endblock %}
+{% block scripts %}
+    <script type="text/javascript">
+        clicks = 0;
+        $("#rowAdder").click(function () {
+            clicks += 1;
+            newRowAdd = `{{ form_group("new", "", true, "", "", "", "", "", true) }}`;
+            $('#newinput').append(newRowAdd);
+        });
+        $("body").on("click", "#deleteRow", function () {
+            div_id = $(this).closest('div').attr('id');
+            $('#' + div_id).remove();
+            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
+        });
+    </script>
+{% endblock %}

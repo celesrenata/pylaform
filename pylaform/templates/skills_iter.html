@@ -1,0 +1,66 @@
+{% macro form_group(id, category, subcategory, employer, position, shortdesc, longdesc, state) %}
+
+    {% set id_end = "" %}
+    {% if id == "new" %}
+        {% set id = "new` + clicks + `"|safe %}
+    {% endif %}
+    <div id="{{ id }}" class="container align-items-center listitem item{{ id }}">
+        <table>
+            <tr>
+                <td>
+                    <label for="{{ id }}_category">Category</label>
+                    <br>
+                    <input type="text" name="{{ id }}_category" id="{{ id }}_category"
+                           value="{{ category if category is defined else '' }}">
+                </td>
+                <td class="align-items-center">
+                    <label for="{{ id }}_subcategory">Subcategory</label>
+                    <br>
+                    <input type="text" name="{{ id }}_subcategory" id="{{ id }}_subcategory"
+                           value="{{ subcategory if subcategory is defined else '' }}">
+                </td>
+                <td>
+
+                    <label for="{{ id }}_employer">Employer</label>
+                    <br>
+                    <input type="text" name="{{ id }}_employer" id="{{ id }}_employer"
+                           value="{{ employer if employer is defined else '' }}">
+                    <br>
+                    <label for="{{ id }}_position">Position</label>
+                    <br>
+                    <input type="text" name="{{ id }}_position" id="{{ id }}_position"
+                           value="{{ position if position is defined else '' }}">
+                </td>
+                <td>
+                    <button class="btn btn-danger"
+                                    id="deleteRow"
+                                    type="button">
+                                <i class="bi bi-trash"></i>
+                                Delete
+                    </button>
+                </td>
+            </tr>
+        </table>
+    <br>
+    <ul>
+        <li>
+            <label for="{{ id }}_shortdesc">Short Description</label>
+            <br>
+            <input type="text" name="{{ id }}_shortdesc" id="{{ id }}_shortdesc"
+                   value="{{ shortdesc if shortdesc is defined else '' }}">
+        </li>
+    </ul>
+    <ul>
+        <li>
+            <label for="{{ id }}_longdesc">Long Description</label>
+            <br>
+            <input type="text" name="{{ id }}_longdesc" id="{{ id }}_longdesc"
+                   value="{{ longdesc if longdesc is defined else '' }}">
+            <br>
+            <label for="{{ id }}_longdesc_enabled">Displayed</label>
+            <input type="checkbox" name="{{ id }}_longdesc_enabled"
+                    {{ "checked" if state }}>
+        </li>
+    </ul>
+</div>
+{%- endmacro %}

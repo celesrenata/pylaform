@@ -1,0 +1,56 @@
+{% macro form_group(schoolid, school, schoolstate, location, focusid, focus, startdate, enddate, focusstate) %}
+    {% if schoolid == "new" %}
+        {% set schoolid = "new` + clicks + `"|safe %}
+        {% set focusid = "new` + clicks + `"|safe %}
+    {% endif %}
+    <div id="{{ focusid }}" class="container align-items-center">
+        <table>
+            <tr>
+                <td>
+                    <label for="{{ schoolid }}_school">School Name</label>
+                    <br>
+                    <input type="text" name="{{ schoolid }}_school" id="{{ schoolid }}_school"
+                           value="{{ school if school is defined else '' }}">
+                    <br>
+                    <label for="{{ schoolid }}_school">School Location</label>
+                    <br>
+                    <input type="text" name="{{ schoolid }}_location" id="{{ schoolid }}_location"
+                           value="{{ location if location is defined else '' }}">
+                    <br>
+                    <label for="{{ schoolid }}_school_enabled">Displayed</label>
+                    <input type="checkbox" name="{{ schoolid }}_school_enabled"
+                    {{ "checked" if schoolstate }}>
+                </td>
+                <td class="align-items-center">
+                    <label for="{{ focusid }}_focus">Study Focus</label>
+                    <br>
+                    <input type="text" name="{{ focusid }}_focus" id="{{ focusid }}_focus"
+                           value="{{ focus if focus is defined else '' }}">
+                </td>
+                <td>
+                    <label for="{{ focusid }}_startdate">Start Date</label>
+                    <br>
+                    <input type="text" name="{{ focusid }}_startdate" id="{{ focusid }}_startdate"
+                           value="{{ startdate if startdate is defined else '' }}">
+                    <br>
+                    <label for="{{ focusid }}_enddate">End Date</label>
+                    <br>
+                    <input type="text" name="{{ focusid }}_enddate" id="{{ focusid }}_enddate"
+                           value="{{ enddate if enddate is defined else '' }}">
+                    <br>
+                    <label for="{{ focusid }}_enddate_enabled">Displayed</label>
+                    <input type="checkbox" name="{{ focusid }}_enddate_enabled"
+                            {{ "checked" if focusstate }}>
+                </td>
+                <td>
+                    <button class="btn btn-danger"
+                                    id="deleteRow"
+                                    type="button">
+                                <i class="bi bi-trash"></i>
+                                Delete
+                    </button>
+                </td>
+            </tr>
+        </table>
+    </div>
+{%- endmacro %}

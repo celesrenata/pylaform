@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 
@@ -17,7 +18,7 @@ def fatten(full_list):
             sub_result.update({sub_key: item[sub_key]})
         result.append(sub_result)
 
-    return {"payload": result, "attrs": attrs}
+    return {"payload": listify(result), "attrs": attrs}
 
 
 def contact_flatten(full_list):
@@ -42,38 +43,51 @@ def listify(full_list):
     :param full_list:
     :return: list
     """
-
+    attrs = [sub["attr"] for sub in full_list]
+    sub_mask_working_group = [''.join(x for x in str(sub["id"]) if x.isalpha()) if ''.join(x for x in str(sub["id"]) if x.isalpha()) != "" else "" for sub in full_list]
+    sub_mask_group = unique(sub_mask_working_group)
+    sub_mask_group_count = []
     result = []
-    working_result = []
-    wait = int()
-    item_count = []
-    for item in full_list:
-        item_count.append(item["attr"])
-
-    last_run = len(unique(item_count))
+    count = 1
+    sub_mask = []
+    sub_mask_count = 0
+    working_result = {}
     for i, item in enumerate(full_list, 1):
-        sub_result = {}
-        flagged = False
+        if count != item["id"] and (re.sub(r'\d+', '', str(item["id"])) == re.sub(r'\d+', '', str(item["id"]))
+            or re.sub('\D', '', str(item["id"])) != re.sub('\D', '', str(item["id"]))):
+            if isinstance(item["id"], int):
+                item_split = str(item["id"])
+            else:
+                item_split = item["id"].split("_")
+            if item["id"] not in sub_mask and len(item_split) == 1:
+                result.append(working_result)
+                item_split = []
+                working_result = {}
 
-        for i_sub, sub_key in enumerate(item, 1):
-            if sub_key == "state":
-                if item[sub_key] == 1:
-                    item[sub_key] = True
-                else:
-                    item[sub_key] = False
-            sub_result.update({"name" if sub_key == "attr" else sub_key: item[sub_key]})
-            if "name" in sub_result and "value" in sub_result:
-                if not flagged:
-                    working_result.append({sub_result["name"]: sub_result["value"]})
-                    flagged = True
-
-        working_dict = {}
-        for sub_item in working_result:
-            for sub_key in sub_item:
-                working_dict.update({sub_key: sub_item[sub_key]})
-        wait = len(working_dict)
-        if i % last_run == 0:
-            result.append(working_dict)
+        if isinstance(item["id"], int):
+            item_split = str(item["id"])
+        else:
+            item_split = item["id"].split("_")
+        if len(item_split) == 2:
+            working_result.update({item_split[0]: item_split[1], item["attr"]: item["value"], item_split[0].replace('id', '') + "state": False})
+        else:
+            working_result.update({"id": item["id"], item["attr"]: item["value"], "state": False})
+        if item['state'] == 1 and len(item_split) == 2:
+            working_result.update({item_split[0].replace('id', '') + "state": True})
+        elif i % len(attrs) == 0:
+            working_result.update({"state": True})
+            if i % len(attrs) == 0:
+                result.append(working_result)
+        if len(item_split) == 2:
+            if item["id"] not in sub_mask:
+                sub_mask.append(item["id"])
+                sub_mask_group_count.append(re.sub("[^A-Za-z]", "", item["id"]))
+            sub_mask_count = len(unique(sub_mask_group_count))
+            # if sub_mask_count % len(sub_mask_group) == 0:
+            if i % (len(attrs) / sub_mask_count) == 0:
+                result.append(working_result)
+                sub_mask_count = 0
+                working_result = {}
 
     return result
 
@@ -93,7 +107,7 @@ def transform_get_id(form_data):
         if "_enabled" in item:
             result[-1].update({"state": True})
         if "_enabled" not in item:
-            result.append({"id": int(item_split[0]), "attr": item_split[1], "value": form_data[item], "state": False})
+            result.append({"id": item_split[0], "attr": item_split[1], "value": form_data[item], "state": False})
 
     return result
 

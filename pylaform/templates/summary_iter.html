@@ -1,0 +1,41 @@
+{% macro form_group(id, shortdesc, longdesc, state) %}
+    {% set id_end = "" %}
+    {% if id == "new" %}
+        {% set id = "new` + clicks + `"|safe %}
+    {% endif %}
+    <div id="{{ id }}" key="{{ id }}" class="d-flex align-items-bottom justify-content-center">
+        <table>
+            <tr>
+                <td>
+                    <label for="{{ id }}_shortdesc">Short Description</label>
+                    <br>
+                    <textarea name="{{ id }}_shortdesc"
+                              id="{{ id }}_shortdesc"
+                              rows="1"
+                              cols="60"
+                              >{{ shortdesc if shortdesc is defined else '' }}</textarea>
+                    <br>
+                    <label for="{{ id }}_longdesc">Long Description</label>
+                    <br>
+                    <textarea name="{{ id }}_longdesc"{{ longdesc }}
+                              id="{{ id }}_longdesc"
+                              rows="2"
+                              cols="60"
+                              >{{ longdesc if longdesc is defined else '' }}</textarea>
+                    <br>
+                    <label for="{{ id }}_longdesc_enabled">Displayed</label>
+                    <input type="checkbox" name="{{id}}_longdesc_enabled"
+                            {{ "checked" if state }}>
+                </td>
+                <td>
+                    <button class="btn btn-danger"
+                            id="deleteRow"
+                            type="button">
+                        <i class="bi bi-trash"></i>
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        </table>
+    </div>
+{%- endmacro %}

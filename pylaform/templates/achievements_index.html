@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "employment_iter.html" import form_group with context %}
+{% block content %}
+    <div class="lead d-flex align-items-bottom justify-content-center">
+        <form method="post">
+
+        {% for i in payload %}
+            {{ form_group(i["employer_id"], i["employer"], i["employer_state"], i["position_id"], i["position"], i["position_state"], i["achievement_id"], i["shortdesc"], i["longdesc"], i["achievement_state"]) }}
+        {% endfor %}
+        <div id="newinput"></div>
+        <button id="rowAdder" type="button" class="btn btn-dark">
+                        <span class="bi bi-plus-square-dotted">
+                        </span> ADD
+                    </button>
+        <button type="submit" type="button" class="btn btn-success">
+                        <span class="bi bi-plus-square-dotted">
+                        </span> SUBMIT
+                    </button>
+        </form>
+    </div>
+{% endblock %}
+{% block scripts %}
+    <script type="text/javascript">
+        clicks = 0;
+        $("#rowAdder").click(function () {
+            clicks += 1;
+            newRowAdd = `{{ form_group("new", "", "", "", "", "", "", "", "", true) }}`;
+            $('#newinput').append(newRowAdd);
+        });
+        $("body").on("click", "#deleteRow", function () {
+            div_id = $(this).closest('div').attr('id');
+            $('#' + div_id).remove();
+            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
+        });
+    </script>
+{% endblock %}

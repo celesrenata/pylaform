@@ -1,0 +1,40 @@
+{% macro form_group(id, certification, year, state) %}
+    {% set id_end = "" %}
+    {% if id == "new" %}
+        {% set id = "new` + clicks + `"|safe %}
+    {% endif %}
+    <div id="{{ id }}" key="{{ id }}" class="d-flex align-items-bottom justify-content-center">
+        <table>
+            <tr>
+                <td>
+                    
+                    <label for="{{ id }}_certification">Certification Name</label>
+                    <br>
+                    <textarea name="{{ id }}_certification"
+                              id="{{ id }}_certification"
+                              rows="1"
+                              cols="42"
+                              >{{ certification if certification is defined else '' }}</textarea>
+                    <br>
+                    <label for="{{ id }}_year">Long Description</label>
+                    <br>
+                    <input type="text" name="{{ id }}_year"{{ year }}
+                           id="{{ id }}_year"
+                           value="{{ year if year is defined else '' }}">
+                    <br>
+                    <label for="{{ id }}_year_enabled">Displayed</label>
+                    <input type="checkbox" name="{{id}}_year_enabled"
+                            {{ "checked" if state }}>
+                </td>
+                <td>
+                    <button class="btn btn-danger"
+                            id="deleteRow"
+                            type="button">
+                        <i class="bi bi-trash"></i>
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        </table>
+    </div>
+{%- endmacro %}

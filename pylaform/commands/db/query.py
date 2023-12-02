@@ -25,21 +25,21 @@ class Get:
     def purge_cache(self, table=None):
         match table:
             case "certifications":
-                self.result_certifications.clear()
+                self.result_certifications = []
             case "education":
-                self.result_education.clear()
+                self.result_education = []
             case "identification":
-                self.result_identification.clear()
+                self.result_identification = []
             case "skills":
-                self.result_skills.clear()
+                self.result_skills = []
             case "achievements":
-                self.result_achievements.clear()
+                self.result_achievements = []
             case "glossary":
-                self.result_glossary.clear()
+                self.result_glossary = []
             case "positions":
-                self.result_positions.clear()
+                self.result_positions = []
             case "summary":
-                self.result_summary.clear()
+                self.result_summary = []
             case other:
                 self.__init__()
 
@@ -51,6 +51,36 @@ class Get:
             print(f"Error querying database: {e}")
             raise
         return self.cursor
+
+    def query_id(self, value, attr):
+        if attr == "employer":
+            sub_result = self.query(
+                f"""
+                    SELECT id
+                    FROM employers
+                    WHERE employer = '{value}';
+                """
+            )
+        if attr == "position":
+            sub_result = self.query(
+                f"""
+                    SELECT id
+                    FROM positions
+                    WHERE position = '{value}'
+                """
+            )
+        if attr == "school":
+            sub_result = self.query(
+                f"""
+                SELECT id
+                FROM schools
+                WHERE school = '{value}'
+                """
+            )
+        result = 0
+        for item in sub_result:
+            result = int(item[0])
+        return result
 
     def get_certifications(self):
         """
@@ -89,34 +119,46 @@ class Get:
         if len(self.result_education) == 0:
             result = self.query(
                 """
-                    SELECT s.id, s.school, s.state, f.id, f.focus, f.startdate, f.enddate, f.state
+                    SELECT f.id, f.focus, f.startdate, f.enddate, s.id, s.school, s.location, s.state, f.state
                     FROM schools AS s
                     JOIN focus AS f on s.id = f.school
                     ORDER BY f.startdate DESC
                 """
             )
 
-            for schoolid, school, schoolstate, focusid, focus, startdate, enddate, focusstate in result:
+            for focusid, focus, startdate, enddate, schoolid, school, location, schoolstate, focusstate in result:
                 self.result_education.append({
-                    "id": schoolid,
-                    "attr": "school",
+                    "id": "school_" + str(schoolid),
+                    "attr": "schoolname",
                     "value": school,
                     "state": schoolstate,
                 })
                 self.result_education.append({
-                    "id": focusid,
+                    "id": "school_" + str(schoolid),
+                    "attr": "location",
+                    "value": location,
+                    "state": schoolstate,
+                })
+                self.result_education.append({
+                    "id": "focusid_" + str(focusid),
                     "attr": "focus",
                     "value": focus,
                     "state": focusstate,
                 })
                 self.result_education.append({
-                    "id": focusid,
+                    "id": "focusid_" + str(focusid),
                     "attr": "startdate",
                     "value": startdate,
                     "state": focusstate,
                 })
                 self.result_education.append({
-                    "id": focusid,
+                    "id": "focusid_" + str(focusid),
+                    "attr": "enddate",
+                    "value": enddate,
+                    "state": focusstate,
+                })
+                self.result_education.append({
+                    "id": "focusid_" + str(focusid),
                     "attr": "enddate",
                     "value": enddate,
                     "state": focusstate,
@@ -188,14 +230,14 @@ class Get:
         if len(self.result_skills) == 0:
             result = self.query(
                 """
-                    SELECT s.id, s.category, s.subcategory, p.position, s.shortdesc, s.longdesc, s.state
-                    FROM skills s, positions p
-                    WHERE p.id = s.position
+                    SELECT s.id, s.category, s.subcategory, e.employer, p.position, s.shortdesc, s.longdesc, s.state
+                    FROM skills s, positions p, employers e
+                    WHERE p.id = s.position and e.id = s.employer
                     ORDER BY categoryorder, skillorder ASC;
                 """
             )
 
-            for skills_id, category, subcategory, position, shortdesc, longdesc, state in result:
+            for skills_id, category, subcategory, employer, position, shortdesc, longdesc, state in result:
                 self.result_skills.append({
                     "id": skills_id,
                     "attr": "category",
@@ -205,6 +247,12 @@ class Get:
                     "id": skills_id,
                     "attr": "subcategory",
                     "value": subcategory,
+                    "state": state})
+
+                self.result_skills.append({
+                    "id": skills_id,
+                    "attr": "employer",
+                    "value": employer,
                     "state": state})
                 self.result_skills.append({
                     "id": skills_id,

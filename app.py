@@ -3,13 +3,15 @@ import os
 from pylaform.commands.db.query import Get
 from pylaform.commands.db.update import Post
 from flask import Flask, render_template, request, send_from_directory
-from pylaform.utilities.commands import fatten
+from pylaform.utilities.commands import fatten, listify
 from pylaform.latex_templates import hybrid, onePage
 
 app = Flask(__name__,
             static_url_path="",
             static_folder="pylaform/static",
             template_folder="pylaform/templates")
+
+app.jinja_env.add_extension('jinja2.ext.do')
 
 resume_query = Get()
 resume_update = Post()
@@ -34,14 +36,14 @@ def summary():
     if request.method == 'POST':
         resume_update.update_summary(request.form)
         resume_query.purge_cache("summary")
-    return render_template("information.html", **fatten(resume_query.get_summary()))
+    return render_template("summary_index.html", **fatten(resume_query.get_summary()))
 
 @app.route("/education", methods=["GET", "POST"])
 def education():
     if request.method == 'POST':
         resume_update.update_education(request.form)
         resume_query.purge_cache("education")
-    return render_template("education.html", **fatten(resume_query.get_education()))
+    return render_template("education_index.html", **fatten(resume_query.get_education()))
 
 
 @app.route("/certifications", methods=["GET", "POST"])
@@ -49,7 +51,7 @@ def certifications():
     if request.method == 'POST':
         resume_update.update_certifications(request.form)
         resume_query.purge_cache("certificaitons")
-    return render_template("certifications.html", **fatten(resume_query.get_certifications()))
+    return render_template("certifications_index.html", **fatten(resume_query.get_certifications()))
 
 
 @app.route("/skills", methods=["GET", "POST"])
@@ -57,7 +59,7 @@ def skills():
     if request.method == 'POST':
         resume_update.update_skills(request.form)
         resume_query.purge_cache()
-    return render_template("skills.html", **fatten(resume_query.get_skills()))
+    return render_template("skills_index.html", **fatten(resume_query.get_skills()))
 
 
 @app.route("/employment", methods=["GET", "POST"])
@@ -79,9 +81,9 @@ def achievements():
 @app.route("/glossary", methods=["GET", "POST"])
 def glossary():
     if request.method == 'POST':
-        resume_update.update_glossary(request_form)
+        resume_update.update_glossary(request.form)
         resume_query.purge_cache("glossary")
-    return render_template("glossary.html", **fatten(resume_query.get_glossary()))
+    return render_template("glossary_index.html", **fatten(resume_query.get_glossary()))
 
 
 @app.route("/generate/one-page", methods=["GET"])
@@ -99,4 +101,4 @@ def hybrid_doc():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=False)

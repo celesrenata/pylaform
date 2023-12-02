@@ -1,0 +1,47 @@
+{% macro form_group(id, term, url, description, state) %}
+    {% set id_end = "" %}
+    {% if id == "new" %}
+        {% set id = "new` + clicks + `"|safe %}
+    {% endif %}
+    <div id="{{ id }}" key="{{ id }}" class="d-flex align-items-bottom justify-content-center">
+        <table>
+            <tr>
+                <td>
+                    <label for="{{ id }}_term">Term</label>
+                    <br>
+                    <input type="text" name="{{ id }}_term"
+                              id="{{ id }}_term"
+                              value="{{ term if term is defined else '' }}">
+                    <br>
+                    <label for="{{ id }}_term">Term</label>
+                    <br>
+                    <textarea name="{{ id }}_url"
+                              id="{{ id }}_url"
+                              rows="1"
+                              cols="80"
+                    >{{ url if url is defined else '' }}</textarea>
+                    <br>
+                    <label for="{{ id }}_term"URL</label>
+                    <br>
+                    <textarea name="{{ id }}_description"
+                              id="{{ id }}_description"
+                              rows="2"
+                              cols="80"
+                    >{{ description if description is defined else '' }}</textarea>
+                    <br>
+                    <label for="{{ id }}_description_enabled">Displayed</label>
+                    <input type="checkbox" name="{{ id }}_description_enabled"
+                            {{ "checked" if state }}>
+                </td>
+                <td>
+                    <button class="btn btn-danger"
+                            id="deleteRow"
+                            type="button">
+                        <i class="bi bi-trash"></i>
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        </table>
+    </div>
+{%- endmacro %}
