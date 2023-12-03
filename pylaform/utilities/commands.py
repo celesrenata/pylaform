@@ -1,7 +1,9 @@
 import re
 
+from werkzeug.datastructures.structures import ImmutableMultiDict
 
-def fatten(full_list) -> dict[str, list[dict[str, str | bool]], str, list[str]]:
+
+def fatten(full_list: list[dict[str, str | int | bool]]) -> dict[str, list[dict[str, str | bool]], str, list[str]]:
     """
     Takes 'id/attr/value/state' and compresses it into a single dictionary.
     :param list[dict[str, str | int | bool]] full_list: Decompiled attribute list.
@@ -20,7 +22,22 @@ def fatten(full_list) -> dict[str, list[dict[str, str | bool]], str, list[str]]:
     return {"payload": listify(result), "attrs": attrs}
 
 
-def contact_flatten(full_list) -> dict[any, dict[str, any]]:
+def slim(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str | bool]]:
+    """
+    Extracts 'id/attr/value/state' and drops items with false states for latex writing.
+    :param list[dict[str, str | int | bool]] full_list: Decompiled attribute list.
+    :return dict: Payload passed to templates.
+    """
+
+    bloated = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
+               for sub in full_list]
+    for item in bloated:
+        if not bloated["state"]:
+            bloated.remove(item)
+    return listify(bloated)
+
+
+def contact_flatten(full_list: list[dict[str, str | int | bool]]) -> dict[any, dict[str, any]]:
     """
     Flattens the list into a FLAT dictionary of contact details for latex
     :param list[dict[str, str|int|bool]] full_list: Decompiled attribute list.
@@ -36,10 +53,10 @@ def contact_flatten(full_list) -> dict[any, dict[str, any]]:
     return result
 
 
-def listify(full_list) -> list[dict[str, str | bool]]:
+def listify(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str | bool]]:
     """
     Converts decompiled attribute list into structured list for latex and flask templates.
-    :param list[dict[str, str | int | bool]] full_list: Decompiled attribute list.
+    :param list[dict[str, str | bool]] full_list: Decompiled attribute list.
     :return list: Compiled attribute list.
     """
 
@@ -105,7 +122,7 @@ def listify(full_list) -> list[dict[str, str | bool]]:
     return result
 
 
-def transform_get_id(form_data) -> list[dict[str, str | bool]]:
+def transform_get_id(form_data: ImmutableMultiDict) -> list[dict[str, str | bool]]:
     """
     Transforms data by stripping id data and creating a new dictionary field for nested and regular items.
     Used for DB actions: INSERT INTO, DELETE FROM, UPDATE.
@@ -124,7 +141,7 @@ def transform_get_id(form_data) -> list[dict[str, str | bool]]:
     return result
 
 
-def unique(list1) -> list:
+def unique(list1: list) -> list:
     """
     Returns only unique values from a list.
     :param list list1: source list.

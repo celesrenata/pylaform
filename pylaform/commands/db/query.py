@@ -24,7 +24,7 @@ class Get:
         self.result_positions = []
         self.result_summary = []
 
-    def purge_cache(self, table=None) -> None:
+    def purge_cache(self, table: str) -> None:
         """
         Purges local cache from python application for associated table
         :param str table:  Name of table to purge.
@@ -50,7 +50,7 @@ class Get:
                 self.result_summary = []
 
     @retry
-    def query(self, query) -> sqlite3.Cursor:
+    def query(self, query: str) -> sqlite3.Cursor:
         """
         Query worker that handles all main SELECT requests.
         :param str query: Query String.
@@ -64,7 +64,7 @@ class Get:
             raise
         return self.cursor
 
-    def query_id(self, value, attr) -> int:
+    def query_id(self, value: str, attr: str) -> int:
         # TODO: Consider refactoring to use the attribute as the FROM/WHERE as "attr + 's'"
         """
         Queries the associated name to return the ID in order to detect if new or not.
@@ -78,21 +78,21 @@ class Get:
             sub_result = self.query(
                 f"""
                 SELECT `id`
-                FROM `employers`
+                FROM `employer`
                 WHERE `employer` = '{value}';
                 """)
         if attr == "position":
             sub_result = self.query(
                 f"""
                 SELECT `id`
-                FROM `positions`
+                FROM `position`
                 WHERE `position` = '{value}'
                 """)
         if attr == "school":
             sub_result = self.query(
                 f"""
                 SELECT `id`
-                FROM `schools`
+                FROM `school`
                 WHERE `school` = '{value}'
                 """)
         result = 0
@@ -100,7 +100,7 @@ class Get:
             result = int(item[0])
         return result
 
-    def query_name(self, value, attr) -> str:
+    def query_name(self, value: int, attr: str) -> str:
         # TODO: Consider refactoring to use the attribute as the FROM/WHERE as "attr + 's'"
         """
         Queries the associated ID to return the name for display.
@@ -115,14 +115,14 @@ class Get:
             sub_result = self.query(
                 f"""
                 SELECT `employer`
-                FROM `employers`
+                FROM `employer`
                 WHERE `id` = '{value}';
                 """)
         if attr == "position":
             sub_result = self.query(
                 f"""
                 SELECT `position`
-                FROM `positions`
+                FROM `position`
                 WHERE `id` = '{value}'
                 """)
         for item in sub_result:
@@ -139,7 +139,7 @@ class Get:
             result = self.query(
                 """
                 SELECT `id`, `certification`, `year`, `state`
-                FROM `certifications`
+                FROM `certification`
                 """)
 
             # Create raw list based on id/attr/value/state
@@ -170,7 +170,7 @@ class Get:
                 """
                 SELECT f.id, f.focus, f.startdate, f.enddate, f.state,
                        s.id, s.school, s.location, s.state
-                FROM `schools` AS s
+                FROM `school` AS s
                 JOIN `focus` AS f on s.id = f.school
                 ORDER BY f.startdate DESC
                 """)
@@ -293,7 +293,7 @@ class Get:
             result = self.query(
                 """
                 SELECT s.id, s.category, s.subcategory, e.employer, p.position, s.shortdesc, s.longdesc, s.state
-                FROM `skills` s, `positions` p, `employers` e
+                FROM `skill` s, `position` p, `employer` e
                 WHERE p.id = s.position and e.id = s.employer
                 ORDER BY `categoryorder`, `skillorder`;
                 """)
@@ -381,8 +381,8 @@ class Get:
                 """
                 SELECT e.id, e.employer, e.location, e.state,
                        p.id, p.position, p.startdate, p.enddate, p.state
-                FROM `employers` AS e
-                JOIN `positions` AS p on e.id = p.employer
+                FROM `employer` AS e
+                JOIN `position` AS p on e.id = p.employer
                 ORDER BY p.startdate DESC
                 """)
 
@@ -430,9 +430,9 @@ class Get:
                 SELECT e.id, e.employer, e.state as employer_state,
                        p.id as position_id, p.position, p.state as position_state,
                        a.id as achievement_id, a.shortdesc, a.longdesc, a.state as achievement_state
-                FROM `achievements` a
-                JOIN `positions` p ON a.position = p.id AND a.employer = p.employer
-                JOIN `employers` e ON a.employer = e.id;
+                FROM `achievement` a
+                JOIN `position` p ON a.position = p.id AND a.employer = p.employer
+                JOIN `employer` e ON a.employer = e.id;
                 """)
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'

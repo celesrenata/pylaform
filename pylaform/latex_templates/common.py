@@ -1,7 +1,7 @@
 from pylaform.commands.db.query import Get
 from pylaform.commands.latex import Commands
-from pylaform.utilities.commands import contact_flatten, listify, unique
-from pylatex import Itemize, NewLine, Section, Subsection, Tabular, Tabularx
+from pylaform.utilities.commands import contact_flatten, listify, unique, slim
+from pylatex import Itemize, NewLine, Section, Subsection, Tabular, Tabularx, Document
 from pylatex.utils import bold, italic, NoEscape
 
 
@@ -15,7 +15,7 @@ class Common:
         self.resume_data = Get()
         self.cmd = Commands()
 
-    def modern_contact_header(self, doc) -> None:
+    def modern_contact_header(self, doc: Document) -> None:
         """
         Print header containing the modern contact information.
         :param Document doc: PyLatex document handler.
@@ -47,7 +47,7 @@ class Common:
                     f"{data['email']['value'] if data['email']['state'] else ''}",
                     f"{data['location']['value'] if data['location']['state'] else ''}")
 
-    def retro_contact_header(self, doc) -> None:
+    def retro_contact_header(self, doc: Document) -> None:
         """
         Print header containing the retro contact information.
         :param Document doc: PyLatex document handler.
@@ -74,20 +74,14 @@ class Common:
             table1.add_row([NoEscape(email if data["email"]["state"] else "")])
             table1.add_row([NoEscape(www if data["www"]["state"] else "")])
 
-    def modern_summary_details(self, doc) -> None:
+    def modern_summary_details(self, doc: Document) -> None:
         """
         Print detailed modern summary.
         :param Document doc: PyLatex document handler.
         :return None: None
         """
 
-        # Setup values.
-        bloated_summaries = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]} 
-                             for sub in self.resume_data.get_summary()]
-        for bloated_summary in bloated_summaries:
-            if not bloated_summary["state"]:
-                bloated_summaries.remove(bloated_summary)
-        summaries = listify(bloated_summaries)
+        summaries = slim(self.resume_data.get_summary())
         
         # Start writing.
         with (doc.create(Section("Summary", False))) as summary_sub:
@@ -97,20 +91,14 @@ class Common:
                                             + self.cmd.glossary_inject(summary["longdesc"], "modern")))
                 summary_sub.append(NoEscape(r"\end{itemize}"))
 
-    def retro_summary_details(self, doc) -> None:
+    def retro_summary_details(self, doc: Document) -> None:
         """
         Print detailed retro summary.
         :param Document doc: PyLatex document handler.
         :return None: None
         """
 
-        # Setup values.
-        bloated_summaries = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]} 
-                             for sub in self.resume_data.get_summary()]
-        for bloated_summary in bloated_summaries:
-            if not bloated_summary["state"]:
-                bloated_summaries.remove(bloated_summary)
-        summaries = listify(bloated_summaries)
+        summaries = slim(self.resume_data.get_summary())
         
         # Start writing
         doc.append(NoEscape(r"\section{\sc Summary}"))
@@ -120,17 +108,17 @@ class Common:
                 + self.cmd.glossary_inject(summary["longdesc"], "retro")))
             doc.append(NewLine())
 
-    def modern_skills(self, doc) -> None:
+    def modern_skills(self, doc: Document) -> None:
         """
         Print detailed modern professional_experience.
         :param Document doc: PyLatex document handler.
         :return None: None
         """
 
-        # Setup values.
-        categories = unique([{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]} 
-                             for sub in self.resume_data.get_skills()])
-        skills = listify(self.resume_data.get_skills())
+        # Remove all items designated to be hidden
+        categories = self.cmd.unique([sub["category"] for sub in slim(self.resume_data.get_skills())])
+        skills = slim(self.resume_data.get_skills())
+
         category_item_count = []
         skill_item_count = []
         for item in categories:
@@ -141,16 +129,9 @@ class Common:
         counts_dict = {}
         for item in unique_list:
             counts_dict.update({item: Common.count_instances(skill_item_count, item)})
-        
+
         # Start writing.
         with ((doc.create(Section("Skills", False)))):
-            # Remove all items designated to be hidden
-            bloated_categories = self.resume_data.get_skills()
-            for bloated_category in bloated_categories:
-                if not bloated_category["state"]:
-                    bloated_categories.remove(bloated_category)
-            categories = listify(bloated_categories)
-
             current_subcategory = ""
             sub_category = []
             for i, category in enumerate(categories, 1):
@@ -172,7 +153,7 @@ class Common:
                                 else:
                                     skill_counter = skill_counter + 1
 
-    def retro_skills(self, doc) -> None:
+    def retro_skills(self, doc: Document) -> None:
         """
         Print detailed retro professional_experience.se
         :param Document doc: PyLatex document handler.
@@ -180,29 +161,24 @@ class Common:
         """
 
         doc.append(NoEscape(r"\section{\sc Experience}"))
-        bloated_categories = self.resume_data.get_skills()
 
-        # Remove all items designated to be hidden
-        for bloated_category in bloated_categories:
-            if not bloated_category['state']:
-                bloated_categories.remove(bloated_category)
-
-        categories = self.cmd.unique([sub['category'] for sub in listify(bloated_categories)])
-        subcategories = self.cmd.unique([{"subcategory": sub['subcategory'], "category": sub['category']}
+        categories = self.cmd.unique([sub["category"] for sub in slim(self.resume_data.get_skills())])
+        subcategories = self.cmd.unique([{"subcategory": sub["subcategory"], "category": sub["category"]}
                                          for sub in listify(self.resume_data.get_skills())])
         for category in categories:
             doc.append(bold(category))
             for subcategory in subcategories:
-                if category == subcategory['category']:
+                if category == subcategory["category"]:
                     doc.append(NewLine())
-                    doc.append(NoEscape(r"{\textit {" + subcategory['subcategory'] + r"}}"))
+                    doc.append(NoEscape(r"{\textit {" + subcategory["subcategory"] + r"}}"))
                     doc.append(NoEscape(r"\begin{list2}"))
                     for skill in listify(self.resume_data.get_skills()):
-                        if subcategory['subcategory'] == skill['subcategory']:
-                            doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(skill['longdesc'], "retro")))
+                        if subcategory["subcategory"] == skill["subcategory"]:
+                            doc.append(NoEscape(
+                                r"\item " + self.cmd.glossary_inject(skill["longdesc"], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))
 
-    def modern_work_history(self, doc) -> None:
+    def modern_work_history(self, doc: Document) -> None:
         """
         Print standard detail work history.
         :param Document doc: PyLatex document handler.
@@ -210,30 +186,22 @@ class Common:
         """
 
         with ((doc.create(Section("Employment", False)))):
-            
-            # Remove all items designated to be hidden
-            bloated_companies = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']}
-                                 for sub in self.resume_data.get_achievements()]
-            for bloated_company in bloated_companies:
-                if not bloated_company['state']:
-                    bloated_companies.remove(bloated_company)
-            
-            companies = self.cmd.unique(listify(bloated_companies))
-            current_subcategory = ''
+            companies = slim(self.resume_data.get_achievements())
+            current_subcategory = ""
             sub_category = []
             for employer in companies:
-                if employer['employer'] != current_subcategory and employer['employer'] not in sub_category:
-                    current_subcategory = employer['employer']
-                    sub_category.append(employer['employer'])
-                    employer_name = self.resume_data.query_name(employer['employer'], "employer")
+                if employer["employer"] != current_subcategory and employer["employer"] not in sub_category:
+                    current_subcategory = employer["employer"]
+                    sub_category.append(employer["employer"])
+                    employer_name = self.resume_data.query_name(employer["employer"], "employer")
                     with doc.create(Subsection(employer_name, False)):
                         for position in unique(listify(self.resume_data.get_positions())):
-                            if employer['employer'] == position["employer"]:
-                                position_name = self.resume_data.query_name(position['position'], "position")
+                            if employer["employer"] == position["employer"]:
+                                position_name = self.resume_data.query_name(position["position"], "position")
                                 with doc.create(Subsection(position_name, False)) as position_sub:
                                     position_sub.append(self.cmd.vspace("-0.25"))
-                                    end_date = 'Present' if self.cmd.format_date(
-                                        position['enddate']) == '' else self.cmd.format_date(position['enddate'])
+                                    end_date = "Present" if self.cmd.format_date(
+                                        position["enddate"]) == "" else self.cmd.format_date(position["enddate"])
                                     position_sub.append(NoEscape(
                                         r"\hfill{\textbf{"
                                         + f"{self.cmd.format_date(position['startdate'])} "
@@ -249,7 +217,7 @@ class Common:
                                                     self.cmd.glossary_inject(
                                                         achievement["shortdesc"], "modern")))
 
-    def retro_work_history(self, doc) -> None:
+    def retro_work_history(self, doc: Document) -> None:
         """
         Print standard detail work history, however for res.cls.
         :param Document doc: PyLatex document handler.
@@ -264,29 +232,27 @@ class Common:
             doc.append(NewLine())
             for position in listify(self.resume_data.get_positions()):
                 if employer == position["employer"]:
-                    # doc.append(self.cmd.vspace("-0.16"))
-                    position_name = self.resume_data.query_name(position['position'], "position")
-                    end_date = 'Present' if self.cmd.format_date(
-                        position['enddate']) == '' else self.cmd.format_date(position['enddate'])
+                    position_name = self.resume_data.query_name(position["position"], "position")
+                    end_date = "Present" if self.cmd.format_date(
+                        position["enddate"]) == "" else self.cmd.format_date(position["enddate"])
                     doc.append(NoEscape(
                         r"{\em "
                         + position_name
                         + r"} \hfill {"
                         + r"\textbf {"
-                        + self.cmd.format_date(position['startdate'])
+                        + self.cmd.format_date(position["startdate"])
                         + r" {--} "
                         + f"{end_date}"
                         + r"}}"))
-                    # doc.append(NewLine())
                     doc.append(NoEscape(r"\begin{list2}"))
                     for achievement in listify(self.resume_data.get_achievements()):
                         if employer == achievement["employer"] and position["position"] == achievement["position"]:
                             doc.append(NoEscape(
-                                r"\item " + self.cmd.glossary_inject(achievement['longdesc'], "retro")))
+                                r"\item " + self.cmd.glossary_inject(achievement["longdesc"], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))
 
     @staticmethod
-    def count_instances(instance_list, x):
+    def count_instances(instance_list: list[str | bool], x: any) -> int:
         """
         Count the number of times a list element shows up.
         :param list[str | bool] instance_list:

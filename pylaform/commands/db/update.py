@@ -1,5 +1,7 @@
 from tenacity import retry, stop_after_delay
-from . import connect, query
+from werkzeug.datastructures.structures import ImmutableMultiDict
+
+from . import connect, delete, query
 from ...utilities.commands import transform_get_id
 
 
@@ -15,8 +17,9 @@ class Post:
         self.conn = connect.db()
         self.cursor = self.conn.cursor()
         self.query = query.Get()
+        self.delete = delete.Delete()
 
-    def update_identification(self, form_data) -> None:
+    def update_identification(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the identification table.
         :param ImmutableMultiDict form_data: Form data from template.
@@ -38,7 +41,7 @@ class Post:
         self.conn.commit()
         return
 
-    def update_certifications(self, form_data) -> None:
+    def update_certifications(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the certification table.
         :param ImmutableMultiDict form_data: Form data from template.
@@ -56,12 +59,8 @@ class Post:
                 
             # Delete certifications.
             if "delete" in item["attr"]:
-                self.cursor.execute(
-                    f"""
-                    DELETE FROM `certifications`
-                    WHERE `id` = {int(item["id"])};
-                    """)
-                
+                self.delete.delete_target(item["id"], "certification")
+
             # Create certifications.
             elif "new" in item["id"]:
                 # Create result based on current attribute value.
@@ -75,7 +74,7 @@ class Post:
                 if len(result) == 3:
                     self.cursor.execute(
                         f"""
-                        INSERT INTO `certifications`
+                        INSERT INTO `certification`
                         (`certification`, `year`, `state`)
                         VALUES ('{result["certification"]}', '{result["year"]}', '{result["state"]}');
                         """)
@@ -84,7 +83,7 @@ class Post:
             else:
                 self.cursor.execute(
                     f"""
-                    UPDATE `certifications`
+                    UPDATE `certification`
                     SET {item["attr"]} = '{item["value"]}',
                     `state` = {item["state"]}
                     WHERE `id` = {item["id"]}
@@ -95,7 +94,7 @@ class Post:
         self.conn.commit()
         return
 
-    def update_positions(self, form_data) -> None:
+    def update_positions(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the employment and positions tables.
         :param ImmutableMultiDict form_data: Form data from template.
@@ -113,31 +112,7 @@ class Post:
                 
             # Delete position, and employer (if necessary).
             if "delete" in item["attr"]:
-                get_employer = self.cursor.execute(
-                    f"""
-                    SELECT `employer`
-                    FROM `positions`
-                    WHERE `id` = '{item["id"]}';
-                    """)
-                self.cursor.execute(
-                    f"""
-                    DELETE FROM `positions`
-                    WHERE `id` = {int(item["id"])};
-                    """)
-                
-                # If no other associations to employer.
-                if len(get_employer.fetchall()) <= 1:
-                    self.cursor.execute(
-                        f"""
-                        DELETE FROM `employers`
-                        WHERE `id` = {int(item["id"])};
-                        """)
-                self.cursor.execute(
-                    f"""
-                    DELETE FROM `positions`
-                    WHERE `id` = {int(item["id"])};
-                    """
-                )
+                self.delete.delete_association(item["id"], "employer", "position")
             
             # Create employer.
             elif "new" in item["id"] and ("employer" in item["attr"] or "location" in item["attr"]):
@@ -160,13 +135,13 @@ class Post:
                     check_employer = self.cursor.execute(
                         f"""
                         SELECT *
-                        FROM `employers`
+                        FROM `employer`
                         WHERE `employer` = '{result["employer"]}'
                         """)
                     if len(check_employer.fetchall()) == 0:  # If no employer.
                         self.cursor.execute(
                             f"""
-                                INSERT INTO `employers`
+                                INSERT INTO `employer`
                                 (`employer`, `location`, `state`)
                                 VALUES ('{result["employer"]}', '{result["location"]}', '{result["state"]}');
                             """)
@@ -199,7 +174,7 @@ class Post:
                         result["employer"] = self.query.query_id(result["employer"], "employer")
                     self.cursor.execute(
                         f"""
-                        INSERT INTO `positions`
+                        INSERT INTO `position`
                         (`employer`, `position`, `startdate`, `enddate`, `state`)
                         VALUES ('{result["employer"]}', '{result["position"]}', 
                                 '{result["startdate"]}', '{result["enddate"]}', '{result["state"]}');
@@ -220,13 +195,13 @@ class Post:
                         check_employer = self.cursor.execute(
                             f"""
                             SELECT *
-                            FROM `employers`
+                            FROM `employer`
                             WHERE `employer` = '{item["id"]}'
                             """)
                         if len(check_employer.fetchall()) == 0:  # If no employer.
                             self.cursor.execute(
                                 f"""
-                                INSERT INTO `employers`
+                                INSERT INTO `employer`
                                 (`employer`, `location`, `state`)
                                 VALUES ('{result["employer"]}', '{result["location"]}', '{result["state"]}');
                                 """)
@@ -234,7 +209,7 @@ class Post:
                 if "location" in item["attr"] or "employer" in item["attr"]:
                     self.cursor.execute(
                         f"""
-                        UPDATE `employers`
+                        UPDATE `employer`
                         SET {item["attr"]} = '{item["value"]}',
                         state = {item["state"]}
                         WHERE id = {int(item["id"])}
@@ -243,7 +218,7 @@ class Post:
                 elif "delete" not in item['attr'] and "new" not in item['attr']:
                     self.cursor.execute(
                         f"""
-                         UPDATE `positions`
+                         UPDATE `position`
                          SET {item["attr"]} = '{item["value"]}',
                          state = {item["state"]}
                          WHERE id = {int(item["id"])}
@@ -253,7 +228,7 @@ class Post:
         self.conn.commit()
         return
 
-    def update_skills(self, form_data) -> None:
+    def update_skills(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the skills table.
         :param ImmutableMultiDict form_data: Form data from template.
@@ -276,12 +251,8 @@ class Post:
             
             # Delete skill.
             if "delete" in item["attr"]:
-                self.cursor.execute(
-                    f"""
-                    DELETE FROM `skills`
-                    WHERE `id` = {int(item["id"])};
-                    """)
-            
+                self.delete.delete_target(item["id"], "skill")
+
             # Create skill.
             elif "new" in item["id"]:
                 # Create result based on current attribute value.
@@ -303,7 +274,7 @@ class Post:
                     # TODO: Implement ordering support.
                     self.cursor.execute(
                         f"""
-                        INSERT INTO `skills`
+                        INSERT INTO `skill`
                                     (`employer`, `position`, `shortdesc`,
                                     `longdesc`, `category`, `subcategory`,
                                     `categoryorder`, `skillorder`, `state`)
@@ -315,7 +286,7 @@ class Post:
             else:
                 self.cursor.execute(
                     f"""
-                        UPDATE `skills`
+                        UPDATE `skill`
                         SET `{item["attr"]}` = '{item["value"]}',
                         `state` = {item["state"]}
                         WHERE `id` = {int(item["id"])}
@@ -325,7 +296,7 @@ class Post:
         self.conn.commit()
         return
 
-    def update_summary(self, form_data) -> None:
+    def update_summary(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the summary table.
         :param ImmutableMultiDict form_data: Form data from template.
@@ -343,11 +314,8 @@ class Post:
             
             # Delete summary.
             if "delete" in item["attr"]:
-                self.cursor.execute(
-                    f"""
-                    DELETE FROM `summary`
-                    WHERE `id` = {int(item["id"])};
-                    """)
+                self.delete.delete_target(item["id"], "summary")
+
             # Create summary.
             elif "new" in item["id"]:
                 # Create result based on current attribute value.
@@ -378,7 +346,7 @@ class Post:
         self.conn.commit()
         return
 
-    def update_education(self, form_data) -> None:
+    def update_education(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the education and focus tables.
         :param ImmutableMultiDict form_data: Form data from template.
@@ -396,29 +364,7 @@ class Post:
 
             # Delete focus, and school (if necessary).
             if "delete" in item["attr"]:
-                # Check for school.
-                get_school = self.cursor.execute(
-                    f"""
-                    SELECT `school`
-                    FROM `focus`
-                    WHERE `id` = '{item["id"]}';
-                    """)
-                self.cursor.execute(
-                    f"""
-                    DELETE FROM `focus`
-                    WHERE `id` = {int(item["id"])};
-                    """)
-                if len(get_school.fetchall()) <= 1:
-                    self.cursor.execute(
-                        f"""
-                        DELETE FROM `schools`
-                        WHERE `id` = {int(item["id"])};
-                        """)
-                self.cursor.execute(
-                    f"""
-                    DELETE FROM `focus`
-                    WHERE `id` = {int(item["id"])};
-                    """)
+                self.delete.delete_association(item["id"], "school", "focus")
                 
             # Create school.
             elif "new" in item["id"] and ("school" in item["attr"] or "location" in item["attr"]):
@@ -440,13 +386,13 @@ class Post:
                     check_school = self.cursor.execute(
                         f"""
                         SELECT *
-                        FROM `schools`
+                        FROM `school`
                         WHERE `school` = '{result["school"]}'
                         """)
                     if len(check_school.fetchall()) == 0:  # If no school.
                         self.cursor.execute(
                             f"""
-                            INSERT INTO `schools`
+                            INSERT INTO `school`
                                         (`school`, `location`, `state`)
                             VALUES      ('{result["school"]}', '{result["location"]}', '{result["state"]}');
                             """)
@@ -498,7 +444,7 @@ class Post:
                 if "location" in item["attr"] or "school" in item["attr"]:
                     self.cursor.execute(
                         f"""
-                                UPDATE `schools`
+                                UPDATE `school`
                                 SET {item["attr"]} = "{item["value"]}",
                                 `state` = {item["state"]}
                                 WHERE `id` = {int(item["id"])}
@@ -517,7 +463,7 @@ class Post:
         self.conn.commit()
         return
 
-    def update_achievements(self, form_data) -> None:
+    def update_achievements(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the achievements table.
         :param ImmutableMultiDict form_data: Form data from template.
@@ -535,12 +481,8 @@ class Post:
             
             # Delete achievement.
             if "delete" in item["attr"]:
-                self.cursor.execute(
-                    f"""
-                     DELETE FROM `achievements`
-                     WHERE `id` = {int(item["id"])};
-                     """)
-                
+                self.delete.delete_target(item["id"], "achievement")
+
             # Create achievement.
             elif "new" in item["id"]:
                 # Create result based on current attribute value.
@@ -561,7 +503,7 @@ class Post:
                 if len(result) == 5:
                     self.cursor.execute(
                         f"""
-                        INSERT INTO `achievements`
+                        INSERT INTO `achievement`
                                     (`position`, `employer`, 
                                     `shortdesc`, `longdesc`, `state`)
                         VALUES      ('{result["employer"]}', '{result["position"]}',
@@ -578,7 +520,7 @@ class Post:
                         item["value"] = str(self.query.query_id(item["value"], "employer"))
                 self.cursor.execute(
                     f"""
-                         UPDATE `achievements`
+                         UPDATE `achievement`
                          SET {item['attr']} = '{item['value']}',
                          state = {item['state']}
                          WHERE id = {int(item['id'])}
@@ -588,7 +530,7 @@ class Post:
         self.conn.commit()
         return
 
-    def update_glossary(self, form_data) -> None:
+    def update_glossary(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the glossary table.
         :param ImmutableMultiDict form_data: Form data from template.
@@ -606,12 +548,8 @@ class Post:
                 
             # Delete term.
             if "delete" in item["attr"]:
-                self.cursor.execute(
-                    f"""
-                   DELETE FROM `glossary`
-                   WHERE `id` = {int(item["id"])};
-                   """)
-                
+                self.delete.delete_target(item["id"], "glossary")
+
             # Create term.
             elif "new" in item["id"]:
                 # Create result based on current attribute value.

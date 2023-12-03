@@ -37,14 +37,14 @@ class Generator:
         """
 
         # Let no files relax
-        self.doc.append(NoEscape(r'\let\nofiles\relax'))
+        self.doc.append(NoEscape(r"\let\nofiles\relax"))
 
         # Plugins
-        self.doc.packages.append(Package('hyperref'))
-        self.doc.packages.append(Package('bookmark'))
-        self.doc.packages.append(Package('pdfcomment'))
-        self.doc.packages.append(Package('setspace'))
-        self.doc.packages.append(Package('enumitem', "inline"))
+        self.doc.packages.append(Package("hyperref"))
+        self.doc.packages.append(Package("bookmark"))
+        self.doc.packages.append(Package("pdfcomment"))
+        self.doc.packages.append(Package("setspace"))
+        self.doc.packages.append(Package("enumitem", "inline"))
         self.doc.append(NoEscape(r"""\hypersetup{
                                 pdfborder={0 0 0},
                                 pdfborderstyle={/S/U/W 0}
@@ -67,7 +67,7 @@ class Generator:
         self.common.modern_work_history(self.doc)
         
         # End page
-        self.doc.create(NoEscape(r'\end{document}'))
+        self.doc.create(NoEscape(r"\end{document}"))
 
         # Generate the page
         self.generate()
@@ -79,5 +79,5 @@ class Generator:
         :return None: None
         """
         
-        self.doc.generate_pdf('data/one-page', clean_tex=True)
-        self.doc.generate_tex('data/one-page')
+        self.doc.generate_pdf("data/one-page", clean_tex=True)
+        self.doc.generate_tex("data/one-page")

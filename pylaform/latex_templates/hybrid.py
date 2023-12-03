@@ -24,10 +24,10 @@ class Generator:
         :return None: None
         """
         # Let no files relax
-        self.doc.append(NoEscape(r'\let\nofiles\relax'))
+        self.doc.append(NoEscape(r"\let\nofiles\relax"))
 
         # DocumentClass
-        self.doc.documentclass = Command('documentclass', options=['margin', 'line'], arguments='res')
+        self.doc.documentclass = Command("documentclass", options=["margin", "line"], arguments="res")
 
         # Margins
         self.doc.append(NoEscape(r"""
@@ -93,9 +93,9 @@ class Generator:
             {list}}"""))
 
         # Plugins
-        self.doc.packages.append(Package('hyperref'))
-        self.doc.packages.append(Package('xcolor'))
-        self.doc.packages.append(Package('pdfcomment'))
+        self.doc.packages.append(Package("hyperref"))
+        self.doc.packages.append(Package("xcolor"))
+        self.doc.packages.append(Package("pdfcomment"))
         self.doc.append(NoEscape(
             r"""\hypersetup{
             pdfborder={0 0 0},
@@ -118,7 +118,7 @@ class Generator:
         self.common.retro_work_history(self.doc)
 
         # End Page
-        self.doc.append(NoEscape(r'\end{resume}'))
+        self.doc.append(NoEscape(r"\end{resume}"))
         self.generate()
 
     @retry(stop=(stop_after_delay(10)))
@@ -128,5 +128,5 @@ class Generator:
         :return None: None
         """
 
-        self.doc.generate_pdf('data/hybrid', clean_tex=True)
-        self.doc.generate_tex('data/hybrid')
+        self.doc.generate_pdf("data/hybrid", clean_tex=True)
+        self.doc.generate_tex("data/hybrid")
