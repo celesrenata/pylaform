@@ -1,6 +1,6 @@
 from pylaform.commands.db.query import Get
 from pylaform.commands.latex import Commands
-from pylaform.utilities.commands import contact_flatten, listify, unique, slim
+from pylaform.utilities.commands import contact_flatten, listify, slim, unique
 from pylatex import Itemize, NewLine, Section, Subsection, Tabular, Tabularx, Document
 from pylatex.utils import bold, italic, NoEscape
 
@@ -116,12 +116,13 @@ class Common:
         """
 
         # Remove all items designated to be hidden
-        categories = self.cmd.unique([sub["category"] for sub in slim(self.resume_data.get_skills())])
+        unique_categories = unique([{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
+                                   for sub in self.resume_data.get_skills()])
         skills = slim(self.resume_data.get_skills())
 
         category_item_count = []
         skill_item_count = []
-        for item in categories:
+        for item in unique_categories:
             category_item_count.append(item["attr"])
         for item in skills:
             skill_item_count.append(item["subcategory"])
@@ -132,6 +133,7 @@ class Common:
 
         # Start writing.
         with ((doc.create(Section("Skills", False)))):
+            categories = slim(self.resume_data.get_skills())
             current_subcategory = ""
             sub_category = []
             for i, category in enumerate(categories, 1):
@@ -162,12 +164,14 @@ class Common:
 
         doc.append(NoEscape(r"\section{\sc Experience}"))
 
-        categories = self.cmd.unique([sub["category"] for sub in slim(self.resume_data.get_skills())])
-        subcategories = self.cmd.unique([{"subcategory": sub["subcategory"], "category": sub["category"]}
-                                         for sub in listify(self.resume_data.get_skills())])
+        categories = unique([sub["category"] for sub in slim(self.resume_data.get_skills())])
+        subcategories = unique([{"subcategory": sub["subcategory"], "category": sub["category"]}
+                                for sub in listify(self.resume_data.get_skills())])
         for category in categories:
             doc.append(bold(category))
             for subcategory in subcategories:
+
+                # Start writing.
                 if category == subcategory["category"]:
                     doc.append(NewLine())
                     doc.append(NoEscape(r"{\textit {" + subcategory["subcategory"] + r"}}"))
@@ -185,6 +189,7 @@ class Common:
         :return None: None
         """
 
+        # Start writing.
         with ((doc.create(Section("Employment", False)))):
             companies = slim(self.resume_data.get_achievements())
             current_subcategory = ""
@@ -224,8 +229,9 @@ class Common:
         :return None: None
         """
 
+        # Start writing.
         doc.append(NoEscape(r"\section{\sc Employment}"))
-        companies = self.cmd.unique([sub["employer"] for sub in listify(self.resume_data.get_achievements())])
+        companies = unique([sub["employer"] for sub in listify(self.resume_data.get_achievements())])
         for employer in companies:
             employer_name = self.resume_data.query_name(employer, "employer")
             doc.append(bold(employer_name))

@@ -16,13 +16,8 @@ class Generator:
         self.resume_data = Get()
         self.cmd = Commands()
         self.common = Common()
+
         # Margins
-        geometry_options = {
-            "head": "0in",
-            "margin": "0.5in",
-            "bottom": "0.5in",
-            "includeheadfoot": True
-        }
         self.doc = Document(geometry_options={
             "head": "0in",
             "margin": "0.5in",

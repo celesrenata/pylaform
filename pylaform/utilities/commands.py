@@ -32,7 +32,7 @@ def slim(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str | b
     bloated = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
                for sub in full_list]
     for item in bloated:
-        if not bloated["state"]:
+        if not item["state"]:
             bloated.remove(item)
     return listify(bloated)
 

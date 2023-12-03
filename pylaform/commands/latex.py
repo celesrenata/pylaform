@@ -1,45 +1,27 @@
 from datetime import datetime
-
-from pylaform.utilities.commands import listify
 from pylaform.commands.db.query import Get
+from pylaform.utilities.commands import listify, unique
 from pylatex import escape_latex, NoEscape
 import re
 
 
 class Commands:
     """
-    Package of commands build from pylatex
+    Package of commands build from PyLatex.
     :return: None
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.queries = Get()
 
     @staticmethod
-    def unique(list1):
+    def format_date(date_date: datetime | str) -> str:
         """
-        Returns only unique values of a list
-        :param list list1: source list
-        :return: list
+        Reformat ('YYYY-MM-DD') into 'Month - Year.'
+        :param datetime | str date_date: Date object.
+        :return str: Stringified version of date.
         """
-        # initialize a null list
-        unique_list = []
 
-        # traverse for all elements
-        for x in list1:
-            # check if exists in unique_list or not
-            if x not in unique_list:
-                unique_list.append(x)
-
-        return unique_list
-
-    @staticmethod
-    def format_date(date_date):
-        """
-        Reformat ('YYYY-MM-DD') into 'Month - Year'
-        :param Any date_date:
-        :return: str
-        """
         if isinstance(date_date, str):
             date_date = datetime.strptime(date_date, "%Y-%m-%d")
         if datetime.strftime(date_date, "%Y-%m-%d") == '9999-01-01':
@@ -48,18 +30,27 @@ class Commands:
         return datetime.strftime(date_date, "%B %Y")
 
     @staticmethod
-    def hyperlink(text, url):
+    def hyperlink(text: str, url: str) -> str:
         """
         Create a hyperlink in the document
-        :param str url:
-        :param str text:
-        :return: object
+        :param str url: URL.
+        :param str text: Description.
+        :return str: PyLatex compiled text.
         """
+
         text = escape_latex(text)
-        return NoEscape(r'\href{' + url + '}{' + text + '}')
+        return NoEscape(r"\href{" + url + "}{" + text + "}")
 
     @staticmethod
-    def textbox(short, long):
+    def textbox(short: str, long: str) -> str:
+        """
+        Create pdfcomment text box.
+        Used for glossary terms.
+        :param str short: Short description.
+        :param str long: Long description.
+        :return str: PyLatex compiled text.
+        """
+
         concat = NoEscape(
             r"\pdfmarkupcomment[markup=Underline,opacity=0.2]{"
             + f"{short}"
@@ -69,33 +60,45 @@ class Commands:
         return concat
 
     @staticmethod
-    def vspace(size):
+    def vspace(size: str) -> str:
+        """
+        Moves vertical position of text.
+        :param str size: Positive or negative float as string.
+        :return str: PyLatex compiled text.
+        """
+
         return NoEscape(r"\vspace{" + size + r" in}")
 
     @staticmethod
-    def hspace(size):
+    def hspace(size: str) -> str:
+        """
+        Moves horizontal position of text.
+        :param str size: Positive or negative float as string.
+        :return str: PyLatex compiled text.
+        """
+
         return NoEscape(r"\nobreak\hspace{" + str(size) + r" em}")
 
-    def glossary_inject(self, text, link_type):
+    def glossary_inject(self, text: str, link_type: str) -> str:
         """
         Scan source text for matching substrings and add pdfcomments to them.
         :param str text: source text
         :param str link_type: available options are modern and retro
-        :return: Any
+        :return str: PyLatex compiled text
         """
 
         glossary = listify(self.queries.get_glossary())
-        search_terms = Commands.unique([sub['term'] for sub in glossary])
+        search_terms = unique([sub["term"] for sub in glossary])
         updated_text = r"" + text
         for term in search_terms:
             if re.search(f" {term} ", text):
                 if link_type == "modern":
                     updated_text = updated_text.replace(
                         term, Commands.textbox(
-                            term, [sub['description'] for sub in glossary if sub['term'] == term][0]))
+                            term, [sub["description"] for sub in glossary if sub["term"] == term][0]))
                 else:
                     updated_text = updated_text.replace(
                         term, Commands.hyperlink(
-                            term, [sub['url'] for sub in glossary if sub['term'] == term][0]))
+                            term, [sub["url"] for sub in glossary if sub["term"] == term][0]))
 
         return updated_text

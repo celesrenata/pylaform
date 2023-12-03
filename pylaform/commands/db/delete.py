@@ -27,7 +27,7 @@ class Delete:
         find_target = self.cursor.execute(
             f"""
             SELECT {target_table}
-            FROM `{associated_table}`
+            FROM {associated_table}
             WHERE `id` = {int(associated_id)};
             """)
 
@@ -35,14 +35,14 @@ class Delete:
         if len(find_target.fetchall()) <= 1:
             self.cursor.execute(
                 f"""
-                DELETE FROM `{target_table}`
+                DELETE FROM {target_table}
                 WHERE `id` = {int(associated_id)};
                 """)
 
         # Delete association
         self.cursor.execute(
             f"""
-            DELETE FROM `{associated_table}`
+            DELETE FROM {associated_table}
             WHERE `id` = {int(associated_id)};
             """)
 
@@ -60,7 +60,7 @@ class Delete:
 
         self.cursor.execute(
             f"""
-            DELETE FROM `{target_table}`
+            DELETE FROM {target_table}
             WHERE `id` = {int(target_id)};
             """)
 
