@@ -1,16 +1,16 @@
+from flask import Flask, render_template, request, send_from_directory
 import os
-
 from pylaform.commands.db.query import Get
 from pylaform.commands.db.update import Post
-from flask import Flask, render_template, request, send_from_directory
-from pylaform.utilities.commands import fatten, listify
 from pylaform.latex_templates import hybrid, onePage
+from pylaform.utilities.commands import fatten, listify
 
 app = Flask(__name__,
             static_url_path="",
             static_folder="pylaform/static",
             template_folder="pylaform/templates")
 
+# Not currently used.
 app.jinja_env.add_extension('jinja2.ext.do')
 
 resume_query = Get()
@@ -66,7 +66,7 @@ def skills():
 def positions():
     if request.method == 'POST':
         resume_update.update_positions(request.form)
-        resume_query.purge_cache("employment")
+        resume_query.purge_cache("positions")
     return render_template("employment_index.html", **fatten(resume_query.get_positions()))
 
 

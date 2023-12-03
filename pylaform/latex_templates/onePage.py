@@ -1,19 +1,18 @@
-from pylaform.commands.latex import Commands
-from pylaform.utilities.commands import fatten, listify
 from pylaform.commands.db.query import Get
-from pylatex import Document, Package, Section, Subsection
+from pylaform.commands.latex import Commands
+from pylatex import Document, Package
 from pylatex.utils import NoEscape
-from tenacity import stop_after_delay, retry
+from tenacity import retry, stop_after_delay
 from .common import Common
 
 
 class Generator:
     """
-    Main logic for generating the single page resume.
+    Class for generating the single page resume.
     :return: None
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.resume_data = Get()
         self.cmd = Commands()
         self.common = Common()
@@ -31,7 +30,12 @@ class Generator:
             "includeheadfoot": True
         })
 
-    def run(self):
+    def run(self) -> None:
+        """
+        Class main logic.
+        :return None: None
+        """
+
         # Plugins
         self.doc.packages.append(Package('hyperref'))
         self.doc.packages.append(Package('bookmark'))
@@ -46,7 +50,7 @@ class Generator:
         self.doc.append(NoEscape(r"\setlist{nosep}"))
         self.doc.append(NoEscape(r"\setlist[itemize]{itemjoin=\hspace*{0.5em},itemjoin*=\hspace*{0.5em}}"))
         
-        # Start Page
+        # Start page
         # Contact Information
         self.common.modern_contact_header(self.doc)
 
@@ -59,15 +63,17 @@ class Generator:
         # Work History
         self.common.modern_work_history(self.doc)
         
-        # End Page
+        # End page
         self.doc.create(NoEscape(r'\end{document}'))
+
+        # Generate the page
         self.generate()
 
     @retry(stop=(stop_after_delay(10)))
-    def generate(self):
+    def generate(self) -> None:
         """
         Hammer PyLatex until it soulpos gives in.
-        :return: 
+        :return None: None
         """
         
         self.doc.generate_pdf('data/one-page', clean_tex=True)

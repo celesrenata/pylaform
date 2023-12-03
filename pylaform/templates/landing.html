@@ -2,9 +2,9 @@
 {% set nst = namespace(description="To be filled in by you") %}
 {{ ns.description }}
 {% for item in payload %}
-    {% if item['attr'] == 'description' %}
-        {% if item['value'] is defined %}
-            {% set nst.description = item['value'] %}
+    {% if item["attr"] == "description" %}
+        {% if item["value"] is defined %}
+            {% set nst.description = item["value"] %}
         {% endif %}
     {% endif %}
 {% endfor %}

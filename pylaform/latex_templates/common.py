@@ -1,32 +1,33 @@
-from itertools import count
-
-from pylaform.commands.latex import Commands
-from pylaform.utilities.commands import fatten, contact_flatten, listify, unique
 from pylaform.commands.db.query import Get
-from pylatex import Document, Itemize, NewLine, Package, Section, Subsection, Tabular, Tabularx
-from pylatex.utils import bold, italic, NoEscape
 from pylaform.commands.latex import Commands
+from pylaform.utilities.commands import contact_flatten, listify, unique
+from pylatex import Itemize, NewLine, Section, Subsection, Tabular, Tabularx
+from pylatex.utils import bold, italic, NoEscape
 
 
 class Common:
     """
-    Common methods used to generate ports of the resume that are shared between templates
-    :return: None
+    Common methods used to generate ports of the resume that are shared between templates.
+    :return None: None
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.resume_data = Get()
         self.cmd = Commands()
 
-    def modern_contact_header(self, doc):
+    def modern_contact_header(self, doc) -> None:
         """
-        Print header containing the modern contact information
-        :return:
+        Print header containing the modern contact information.
+        :param Document doc: PyLatex document handler.
+        :return None: None
         """
 
+        # Setup values.
         data = contact_flatten(self.resume_data.get_identification())
-        phone = data['phone']['value']
+        phone = data["phone"]["value"]
         phone_number = f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}"
+        
+        # Start writing.
         with doc.create(Section(data["name"]["value"] if data["name"]["state"] else "", False)):
             doc.append(self.cmd.vspace("-0.12"))
             with doc.create(Tabularx("X X")) as table1:
@@ -46,121 +47,135 @@ class Common:
                     f"{data['email']['value'] if data['email']['state'] else ''}",
                     f"{data['location']['value'] if data['location']['state'] else ''}")
 
-    def retro_contact_header(self, doc):
+    def retro_contact_header(self, doc) -> None:
         """
-        Print header containing the retro contact information
-        :return:
+        Print header containing the retro contact information.
+        :param Document doc: PyLatex document handler.
+        :return None: None
         """
 
+        # Setup values.
         data = contact_flatten(self.resume_data.get_identification())
-        name = data['name']['value']
-        phone = data['phone']["value"]
+        name = data["name"]["value"]
+        phone = data["phone"]["value"]
         phone_number = italic("Phone:  ") + f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}"
         email = italic("E-mail:  ") + self.cmd.hyperlink(
-                data['email']['value'], "mailto:" + data['email']['value'])
+                data["email"]["value"], "mailto:" + data["email"]["value"])
         www = italic("WWW: ") + self.cmd.hyperlink(
-            data['www']['value'], "https://" + data['www']['value'])
+            data["www"]["value"], "https://" + data["www"]["value"])
 
-        # Start Writing
-        doc.append(NoEscape(r"\name{" + f"{name if data['name']['state'] else ''}" + r"}") + self.cmd.vspace("0.1"))
+        # Start writing.
+        doc.append(NoEscape(r"\name{' + f'{name if data['name']['state'] else ''}' + r'}") + self.cmd.vspace("0.1"))
         doc.append(NoEscape(r"\begin{resume}"))
         doc.append(NoEscape(r"\section{\sc Contact Information}"))
         doc.append(self.cmd.vspace(".05"))
         with doc.create(Tabular("l")) as table1:
-            table1.add_row([NoEscape(phone_number if data['phone']['state'] else '')])
-            table1.add_row([NoEscape(email if data['email']['state'] else '')])
-            table1.add_row([NoEscape(www if data['www']['state'] else '')])
+            table1.add_row([NoEscape(phone_number if data["phone"]["state"] else "")])
+            table1.add_row([NoEscape(email if data["email"]["state"] else "")])
+            table1.add_row([NoEscape(www if data["www"]["state"] else "")])
 
-    def modern_summary_details(self, doc):
+    def modern_summary_details(self, doc) -> None:
         """
         Print detailed modern summary.
-        :param object doc: doc handler
-        :return: object
+        :param Document doc: PyLatex document handler.
+        :return None: None
         """
 
-        bloated_summaries = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_summary()]
+        # Setup values.
+        bloated_summaries = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]} 
+                             for sub in self.resume_data.get_summary()]
         for bloated_summary in bloated_summaries:
-            if not bloated_summary['state']:
+            if not bloated_summary["state"]:
                 bloated_summaries.remove(bloated_summary)
-
         summaries = listify(bloated_summaries)
+        
+        # Start writing.
         with (doc.create(Section("Summary", False))) as summary_sub:
             for summary in summaries:
                 summary_sub.append(NoEscape(r"\begin{itemize}"))
-                summary_sub.append(NoEscape(r"\item\textbf{" + summary["shortdesc"] + r":} " + self.cmd.glossary_inject(summary["longdesc"], "modern")))
+                summary_sub.append(NoEscape(r"\item\textbf{" + summary["shortdesc"] + r":} "
+                                            + self.cmd.glossary_inject(summary["longdesc"], "modern")))
                 summary_sub.append(NoEscape(r"\end{itemize}"))
 
-    def retro_summary_details(self, doc):
+    def retro_summary_details(self, doc) -> None:
         """
         Print detailed retro summary.
-        :param object doc: doc handler
-        :return: object
+        :param Document doc: PyLatex document handler.
+        :return None: None
         """
 
-        bloated_summaries = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for
-                             sub in self.resume_data.get_summary()]
+        # Setup values.
+        bloated_summaries = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]} 
+                             for sub in self.resume_data.get_summary()]
         for bloated_summary in bloated_summaries:
-            if not bloated_summary['state']:
+            if not bloated_summary["state"]:
                 bloated_summaries.remove(bloated_summary)
-
         summaries = listify(bloated_summaries)
+        
+        # Start writing
         doc.append(NoEscape(r"\section{\sc Summary}"))
         for summary in summaries:
             doc.append(NoEscape(
-                r"\textbf{" + summary["shortdesc"] + r":} " + self.cmd.glossary_inject(summary["longdesc"], "retro")))
+                r"\textbf{" + summary["shortdesc"] + r":} " 
+                + self.cmd.glossary_inject(summary["longdesc"], "retro")))
             doc.append(NewLine())
 
-    def modern_skills(self, doc):
+    def modern_skills(self, doc) -> None:
         """
         Print detailed modern professional_experience.
-        :param object doc: doc handler
-        :return: object
+        :param Document doc: PyLatex document handler.
+        :return None: None
         """
 
-        categories = unique([{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in
-             self.resume_data.get_skills()])
+        # Setup values.
+        categories = unique([{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]} 
+                             for sub in self.resume_data.get_skills()])
         skills = listify(self.resume_data.get_skills())
         category_item_count = []
         skill_item_count = []
         for item in categories:
             category_item_count.append(item["attr"])
         for item in skills:
-            skill_item_count.append(item['subcategory'])
+            skill_item_count.append(item["subcategory"])
         unique_list = unique(skill_item_count)
         counts_dict = {}
         for item in unique_list:
             counts_dict.update({item: self.count_instances(self, skill_item_count, item)})
 
         last_run = len(unique(category_item_count))
-        with doc.create(Section("Skills", False)):
-            categories = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in
-                 self.resume_data.get_skills()]
+        
+        # Start writing.
+        with ((doc.create(Section("Skills", False)))):
+            categories = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
+                          for sub in self.resume_data.get_skills()]
 
             # Remove all items designated to be hidden
             bloated_categories = self.resume_data.get_skills()
             for bloated_category in bloated_categories:
-                if not bloated_category['state']:
+                if not bloated_category["state"]:
                     bloated_categories.remove(bloated_category)
             categories = listify(bloated_categories)
 
-            current_subcategory = ''
+            current_subcategory = ""
             sub_category = []
             for i, category in enumerate(categories, 1):
-                if category['subcategory'] != current_subcategory and category['subcategory'] not in sub_category:
-                    current_subcategory = category['subcategory']
-                    sub_category.append(category['subcategory'])
+                if category["subcategory"] != current_subcategory and category["subcategory"] not in sub_category:
+                    current_subcategory = category["subcategory"]
+                    sub_category.append(category["subcategory"])
                     subcategory_counter = 0
                     # if i % last_run == 0:
-                    with doc.create(Subsection(category['subcategory'], False)) as skill_sub:
+                    with doc.create(Subsection(category["subcategory"], False)) as skill_sub:
                         if subcategory_counter != i:
-                            skill_sub.append(NoEscape(r'\begin{itemize*}'))
+                            skill_sub.append(NoEscape(r"\begin{itemize*}"))
                             subcategory_counter = i
                         skill_counter = 1
                         for skill in skills:
-                            if skill['category'] == category['category'] and skill['subcategory'] == category['subcategory']:
-                                skill_sub.append(NoEscape(r'\item') + self.cmd.textbox(skill['shortdesc'], skill['longdesc']))
-                                if skill_counter == counts_dict[category['subcategory']]:
-                                    skill_sub.append(NoEscape(r'\end{itemize*}'))
+                            if (skill["category"] == category["category"]
+                                    and skill["subcategory"] == category["subcategory"]):
+                                skill_sub.append(NoEscape(r"\item")
+                                                 + self.cmd.textbox(skill["shortdesc"], skill["longdesc"]))
+                                if skill_counter == counts_dict[category["subcategory"]]:
+                                    skill_sub.append(NoEscape(r"\end{itemize*}"))
                                     break
                                 else:
                                     skill_counter = skill_counter + 1
@@ -168,8 +183,8 @@ class Common:
     def retro_skills(self, doc):
         """
         Print detailed retro professional_experience.se
-        :param object doc: doc handler
-        :return: object
+        :param Document doc: PyLatex document handler.
+        :return None: None
         """
 
         doc.append(NoEscape(r"\section{\sc Experience}"))
@@ -196,9 +211,9 @@ class Common:
 
     def modern_work_history(self, doc):
         """
-        :param object doc: doc handler
         Print standard detail work history.
-        :return:
+        :param Document doc: PyLatex document handler.
+        :return None: None
         """
 
         with doc.create(Section("Employment", False)):
@@ -239,9 +254,9 @@ class Common:
 
     def retro_work_history(self, doc):
         """
-        :param object doc: doc handler
         Print standard detail work history, however for res.cls.
-        :return:
+        :param Document doc: PyLatex document handler.
+        :return None: None
         """
         doc.append(NoEscape(r"\section{\sc Employment}"))
         companies = self.cmd.unique([sub["employer"] for sub in listify(self.resume_data.get_achievements())])

@@ -1,24 +1,29 @@
-from pylaform.commands.latex import Commands
 from pylaform.commands.db.query import Get
-from pylatex import Command, Document, Package, Section, Subsection
+from pylaform.commands.latex import Commands
+from pylatex import Command, Document, Package
 from pylatex.utils import NoEscape
-from tenacity import stop_after_delay, retry
+from tenacity import retry, stop_after_delay
 from .common import Common
 
 
 class Generator:
     """
-    Main logic for generating the hybrid format resume.
+    Class for generating the hybrid format resume.
     :return: None
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.resume_data = Get()
         self.cmd = Commands()
         self.common = Common()
         self.doc = Document()
 
-    def run(self):
+    def run(self) -> None:
+        """
+        Class main logic.
+        :return None: None
+        """
+
         # DocumentClass
         self.doc.documentclass = Command('documentclass', options=['margin', 'line'], arguments='res')
 
@@ -116,10 +121,10 @@ class Generator:
         self.generate()
 
     @retry(stop=(stop_after_delay(10)))
-    def generate(self):
+    def generate(self) -> None:
         """
         Hammer PyLatex until it soulpos gives in.
-        :return:
+        :return None: None
         """
 
         self.doc.generate_pdf('data/hybrid', clean_tex=True)

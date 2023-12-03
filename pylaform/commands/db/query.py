@@ -1,16 +1,18 @@
 import sqlite3
+from tenacity import retry, stop_after_delay
 
 from . import connect
-from tenacity import retry, stop_after_delay
 
 
 class Get:
     """
-        Connect to the Database and return basic selections, to be improved for user specifics.
-        :return: Dictionary
+    Collection of queries to run against the local database.
+    Actions: SELECT
+    :return None: None
     """
+
     @retry(stop=(stop_after_delay(10)))
-    def __init__(self):
+    def __init__(self) -> None:
         self.conn = connect.db()
         self.cursor = self.conn.cursor()
         self.result_certifications = []
@@ -22,7 +24,13 @@ class Get:
         self.result_positions = []
         self.result_summary = []
 
-    def purge_cache(self, table=None):
+    def purge_cache(self, table=None) -> None:
+        """
+        Purges local cache from python application for associated table
+        :param str table:  Name of table to purge.
+        :return None: None
+        """
+
         match table:
             case "certifications":
                 self.result_certifications = []
@@ -36,7 +44,7 @@ class Get:
                 self.result_achievements = []
             case "glossary":
                 self.result_glossary = []
-            case "employment":
+            case "positions":
                 self.result_positions = []
             case "summary":
                 self.result_summary = []
@@ -44,7 +52,13 @@ class Get:
                 self.__init__()
 
     @retry
-    def query(self, query):
+    def query(self, query) -> sqlite3.Cursor:
+        """
+        Query worker that handles all main SELECT requests.
+        :param str query: Query String.
+        :return sqlite3.Cursor: Iterable cursor.
+        """
+
         try:
             self.cursor.execute(query)
         except sqlite3.Error as e:
@@ -52,69 +66,82 @@ class Get:
             raise
         return self.cursor
 
-    def query_id(self, value, attr):
+    def query_id(self, value, attr) -> int:
+        # TODO: Consider refactoring to use the attribute as the FROM/WHERE as "attr + 's'"
+        """
+        Queries the associated name to return the ID in order to detect if new or not.
+        :param str value: Name to search.
+        :param str attr: Attribute to search.
+        :return int: ID associated with Name.
+        """
+
         if attr == "employer":
             sub_result = self.query(
                 f"""
-                    SELECT id
-                    FROM employers
-                    WHERE employer = '{value}';
-                """
-            )
+                SELECT `id`
+                FROM `employers`
+                WHERE `employer` = '{value}';
+                """)
         if attr == "position":
             sub_result = self.query(
                 f"""
-                    SELECT id
-                    FROM positions
-                    WHERE position = '{value}'
-                """
-            )
+                SELECT `id`
+                FROM `positions`
+                WHERE `position` = '{value}'
+                """)
         if attr == "school":
             sub_result = self.query(
                 f"""
-                SELECT id
-                FROM schools
-                WHERE school = '{value}'
-                """
-            )
+                SELECT `id`
+                FROM `schools`
+                WHERE `school` = '{value}'
+                """)
         result = 0
         for item in sub_result:
             result = int(item[0])
         return result
 
-    def query_name(self, value, attr):
+    def query_name(self, value, attr) -> str:
+        # TODO: Consider refactoring to use the attribute as the FROM/WHERE as "attr + 's'"
+        """
+        Queries the associated ID to return the name for display.
+        :param int value: ID to search.
+        :param str attr: Attribute to search.
+        :return str: Name associated with ID.
+        """
+
         if attr == "employer":
             sub_result = self.query(
                 f"""
-                    SELECT `employer`
-                    FROM `employers`
-                    WHERE `id` = '{value}';
-                """
-            )
+                SELECT `employer`
+                FROM `employers`
+                WHERE `id` = '{value}';
+                """)
         if attr == "position":
             sub_result = self.query(
                 f"""
-                    SELECT `position`
-                    FROM positions
-                    WHERE `id` = '{value}'
-                """
-            )
+                SELECT `position`
+                FROM `positions`
+                WHERE `id` = '{value}'
+                """)
         for item in sub_result:
             result = item[0]
         return result
 
-    def get_certifications(self):
+    def get_certifications(self) -> list:
         """
-        Return certification list from database
-        :return: list
+        Return certification list from database.
+        :return list: Raw return grouped by id/attr/value/state.
         """
+
         if len(self.result_certifications) == 0:
             result = self.query(
                 """
-                    SELECT id, certification, year, state
-                    FROM certifications
+                SELECT `id`, `certification`, `year`, `state`
+                FROM `certifications`
                 """)
 
+            # Create raw list based on id/attr/value/state
             for certification_id, certification, year, state in result:
                 self.result_certifications.append({
                     "id": certification_id,
@@ -131,23 +158,25 @@ class Get:
 
         return self.result_certifications
 
-    def get_education(self):
+    def get_education(self) -> list:
         """
-            Return education list objects from database by school, focus, startdate, enddate
-            :return: list
+        Return education NESTED list objects from database by school.
+        :return list: Raw return grouped by 'origin_ + id/attr/value/state.'
         """
 
         if len(self.result_education) == 0:
             result = self.query(
                 """
-                    SELECT f.id, f.focus, f.startdate, f.enddate, s.id, s.school, s.location, s.state, f.state
-                    FROM schools AS s
-                    JOIN focus AS f on s.id = f.school
-                    ORDER BY f.startdate DESC
-                """
-            )
+                SELECT f.id, f.focus, f.startdate, f.enddate, f.state,
+                       s.id, s.school, s.location, s.state
+                FROM `schools` AS s
+                JOIN `focus` AS f on s.id = f.school
+                ORDER BY f.startdate DESC
+                """)
 
-            for focusid, focus, startdate, enddate, schoolid, school, location, schoolstate, focusstate in result:
+            # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
+            for (focusid, focus, startdate, enddate, focusstate,
+                 schoolid, school, location, schoolstate) in result:
                 self.result_education.append({
                     "id": "school_" + str(schoolid),
                     "attr": "schoolname",
@@ -187,25 +216,26 @@ class Get:
 
         return self.result_education
 
-    def get_identification(self):
+    def get_identification(self) -> list:
         """
-            Return identification list from database.
-            :return: list
-        :return:
+        Return identification list objects from database.
+        :return list: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_identification) == 0:
             result = self.query(
                 """
-                    SELECT id, attr, value, state
-                    FROM identification
+                SELECT id, attr, value, state
+                FROM identification
                 """)
 
+            # Create raw list based on 'id/attr/value/state.'
             for identification_id, attr, value, state in result:
                 if state == 1:
                     state = True
                 else:
                     state = False
+
                 self.result_identification.append({
                     "id": identification_id,
                     "attr": attr,
@@ -221,21 +251,21 @@ class Get:
 
         return self.result_identification
 
-    def get_summary(self):
+    def get_summary(self) -> list:
         """
-            Return glossary list objects from database
-            :return: list
+        Return summary list objects from database.
+        :return list: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_summary) == 0:
             result = self.query(
                 """
-                    SELECT id, shortdesc, longdesc, state
-                    FROM summary
-                    ORDER BY summaryorder ASC
-                """
-            )
+                SELECT id, shortdesc, longdesc, state
+                FROM summary
+                ORDER BY summaryorder ASC
+                """)
 
+            # Create raw list based on 'id/attr/value/state.'
             for summary_id, shortdesc, longdesc, state in result:
                 self.result_summary.append({
                     "id": summary_id,
@@ -252,22 +282,22 @@ class Get:
 
         return self.result_summary
 
-    def get_skills(self):
+    def get_skills(self) -> list:
         """
-            Return unrefined skills list from database
-            :return: list
+        Return skills list objects from database.
+        :return list: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_skills) == 0:
             result = self.query(
                 """
-                    SELECT s.id, s.category, s.subcategory, e.employer, p.position, s.shortdesc, s.longdesc, s.state
-                    FROM skills s, positions p, employers e
-                    WHERE p.id = s.position and e.id = s.employer
-                    ORDER BY categoryorder, skillorder ASC;
-                """
-            )
+                SELECT s.id, s.category, s.subcategory, e.employer, p.position, s.shortdesc, s.longdesc, s.state
+                FROM skills s, positions p, employers e
+                WHERE p.id = s.position and e.id = s.employer
+                ORDER BY categoryorder, skillorder ASC;
+                """)
 
+            # Create raw list based on 'id/attr/value/state.'
             for skills_id, category, subcategory, employer, position, shortdesc, longdesc, state in result:
                 self.result_skills.append({
                     "id": skills_id,
@@ -279,7 +309,6 @@ class Get:
                     "attr": "subcategory",
                     "value": subcategory,
                     "state": state})
-
                 self.result_skills.append({
                     "id": skills_id,
                     "attr": "employer",
@@ -303,21 +332,21 @@ class Get:
 
         return self.result_skills
 
-    def get_glossary(self):
+    def get_glossary(self) -> list:
         """
-            Return glossary list objects from database
-            :return: list
+        Return glossary list objects from database.
+        :return list: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_glossary) == 0:
             result = self.query(
                 """
-                    SELECT id, term, url, description, state
-                    FROM glossary
-                    ORDER BY term ASC
-                """
-            )
+                SELECT id, term, url, description, state
+                FROM glossary
+                ORDER BY term ASC
+                """)
 
+            # Create raw list based on 'id/attr/value/state.'
             for glossary_id, term, url, description, state in result:
                 self.result_glossary.append({
                     "id": glossary_id,
@@ -340,23 +369,25 @@ class Get:
 
         return self.result_glossary
 
-    def get_positions(self):
+    def get_positions(self) -> list:
         """
-            Return positions list objects from database by employer, position, startdate, enddate
-            :return: list
+        Return positions NESTED list objects from database by school.
+        :return list: Raw return grouped by 'origin_ + id/attr/value/state.'
         """
 
         if len(self.result_positions) == 0:
             result = self.query(
                 """
-                    SELECT e.id, e.employer, e.location, e.state, p.id, p.position, p.startdate, p.enddate, p.state
-                    FROM employers AS e
-                    JOIN positions AS p on e.id = p.employer
-                    ORDER BY p.startdate DESC
-                """
-            )
+                SELECT e.id, e.employer, e.location, e.state,
+                       p.id, p.position, p.startdate, p.enddate, p.state
+                FROM employers AS e
+                JOIN positions AS p on e.id = p.employer
+                ORDER BY p.startdate DESC
+                """)
 
-            for employer_id, employer, location, employer_state, position_id, position, start_date, end_date, position_state in result:
+            # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
+            for (employer_id, employer, location, employer_state,
+                 position_id, position, start_date, end_date, position_state) in result:
                 self.result_positions.append({
                     "id": "employer_" + str(employer_id),
                     "attr": "employername",
@@ -386,23 +417,27 @@ class Get:
 
         return self.result_positions
 
-    def get_achievements(self):
+    def get_achievements(self) -> list:
         """
-            Return achievements list objects from database by employer and position
-            :return: list
+        Return achievements NESTED list objects from database by school.
+        :return list: Raw return grouped by 'origin_ + id/attr/value/state.'
         """
 
         if len(self.result_achievements) == 0:
             result = self.query(
                 """
-                    SELECT e.id, e.employer, e.state as employer_state, p.id as position_id, p.position, p.state as position_state, a.id as achievement_id, a.shortdesc, a.longdesc, a.state as achievement_state
-                    FROM achievements a
-                    JOIN positions p ON a.position = p.id AND a.employer = p.employer
-                    JOIN employers e ON a.employer = e.id;
-                """
-            )
+                SELECT e.id, e.employer, e.state as employer_state,
+                       p.id as position_id, p.position, p.state as position_state,
+                       a.id as achievement_id, a.shortdesc, a.longdesc, a.state as achievement_state
+                FROM achievements a
+                JOIN positions p ON a.position = p.id AND a.employer = p.employer
+                JOIN employers e ON a.employer = e.id;
+                """)
 
-            for employer_id, employer, employer_state, position_id, position, position_state, achievement_id, shortdesc, longdesc, achievement_state in result:
+            # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
+            for (employer_id, employer, employer_state,
+                 position_id, position, position_state,
+                 achievement_id, shortdesc, longdesc, achievement_state) in result:
                 self.result_achievements.append({
                     "id": "employer_" + str(employer_id),
                     "attr": "employername",

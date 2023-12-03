@@ -3,6 +3,7 @@
 {% block content %}
     <div class="lead d-flex align-items-bottom justify-content-center">
         <form method="post">
+            <!-- Iterate payload -->
         {% for i in payload %}
             {{ form_group(i["employer"], i["employername"] ,i["location"], i["employerstate"], i["position"], i["positionname"], i["startdate"], i["enddate"], i["positionstate"]) }}
         {% endfor %}
@@ -24,11 +25,11 @@
         $("#rowAdder").click(function () {
             clicks += 1;
             newRowAdd = `{{ form_group("new", "", "", true, "", "", "", "", true) }}`;
-            $('#newinput').append(newRowAdd);
+            $("#newinput").append(newRowAdd);
         });
         $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest('div').attr('id');
-            $('#' + div_id).remove();
+            div_id = $(this).closest("div").attr("id");
+            $("#" + div_id).remove();
             $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
         });
     </script>

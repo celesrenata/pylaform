@@ -1,4 +1,5 @@
 {% macro form_group(employerid, employer, employerstate, positionid, position, positionstate, achievementid, shortdesc, longdesc, achievementstate) %}
+    <!-- Test if new template element -->
     {% if employerid == "new" %}
         {% set employerid = "new` + clicks + `"|safe %}
         {% set positionid = "new` + clicks + `"|safe %}
@@ -11,13 +12,13 @@
                     <label for="{{ achievementid }}_employer">Employer Name</label>
                     <br>
                     <input type="text" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
-                           value="{{ employer if employer is defined else '' }}">
+                           value="{{ employer if employer is defined else "" }}">
                 </td>
                 <td>
                     <label for="{{ achievementid }}_position">Position Held</label>
                     <br>
                     <input type="text" name="{{ achievementid }}_position" id="{{ employerid }}_position"
-                           value="{{ position if position is defined else '' }}">
+                           value="{{ position if position is defined else "" }}">
                 </td>
                 <td>
                     <label for="{{ position }}_position_enabled">Displayed</label>
@@ -30,13 +31,13 @@
                     <label for="{{ achievementid }}_shortdesc">Achievement Short Description</label>
                     <br>
                     <input type="text" name="{{ achievementid }}_shortdesc" id="{{ achievementid }}_shortdesc"
-                           value="{{ shortdesc if shortdesc is defined else '' }}">
+                           value="{{ shortdesc if shortdesc is defined else "" }}">
                 </td>
                 <td>
                     <label for="{{ achievementid }}_longdesc">Achievement Long Description</label>
                     <br>
                     <input type="text" name="{{ positionid }}_longdesc" id="{{ achievementid }}_longdesc"
-                           value="{{ longdesc if longdesc is defined else '' }}">
+                           value="{{ longdesc if longdesc is defined else "" }}">
                     <br>
                     <label for="{{ achievementid }}_longdesc_enabled">Displayed</label>
                     <input type="checkbox" name="{{ achievementid }}_enddate_enabled"

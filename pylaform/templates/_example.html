@@ -3,19 +3,20 @@
     <div class="d-flex align-items-bottom justify-content-center">
         <form method="post">
         <ul>
+            <!-- Iterate payload -->
             {% for item in payload %}
                 <li>
-                    <label for="{{ item['id'] }}_{{ item['attr'] }}">{{ item['attr'] }}</label>
+                    <label for="{{ item["id"] }}_{{ item["attr"] }}">{{ item["attr"] }}</label>
                     <br>
-                    <textarea name="{{item['id']}}_{{ item['attr'] }}" {{ item['value'] }}
-                              id="{{ item['id'] }}"
+                    <textarea name="{{item["id"]}}_{{ item["attr"] }}" {{ item["value"] }}
+                              id="{{ item["id"] }}"
                               rows="2"
                               cols="100"
-                    >{{ item['value'] if item['value'] is defined else '' }}</textarea>
+                    >{{ item["value"] if item["value"] is defined else "" }}</textarea>
                     <br>
-                    <label for="{{ item['id'] }}_{{ item['attr'] }}_enabled">Displayed</label>
-                    <input type="checkbox" name="{{item['id']}}_{{ item['attr'] }}_enabled"
-                            {{ "checked" if item['state'] }}>
+                    <label for="{{ item["id"] }}_{{ item["attr"] }}_enabled">Displayed</label>
+                    <input type="checkbox" name="{{item["id"]}}_{{ item["attr"] }}_enabled"
+                            {{ "checked" if item["state"] }}>
                 </li>
             {% endfor %}
         </ul>

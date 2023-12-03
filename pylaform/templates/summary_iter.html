@@ -1,5 +1,5 @@
 {% macro form_group(id, shortdesc, longdesc, state) %}
-    {% set id_end = "" %}
+    <!-- Test if new template element -->
     {% if id == "new" %}
         {% set id = "new` + clicks + `"|safe %}
     {% endif %}
@@ -13,7 +13,7 @@
                               id="{{ id }}_shortdesc"
                               rows="1"
                               cols="60"
-                              >{{ shortdesc if shortdesc is defined else '' }}</textarea>
+                              >{{ shortdesc if shortdesc is defined else "" }}</textarea>
                     <br>
                     <label for="{{ id }}_longdesc">Long Description</label>
                     <br>
@@ -21,7 +21,7 @@
                               id="{{ id }}_longdesc"
                               rows="2"
                               cols="60"
-                              >{{ longdesc if longdesc is defined else '' }}</textarea>
+                              >{{ longdesc if longdesc is defined else "" }}</textarea>
                     <br>
                     <label for="{{ id }}_longdesc_enabled">Displayed</label>
                     <input type="checkbox" name="{{id}}_longdesc_enabled"
