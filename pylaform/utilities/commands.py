@@ -45,17 +45,12 @@ def listify(full_list) -> list[dict[str, str | bool]]:
 
     attrs = unique([sub["attr"] for sub in full_list])
     attrs_per_id = 0
-    # list[str] of all nested ID groups
-    sub_mask_working_group = ["".join(x for x in str(sub["id"])if x.isalpha())
-                              if "".join(x for x in str(sub["id"]) if x.isalpha())
-                                 != "" else "" for sub in full_list]
-    # Dedup
-    sub_mask_group = unique(sub_mask_working_group)
+
+    # Setup variables.
     sub_mask_group_count = []
     result = []
     count = 1
     sub_mask = []
-    sub_mask_count = 0
     working_result = {}
     for item in full_list:
         # If current_id and
@@ -63,7 +58,7 @@ def listify(full_list) -> list[dict[str, str | bool]]:
         # or isnumeber(current_id) != isnumber(previous_loop_id).
         if (count != item["id"]
                 and (re.sub(r'\d+', '', str(item["id"])) == re.sub(r'\d+', '', str(count))
-                     or re.sub('\D', '', str(item["id"])) != re.sub('\D', '', str(count)))):
+                     or re.sub(r'\D', '', str(item["id"])) != re.sub(r'\D', '', str(count)))):
             # Split current ID for nested detection.
             if isinstance(item["id"], int):
                 item_split = str(item["id"])
@@ -98,10 +93,8 @@ def listify(full_list) -> list[dict[str, str | bool]]:
             if item["id"] not in sub_mask:
                 sub_mask.append(item["id"])
                 sub_mask_group_count.append(re.sub("[^A-Za-z]", "", item["id"]))
-            sub_mask_count = len(unique(sub_mask_group_count))
             if all(x in working_result for x in attrs):
                 result.append(working_result)
-                sub_mask_count = 0
                 working_result = {}
 
         # REGULAR Update result
@@ -121,8 +114,6 @@ def transform_get_id(form_data) -> list[dict[str, str | bool]]:
     """
 
     result = []
-    sub_result = {}
-    form_data_len = len(form_data)
     for item in form_data:
         item_split = str(item).split("_")
         if "_enabled" in item:

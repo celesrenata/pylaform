@@ -48,8 +48,6 @@ class Get:
                 self.result_positions = []
             case "summary":
                 self.result_summary = []
-            case other:
-                self.__init__()
 
     @retry
     def query(self, query) -> sqlite3.Cursor:
@@ -75,6 +73,7 @@ class Get:
         :return int: ID associated with Name.
         """
 
+        sub_result = sqlite3.Cursor
         if attr == "employer":
             sub_result = self.query(
                 f"""
@@ -110,6 +109,8 @@ class Get:
         :return str: Name associated with ID.
         """
 
+        result = ""
+        sub_result = sqlite3.Cursor
         if attr == "employer":
             sub_result = self.query(
                 f"""
@@ -225,8 +226,8 @@ class Get:
         if len(self.result_identification) == 0:
             result = self.query(
                 """
-                SELECT id, attr, value, state
-                FROM identification
+                SELECT `id`, `attr`, `value`, `state`
+                FROM `identification`
                 """)
 
             # Create raw list based on 'id/attr/value/state.'
@@ -260,9 +261,9 @@ class Get:
         if len(self.result_summary) == 0:
             result = self.query(
                 """
-                SELECT id, shortdesc, longdesc, state
-                FROM summary
-                ORDER BY summaryorder ASC
+                SELECT `id`, `shortdesc`, `longdesc`, `state`
+                FROM `summary`
+                ORDER BY `summaryorder`
                 """)
 
             # Create raw list based on 'id/attr/value/state.'
@@ -292,9 +293,9 @@ class Get:
             result = self.query(
                 """
                 SELECT s.id, s.category, s.subcategory, e.employer, p.position, s.shortdesc, s.longdesc, s.state
-                FROM skills s, positions p, employers e
+                FROM `skills` s, `positions` p, `employers` e
                 WHERE p.id = s.position and e.id = s.employer
-                ORDER BY categoryorder, skillorder ASC;
+                ORDER BY `categoryorder`, `skillorder`;
                 """)
 
             # Create raw list based on 'id/attr/value/state.'
@@ -341,9 +342,9 @@ class Get:
         if len(self.result_glossary) == 0:
             result = self.query(
                 """
-                SELECT id, term, url, description, state
-                FROM glossary
-                ORDER BY term ASC
+                SELECT `id`, `term`, `url`, `description`, `state`
+                FROM `glossary`
+                ORDER BY `term`;
                 """)
 
             # Create raw list based on 'id/attr/value/state.'
@@ -380,8 +381,8 @@ class Get:
                 """
                 SELECT e.id, e.employer, e.location, e.state,
                        p.id, p.position, p.startdate, p.enddate, p.state
-                FROM employers AS e
-                JOIN positions AS p on e.id = p.employer
+                FROM `employers` AS e
+                JOIN `positions` AS p on e.id = p.employer
                 ORDER BY p.startdate DESC
                 """)
 
@@ -429,9 +430,9 @@ class Get:
                 SELECT e.id, e.employer, e.state as employer_state,
                        p.id as position_id, p.position, p.state as position_state,
                        a.id as achievement_id, a.shortdesc, a.longdesc, a.state as achievement_state
-                FROM achievements a
-                JOIN positions p ON a.position = p.id AND a.employer = p.employer
-                JOIN employers e ON a.employer = e.id;
+                FROM `achievements` a
+                JOIN `positions` p ON a.position = p.id AND a.employer = p.employer
+                JOIN `employers` e ON a.employer = e.id;
                 """)
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'

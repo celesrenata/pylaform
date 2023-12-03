@@ -140,15 +140,10 @@ class Common:
         unique_list = unique(skill_item_count)
         counts_dict = {}
         for item in unique_list:
-            counts_dict.update({item: self.count_instances(self, skill_item_count, item)})
-
-        last_run = len(unique(category_item_count))
+            counts_dict.update({item: Common.count_instances(skill_item_count, item)})
         
         # Start writing.
         with ((doc.create(Section("Skills", False)))):
-            categories = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
-                          for sub in self.resume_data.get_skills()]
-
             # Remove all items designated to be hidden
             bloated_categories = self.resume_data.get_skills()
             for bloated_category in bloated_categories:
@@ -162,12 +157,9 @@ class Common:
                 if category["subcategory"] != current_subcategory and category["subcategory"] not in sub_category:
                     current_subcategory = category["subcategory"]
                     sub_category.append(category["subcategory"])
-                    subcategory_counter = 0
                     # if i % last_run == 0:
                     with doc.create(Subsection(category["subcategory"], False)) as skill_sub:
-                        if subcategory_counter != i:
-                            skill_sub.append(NoEscape(r"\begin{itemize*}"))
-                            subcategory_counter = i
+                        skill_sub.append(NoEscape(r"\begin{itemize*}"))
                         skill_counter = 1
                         for skill in skills:
                             if (skill["category"] == category["category"]
@@ -196,7 +188,8 @@ class Common:
                 bloated_categories.remove(bloated_category)
 
         categories = self.cmd.unique([sub['category'] for sub in listify(bloated_categories)])
-        subcategories = self.cmd.unique([{"subcategory": sub['subcategory'], "category": sub['category']} for sub in listify(self.resume_data.get_skills())])
+        subcategories = self.cmd.unique([{"subcategory": sub['subcategory'], "category": sub['category']}
+                                         for sub in listify(self.resume_data.get_skills())])
         for category in categories:
             doc.append(bold(category))
             for subcategory in subcategories:
@@ -216,10 +209,11 @@ class Common:
         :return None: None
         """
 
-        with doc.create(Section("Employment", False)):
+        with ((doc.create(Section("Employment", False)))):
             
             # Remove all items designated to be hidden
-            bloated_companies = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']} for sub in self.resume_data.get_achievements()]
+            bloated_companies = [{"id": sub['id'], "attr": sub['attr'], "value": sub['value'], "state": sub['state']}
+                                 for sub in self.resume_data.get_achievements()]
             for bloated_company in bloated_companies:
                 if not bloated_company['state']:
                     bloated_companies.remove(bloated_company)
@@ -231,26 +225,29 @@ class Common:
                 if employer['employer'] != current_subcategory and employer['employer'] not in sub_category:
                     current_subcategory = employer['employer']
                     sub_category.append(employer['employer'])
-                    subcategory_counter = 0
                     employer_name = self.resume_data.query_name(employer['employer'], "employer")
-                    with doc.create(Subsection(employer_name, False)) as employer_sub:
+                    with doc.create(Subsection(employer_name, False)):
                         for position in unique(listify(self.resume_data.get_positions())):
                             if employer['employer'] == position["employer"]:
                                 position_name = self.resume_data.query_name(position['position'], "position")
                                 with doc.create(Subsection(position_name, False)) as position_sub:
                                     position_sub.append(self.cmd.vspace("-0.25"))
+                                    end_date = 'Present' if self.cmd.format_date(
+                                        position['enddate']) == '' else self.cmd.format_date(position['enddate'])
                                     position_sub.append(NoEscape(
                                         r"\hfill{\textbf{"
                                         + f"{self.cmd.format_date(position['startdate'])} "
                                         + r"{--} "
-                                        + f"{'Present' if self.cmd.format_date(position['enddate']) == '' else self.cmd.format_date(position['enddate'])}"
+                                        + end_date
                                         + r"}}"))
                                     position_sub.append(NewLine())
                                     for achievement in unique(listify(self.resume_data.get_achievements())):
-                                        if position["employer"] == achievement["employer"] and position["position"] == achievement["position"]:
+                                        if position["employer"] == achievement["employer"] and (
+                                                position["position"] == achievement["position"]):
                                             with doc.create(Itemize()) as itemize:
                                                 itemize.add_item(NoEscape(
-                                                    self.cmd.glossary_inject(achievement["shortdesc"], "modern")))
+                                                    self.cmd.glossary_inject(
+                                                        achievement["shortdesc"], "modern")))
 
     def retro_work_history(self, doc) -> None:
         """
@@ -269,6 +266,8 @@ class Common:
                 if employer == position["employer"]:
                     # doc.append(self.cmd.vspace("-0.16"))
                     position_name = self.resume_data.query_name(position['position'], "position")
+                    end_date = 'Present' if self.cmd.format_date(
+                        position['enddate']) == '' else self.cmd.format_date(position['enddate'])
                     doc.append(NoEscape(
                         r"{\em "
                         + position_name
@@ -276,13 +275,14 @@ class Common:
                         + r"\textbf {"
                         + self.cmd.format_date(position['startdate'])
                         + r" {--} "
-                        + f"{'Present' if self.cmd.format_date(position['enddate']) == '' else self.cmd.format_date(position['enddate'])}"
+                        + f"{end_date}"
                         + r"}}"))
-                    #doc.append(NewLine())
+                    # doc.append(NewLine())
                     doc.append(NoEscape(r"\begin{list2}"))
                     for achievement in listify(self.resume_data.get_achievements()):
                         if employer == achievement["employer"] and position["position"] == achievement["position"]:
-                            doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(achievement['longdesc'], "retro")))
+                            doc.append(NoEscape(
+                                r"\item " + self.cmd.glossary_inject(achievement['longdesc'], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))
 
     @staticmethod

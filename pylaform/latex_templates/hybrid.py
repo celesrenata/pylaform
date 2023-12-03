@@ -102,7 +102,6 @@ class Generator:
             pdfborderstyle={/S/U/W 1},
             urlbordercolor=blue
             }"""))
-        # self.doc.append(NoEscape(r"\let\nofiles\relax"))
         # self.doc.append(NoEscape(r"\setlist[itemize]{itemjoin=\hspace*{0.5em},itemjoin*=\hspace*{0.5em}}"))
 
         # Start Page

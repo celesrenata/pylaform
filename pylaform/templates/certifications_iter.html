@@ -3,7 +3,7 @@
     {% if id == "new" %}
         {% set id = "new` + clicks + `"|safe %}
     {% endif %}
-    <div id="{{ id }}" key="{{ id }}" class="d-flex align-items-bottom justify-content-center">
+    <div id="{{ id }}" class="d-flex align-items-bottom justify-content-center">
         <table>
             <tr>
                 <td>
@@ -23,7 +23,7 @@
                            value="{{ year if year is defined else '' }}">
                     <br>
                     <label for="{{ id }}_year_enabled">Displayed</label>
-                    <input type="checkbox" name="{{id}}_year_enabled"
+                    <input type="checkbox" name="{{ id }}_year_enabled"
                             {{ "checked" if state }}>
                 </td>
                 <td>

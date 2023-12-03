@@ -1,7 +1,6 @@
-from datetime import datetime
 from tenacity import retry, stop_after_delay
 from . import connect, query
-from ...utilities.commands import listify, transform_get_id
+from ...utilities.commands import transform_get_id
 
 
 class Post:
@@ -49,6 +48,7 @@ class Post:
         # Transform from template.
         form_data = transform_get_id(form_data)
         counter = ""
+        result = {}
         for item in form_data:
             if counter != item["id"]:
                 counter = item["id"]
@@ -128,10 +128,10 @@ class Post:
                 # If no other associations to employer.
                 if len(get_employer.fetchall()) <= 1:
                     self.cursor.execute(
-                    f"""
-                    DELETE FROM `employers`
-                    WHERE `id` = {int(item["id"])};
-                    """)
+                        f"""
+                        DELETE FROM `employers`
+                        WHERE `id` = {int(item["id"])};
+                        """)
                 self.cursor.execute(
                     f"""
                     DELETE FROM `positions`
@@ -152,9 +152,9 @@ class Post:
                     # Cleanup dates for (hidden) and 'Present' value detection.
                     if "date" in item["attr"]:
                         if item["value"] == "":
-                            item["value"] = datetime.strptime("9999-01-01", "%Y-%m-%d")
+                            item["value"] = "9999-01-01"
                         if item["value"] == "hidden":
-                            item["value"] = datetime.strptime("0001-01-01", "%Y-%m-%d")
+                            item["value"] = "0001-01-01"
                             
                     # Check for employer.
                     check_employer = self.cursor.execute(
@@ -180,7 +180,7 @@ class Post:
                 match item["attr"]:
                     case "employer":
                         if item["attr"] == "employer":
-                            item["value"] = self.query.query_id(item["value"], "employer")
+                            item["value"] = str(self.query.query_id(item["value"], "employer"))
                         result.update({"employer": item["value"]})
                     case "position":
                         result.update({"position": item["value"]})
@@ -193,9 +193,9 @@ class Post:
                     # Cleanup dates for (hidden) and 'Present' value detection.
                     if "date" in item["attr"]:
                         if item["value"] == "":
-                            item["value"] = datetime.strptime("9999-01-01", "%Y-%m-%d")
+                            item["value"] = "9999-01-01"
                         if item["value"] == "hidden":
-                            item["value"] = datetime.strptime("0001-01-01", "%Y-%m-%d")
+                            item["value"] = "0001-01-01"
                         result["employer"] = self.query.query_id(result["employer"], "employer")
                     self.cursor.execute(
                         f"""
@@ -212,9 +212,9 @@ class Post:
                     # Cleanup dates for (hidden) and 'Present' value detection.
                     if "date" in item['attr']:
                         if item["value"] == "":
-                            item["value"] = datetime.strptime("9999-01-01", "%Y-%m-%d")
+                            item["value"] = "9999-01-01"
                         if item["value"] == "hidden":
-                            item["value"] = datetime.strptime("0001-01-01", "%Y-%m-%d")
+                            item["value"] = "0001-01-01"
                     if item["attr"] == "employer":
                         # Check for employer.
                         check_employer = self.cursor.execute(
@@ -267,9 +267,9 @@ class Post:
         for item in form_data:
             # Get ID from name.
             if item["attr"] == "employer":
-                item["value"] = self.query.query_id(item["value"], "employer")
+                item["value"] = str(self.query.query_id(item["value"], "employer"))
             if item["attr"] == "position":
-                item["value"] = self.query.query_id(item["value"], "position")
+                item["value"] = str(self.query.query_id(item["value"], "position"))
             if counter != item["id"]:
                 counter = item["id"]
                 result = {}
@@ -410,10 +410,10 @@ class Post:
                     """)
                 if len(get_school.fetchall()) <= 1:
                     self.cursor.execute(
-                    f"""
-                    DELETE FROM `schools`
-                    WHERE `id` = {int(item["id"])};
-                    """)
+                        f"""
+                        DELETE FROM `schools`
+                        WHERE `id` = {int(item["id"])};
+                        """)
                 self.cursor.execute(
                     f"""
                     DELETE FROM `focus`
@@ -433,9 +433,9 @@ class Post:
                     # Cleanup dates for (hidden) and 'Present' value detection.
                     if "date" in item["attr"]:
                         if item["value"] == "":
-                            item["value"] = datetime.strptime("9999-01-01", "%Y-%m-%d")
+                            item["value"] = "9999-01-01"
                         if item["value"] == "hidden":
-                            item["value"] = datetime.strptime("0001-01-01", "%Y-%m-%d")
+                            item["value"] = "0001-01-01"
                     # Check for school.
                     check_school = self.cursor.execute(
                         f"""
@@ -460,7 +460,7 @@ class Post:
                 match item["attr"]:
                     case "school":
                         # get ID from name.
-                        item["value"] = self.query.query_id(item["value"], "school")
+                        item["value"] = str(self.query.query_id(item["value"], "school"))
                         result.update({"school": item["value"]})
                     case "focus":
                         result.update({"focus": item["value"]})
@@ -473,9 +473,9 @@ class Post:
                     # Cleanup dates for (hidden) and 'Present' value detection.
                     if "date" in item["attr"]:
                         if item["value"] == "":
-                            item["value"] = datetime.strptime("9999-01-01", "%Y-%m-%d")
+                            item["value"] = "9999-01-01"
                         if item["value"] == "hidden":
-                            item["value"] = datetime.strptime("0001-01-01", "%Y-%m-%d")
+                            item["value"] = "0001-01-01"
                         result["school"] = self.query.query_id(result["school"], "school")
                     self.cursor.execute(
                         f"""
@@ -488,29 +488,29 @@ class Post:
 
             # Update focus.
             else:
-                # Cleanup dates for (hidden) and 'Present' value detection.
-                if "date" in item['attr']:
-                    if item['value'] == '':
-                        item['value'] = datetime.strptime('9999-01-01', '%Y-%m-%d')
-                    if item['value'] == 'hidden':
-                        item['value'] = datetime.strptime('0001-01-01', '%Y-%m-%d')
+                # Cleanup dates for (hidden) and "Present" value detection.
+                if "date" in item["attr"]:
+                    if item["value"] == "":
+                        item["value"] = "9999-01-01"
+                    if item["value"] == "hidden":
+                        item["value"] = "0001-01-01"
                 # Detect if enough data to update school.
                 if "location" in item["attr"] or "school" in item["attr"]:
                     self.cursor.execute(
                         f"""
                                 UPDATE `schools`
-                                SET {item['attr']} = '{item['value']}',
-                                state = {item['state']}
-                                WHERE id = {int(item['id'])}
+                                SET {item["attr"]} = "{item["value"]}",
+                                `state` = {item["state"]}
+                                WHERE `id` = {int(item["id"])}
                             """)
                 # Detect if enough data to update focus.
-                elif "delete" not in item['attr'] and "new" not in item['attr']:
+                elif "delete" not in item["attr"] and "new" not in item["attr"]:
                     self.cursor.execute(
                         f"""
                              UPDATE `focus`
-                             SET {item['attr']} = '{item['value']}',
-                             state = {item['state']}
-                             WHERE id = {int(item['id'])}
+                             SET {item["attr"]} = "{item["value"]}",
+                             `state` = {item["state"]}
+                             WHERE `id` = {int(item["id"])}
                          """)
 
         # Commit changes.
@@ -546,10 +546,10 @@ class Post:
                 # Create result based on current attribute value.
                 match item["attr"]:
                     case "position":
-                        item["value"] = self.query.query_id(item["value"], "position")
+                        item["value"] = str(self.query.query_id(item["value"], "position"))
                         result.update({"position": item["value"], "state": int(item["state"])})
                     case "employer":
-                        item["value"] = self.query.query_id(item["value"], "employer")
+                        item["value"] = str(self.query.query_id(item["value"], "employer"))
                         result.update({"employer": item["value"], "state": int(item["state"])})
                     case "achievement":
                         result.update({"achievement": item["value"]})
@@ -573,9 +573,9 @@ class Post:
                 # Get ID from name.
                 match item["attr"]:
                     case "position":
-                        item["value"] = self.query.query_id(item["value"], "position")
+                        item["value"] = str(self.query.query_id(item["value"], "position"))
                     case "employer":
-                        item["value"] = self.query.query_id(item["value"], "employer")
+                        item["value"] = str(self.query.query_id(item["value"], "employer"))
                 self.cursor.execute(
                     f"""
                          UPDATE `achievements`
