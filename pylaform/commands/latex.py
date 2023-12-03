@@ -38,8 +38,8 @@ class Commands:
         :return str: PyLatex compiled text.
         """
 
-        text = escape_latex(text)
-        return NoEscape(r"\href{" + url + "}{" + text + "}")
+        escaped_text: str = escape_latex(text)
+        return NoEscape(r"\href{" + url + "}{" + escaped_text + "}")
 
     @staticmethod
     def textbox(short: str, long: str) -> str:
@@ -51,7 +51,7 @@ class Commands:
         :return str: PyLatex compiled text.
         """
 
-        concat = NoEscape(
+        concat: str = NoEscape(
             r"\pdfmarkupcomment[markup=Underline,opacity=0.2]{"
             + f"{short}"
             + r"}{"
@@ -87,9 +87,9 @@ class Commands:
         :return str: PyLatex compiled text
         """
 
-        glossary = listify(self.queries.get_glossary())
-        search_terms = unique([sub["term"] for sub in glossary])
-        updated_text = r"" + text
+        glossary: list[dict[str, str | bool]] = listify(self.queries.get_glossary())
+        search_terms: list[str] = unique([sub["term"] for sub in glossary])
+        updated_text: str = r"" + text
         for term in search_terms:
             if re.search(f" {term} ", text):
                 if link_type == "modern":

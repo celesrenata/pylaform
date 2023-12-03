@@ -8,7 +8,7 @@ def db() -> sqlite3.Connection:
     Connects to the local database resource.
     :return sqlite3.Connection: DB connection session.
     """
-    path = os.path.abspath(os.curdir)
+    path: str = os.path.abspath(os.curdir)
     if not os.path.exists(os.path.join(path, 'data/resume.db')):
         try:
             shutil.copyfile(os.path.join(path, 'pylaform/resources/resume.db'), os.path.join(path, 'data/resume.db'))

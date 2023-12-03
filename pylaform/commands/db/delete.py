@@ -1,3 +1,5 @@
+from sqlite3 import Connection, Cursor
+
 from tenacity import retry, stop_after_delay
 
 from . import connect
@@ -12,8 +14,8 @@ class Delete:
     
     @retry(stop=(stop_after_delay(10)))
     def __init__(self) -> None:
-        self.conn = connect.db()
-        self.cursor = self.conn.cursor()
+        self.conn: Connection = connect.db()
+        self.cursor: Cursor = self.conn.cursor()
 
     def delete_association(self, associated_id: str, associated_table: str, target_table: str) -> None:
         """

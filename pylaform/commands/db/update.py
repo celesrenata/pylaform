@@ -1,3 +1,4 @@
+from sqlite3 import Cursor, Connection
 from tenacity import retry, stop_after_delay
 from werkzeug.datastructures.structures import ImmutableMultiDict
 
@@ -14,8 +15,8 @@ class Post:
 
     @retry(stop=(stop_after_delay(10)))
     def __init__(self) -> None:
-        self.conn = connect.db()
-        self.cursor = self.conn.cursor()
+        self.conn: Connection = connect.db()
+        self.cursor: Cursor = self.conn.cursor()
         self.query = query.Get()
         self.delete = delete.Delete()
 
@@ -27,7 +28,7 @@ class Post:
         """
 
         # Transform from template.
-        form_data = transform_get_id(form_data)
+        form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
         for item in form_data:
             self.cursor.execute(
                 f"""
@@ -41,20 +42,20 @@ class Post:
         self.conn.commit()
         return
 
-    def update_certifications(self, form_data: ImmutableMultiDict) -> None:
+    def update_certifications(self, transform_form_data: ImmutableMultiDict) -> None:
         """
         Updates the certification table.
-        :param ImmutableMultiDict form_data: Form data from template.
+        :param ImmutableMultiDict transform_form_data: Form data from template.
         :return: list
         """
 
         # Transform from template.
-        form_data = transform_get_id(form_data)
-        counter = ""
-        result = {}
-        for item in form_data:
-            if counter != item["id"]:
-                counter = item["id"]
+        transform_form_data: list[dict[str, str | bool]] = transform_get_id(transform_form_data)
+        counter: str = ""
+        result: dict[str, str | int] = {}
+        for item in transform_form_data:
+            if counter != str(item["id"]):
+                counter = str(item["id"])
                 result = {}
                 
             # Delete certifications.
@@ -102,12 +103,12 @@ class Post:
         """
         
         # Transform from template.
-        form_data = transform_get_id(form_data)
-        counter = ""
-        result = {}
-        for item in form_data:
-            if counter != item["id"]:
-                counter = item["id"]
+        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
+        counter: str = ""
+        result: dict[str, str | int] = {}
+        for item in transform_form_data:
+            if counter != str(item["id"]):
+                counter = str(item["id"])
                 result = {}
                 
             # Delete position, and employer (if necessary).
@@ -236,17 +237,17 @@ class Post:
         """
 
         # Transform from template.
-        form_data = transform_get_id(form_data)
-        counter = ""
-        result = {}
-        for item in form_data:
+        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
+        counter: str = ""
+        result: dict[str, str | int] = {}
+        for item in transform_form_data:
             # Get ID from name.
             if item["attr"] == "employer":
                 item["value"] = str(self.query.query_id(item["value"], "employer"))
             if item["attr"] == "position":
                 item["value"] = str(self.query.query_id(item["value"], "position"))
-            if counter != item["id"]:
-                counter = item["id"]
+            if counter != str(item["id"]):
+                counter = str(item["id"])
                 result = {}
             
             # Delete skill.
@@ -304,12 +305,12 @@ class Post:
         """
 
         # Transform from template.
-        form_data = transform_get_id(form_data)
-        counter = ""
-        result = {}
-        for item in form_data:
-            if counter != item["id"]:
-                counter = item["id"]
+        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
+        counter: str = ""
+        result: dict[str, str | int] = {}
+        for item in transform_form_data:
+            if counter != str(item["id"]):
+                counter = str(item["id"])
                 result = {}
             
             # Delete summary.
@@ -354,12 +355,12 @@ class Post:
         """
 
         # Transform from template.
-        form_data = transform_get_id(form_data)
-        counter = ""
-        result = {}
-        for item in form_data:
-            if counter != item["id"]:
-                counter = item["id"]
+        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
+        counter: str = ""
+        result: dict[str, str | int] = {}
+        for item in transform_form_data:
+            if counter != str(item["id"]):
+                counter = str(item["id"])
                 result = {}
 
             # Delete focus, and school (if necessary).
@@ -471,12 +472,12 @@ class Post:
         """
 
         # Transform from template.
-        form_data = transform_get_id(form_data)
-        counter = ""
-        result = {}
-        for item in form_data:
-            if counter != item["id"]:
-                counter = item["id"]
+        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
+        counter: str = ""
+        result: dict[str, str | int] = {}
+        for item in transform_form_data:
+            if counter != str(item["id"]):
+                counter = str(item["id"])
                 result = {}
             
             # Delete achievement.
@@ -538,10 +539,10 @@ class Post:
         """
 
         # Transform from template.
-        form_data = transform_get_id(form_data)
-        counter = ""
-        result = {}
-        for item in form_data:
+        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
+        counter: str = ""
+        result: dict[str, str | int] = {}
+        for item in transform_form_data:
             if counter != item["id"]:
                 counter = item["id"]
                 result = {}

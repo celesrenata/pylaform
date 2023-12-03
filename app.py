@@ -15,7 +15,7 @@ app.jinja_env.add_extension('jinja2.ext.do')
 
 resume_query = Get()
 resume_update = Post()
-uploads = os.path.join(app.root_path, 'data')
+uploads: str = os.path.join(app.root_path, 'data')
 
 
 @app.route("/")

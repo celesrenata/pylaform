@@ -23,9 +23,9 @@ class Common:
         """
 
         # Setup values.
-        data = contact_flatten(self.resume_data.get_identification())
-        phone = data["phone"]["value"]
-        phone_number = f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}"
+        data: dict[str, dict[str, str | bool]] = contact_flatten(self.resume_data.get_identification())
+        phone: str = data["phone"]["value"]
+        phone_number: str = f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}"
         
         # Start writing.
         with doc.create(Section(data["name"]["value"] if data["name"]["state"] else "", False)):
@@ -55,13 +55,13 @@ class Common:
         """
 
         # Setup values.
-        data = contact_flatten(self.resume_data.get_identification())
-        name = data["name"]["value"]
-        phone = data["phone"]["value"]
-        phone_number = italic("Phone:  ") + f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}"
-        email = italic("E-mail:  ") + self.cmd.hyperlink(
+        data: dict[str, dict[str, str | bool]] = contact_flatten(self.resume_data.get_identification())
+        name: str = data["name"]["value"]
+        phone: str = data["phone"]["value"]
+        phone_number: str = italic("Phone:  ") + f"({phone[0:3]}) {phone[3:6]}-{phone[6:10]}"
+        email: str = italic("E-mail:  ") + self.cmd.hyperlink(
                 data["email"]["value"], "mailto:" + data["email"]["value"])
-        www = italic("WWW: ") + self.cmd.hyperlink(
+        www: str = italic("WWW: ") + self.cmd.hyperlink(
             data["www"]["value"], "https://" + data["www"]["value"])
 
         # Start writing.
@@ -81,7 +81,7 @@ class Common:
         :return None: None
         """
 
-        summaries = slim(self.resume_data.get_summary())
+        summaries: list[dict[str, str | bool]] = slim(self.resume_data.get_summary())
         
         # Start writing.
         with (doc.create(Section("Summary", False))) as summary_sub:
@@ -98,7 +98,7 @@ class Common:
         :return None: None
         """
 
-        summaries = slim(self.resume_data.get_summary())
+        summaries: list[dict[str, str | bool]] = slim(self.resume_data.get_summary())
         
         # Start writing
         doc.append(NoEscape(r"\section{\sc Summary}"))
@@ -116,9 +116,10 @@ class Common:
         """
 
         # Remove all items designated to be hidden
-        unique_categories = unique([{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
-                                   for sub in self.resume_data.get_skills()])
-        skills = slim(self.resume_data.get_skills())
+        unique_categories: list[dict[str, str, str, int, str, int, str, str]] = unique(
+            [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
+             for sub in self.resume_data.get_skills()])
+        skills: list[dict[str, str | bool]] = slim(self.resume_data.get_skills())
 
         category_item_count = []
         skill_item_count = []

@@ -10,10 +10,10 @@ def fatten(full_list: list[dict[str, str | int | bool]]) -> dict[str, list[dict[
     :return dict: Payload passed to templates.
     """
 
-    result = []
-    attrs = []
+    result: list[dict[str, str | int | bool]] = []
+    attrs: list[str] = []
     for item in full_list:
-        sub_result = {}
+        sub_result: dict[str, str | int | bool] = {}
         attrs.append(item["attr"])
         for sub_key in item:
             sub_result.update({sub_key: item[sub_key]})
@@ -44,9 +44,9 @@ def contact_flatten(full_list: list[dict[str, str | int | bool]]) -> dict[any, d
     :return dict: Payload passed to latex
     """
 
-    result = {}
+    result: dict[str, dict[str, str | int | bool]] = {}
     for item in full_list:
-        sub_result = {}
+        sub_result: dict[str, str | int | bool] = {}
         for sub_key in item:
             sub_result.update({sub_key: item[sub_key]})
         result.update({sub_result["attr"]: {"value": sub_result["value"], "state": sub_result["state"]}})
@@ -60,15 +60,15 @@ def listify(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str 
     :return list: Compiled attribute list.
     """
 
-    attrs = unique([sub["attr"] for sub in full_list])
-    attrs_per_id = 0
+    attrs: list[str] = unique([sub["attr"] for sub in full_list])
+    attrs_per_id: int = 0
 
     # Setup variables.
-    sub_mask_group_count = []
-    result = []
-    count = 1
-    sub_mask = []
-    working_result = {}
+    sub_mask_group_count: list[str] = []
+    result: list[dict[str, str | bool]] = []
+    count: int = 1
+    sub_mask: list[str] = []
+    working_result: dict[str, str | bool] = {}
     for item in full_list:
         # If current_id and
         # (isalpha(current_id) == isalpha(previous_loop_id)
@@ -130,7 +130,7 @@ def transform_get_id(form_data: ImmutableMultiDict) -> list[dict[str, str | bool
     :return list:
     """
 
-    result = []
+    result: list[dict[str, str | bool]] = []
     for item in form_data:
         item_split = str(item).split("_")
         if "_enabled" in item:
@@ -148,7 +148,7 @@ def unique(list1: list) -> list:
     :return list: Dedupped list.
     """
 
-    unique_list = []
+    unique_list: list = []
 
     for x in list1:
         if x == "":

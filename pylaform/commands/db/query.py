@@ -1,4 +1,6 @@
 import sqlite3
+from sqlite3 import Cursor, Connection
+
 from tenacity import retry, stop_after_delay
 
 from . import connect
@@ -13,16 +15,16 @@ class Get:
 
     @retry(stop=(stop_after_delay(10)))
     def __init__(self) -> None:
-        self.conn = connect.db()
-        self.cursor = self.conn.cursor()
-        self.result_certifications = []
-        self.result_education = []
-        self.result_identification = []
-        self.result_skills = []
-        self.result_achievements = []
-        self.result_glossary = []
-        self.result_positions = []
-        self.result_summary = []
+        self.conn: Connection = connect.db()
+        self.cursor: Cursor = self.conn.cursor()
+        self.result_certifications: list[dict[str, str | int | bool]] = []
+        self.result_education: list[dict[str, str | int | bool]] = []
+        self.result_identification: list[dict[str, str | int | bool]] = []
+        self.result_skills: list[dict[str, str | int | bool]] = []
+        self.result_achievements: list[dict[str, str | int | bool]] = []
+        self.result_glossary: list[dict[str, str | int | bool]] = []
+        self.result_positions: list[dict[str, str | int | bool]] = []
+        self.result_summary: list[dict[str, str | int | bool]] = []
 
     def purge_cache(self, table: str) -> None:
         """
@@ -73,7 +75,7 @@ class Get:
         :return int: ID associated with Name.
         """
 
-        sub_result = sqlite3.Cursor
+        sub_result: sqlite3.Cursor = self.query()
         if attr == "employer":
             sub_result = self.query(
                 f"""
@@ -95,7 +97,7 @@ class Get:
                 FROM `school`
                 WHERE `school` = '{value}'
                 """)
-        result = 0
+        result: int = 0
         for item in sub_result:
             result = int(item[0])
         return result
@@ -109,8 +111,8 @@ class Get:
         :return str: Name associated with ID.
         """
 
-        result = ""
-        sub_result = sqlite3.Cursor
+        result: str = ""
+        sub_result: sqlite3.Cursor = self.query()
         if attr == "employer":
             sub_result = self.query(
                 f"""
@@ -126,7 +128,7 @@ class Get:
                 WHERE `id` = '{value}'
                 """)
         for item in sub_result:
-            result = item[0]
+            result = str(item[0])
         return result
 
     def get_certifications(self) -> list[dict[str, str | int | bool]]:
@@ -166,7 +168,7 @@ class Get:
         """
 
         if len(self.result_education) == 0:
-            result = self.query(
+            result: Cursor = self.query(
                 """
                 SELECT f.id, f.focus, f.startdate, f.enddate, f.state,
                        s.id, s.school, s.location, s.state
@@ -224,7 +226,7 @@ class Get:
         """
 
         if len(self.result_identification) == 0:
-            result = self.query(
+            result: Cursor = self.query(
                 """
                 SELECT `id`, `attr`, `value`, `state`
                 FROM `identification`
@@ -259,7 +261,7 @@ class Get:
         """
 
         if len(self.result_summary) == 0:
-            result = self.query(
+            result: Cursor = self.query(
                 """
                 SELECT `id`, `shortdesc`, `longdesc`, `state`
                 FROM `summary`
@@ -290,7 +292,7 @@ class Get:
         """
 
         if len(self.result_skills) == 0:
-            result = self.query(
+            result: Cursor = self.query(
                 """
                 SELECT s.id, s.category, s.subcategory, e.employer, p.position, s.shortdesc, s.longdesc, s.state
                 FROM `skill` s, `position` p, `employer` e
@@ -340,7 +342,7 @@ class Get:
         """
 
         if len(self.result_glossary) == 0:
-            result = self.query(
+            result: Cursor = self.query(
                 """
                 SELECT `id`, `term`, `url`, `description`, `state`
                 FROM `glossary`
@@ -377,7 +379,7 @@ class Get:
         """
 
         if len(self.result_positions) == 0:
-            result = self.query(
+            result: Cursor = self.query(
                 """
                 SELECT e.id, e.employer, e.location, e.state,
                        p.id, p.position, p.startdate, p.enddate, p.state
@@ -425,7 +427,7 @@ class Get:
         """
 
         if len(self.result_achievements) == 0:
-            result = self.query(
+            result: Cursor = self.query(
                 """
                 SELECT e.id, e.employer, e.state as employer_state,
                        p.id as position_id, p.position, p.state as position_state,
