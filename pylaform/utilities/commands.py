@@ -4,7 +4,7 @@ import re
 def fatten(full_list) -> dict[str, list[dict[str, str | bool]], str, list[str]]:
     """
     Takes 'id/attr/value/state' and compresses it into a single dictionary.
-    :param list full_list: Decompiled attribute list.
+    :param list[dict[str, str | int | bool]] full_list: Decompiled attribute list.
     :return dict: Payload passed to templates.
     """
 
@@ -23,7 +23,7 @@ def fatten(full_list) -> dict[str, list[dict[str, str | bool]], str, list[str]]:
 def contact_flatten(full_list) -> dict[any, dict[str, any]]:
     """
     Flattens the list into a FLAT dictionary of contact details for latex
-    :param list full_list: Decompiled attribute list.
+    :param list[dict[str, str|int|bool]] full_list: Decompiled attribute list.
     :return dict: Payload passed to latex
     """
 
@@ -39,7 +39,7 @@ def contact_flatten(full_list) -> dict[any, dict[str, any]]:
 def listify(full_list) -> list[dict[str, str | bool]]:
     """
     Converts decompiled attribute list into structured list for latex and flask templates.
-    :param list full_list: Decompiled attribute list.
+    :param list[dict[str, str | int | bool]] full_list: Decompiled attribute list.
     :return list: Compiled attribute list.
     """
 

@@ -23,6 +23,8 @@ class Generator:
         Class main logic.
         :return None: None
         """
+        # Let no files relax
+        self.doc.append(NoEscape(r'\let\nofiles\relax'))
 
         # DocumentClass
         self.doc.documentclass = Command('documentclass', options=['margin', 'line'], arguments='res')
@@ -117,7 +119,7 @@ class Generator:
         self.common.retro_work_history(self.doc)
 
         # End Page
-        self.doc.create(NoEscape(r'\end{resume}'))
+        self.doc.append(NoEscape(r'\end{resume}'))
         self.generate()
 
     @retry(stop=(stop_after_delay(10)))

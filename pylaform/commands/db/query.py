@@ -128,10 +128,10 @@ class Get:
             result = item[0]
         return result
 
-    def get_certifications(self) -> list:
+    def get_certifications(self) -> list[dict[str, str | int | bool]]:
         """
         Return certification list from database.
-        :return list: Raw return grouped by id/attr/value/state.
+        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_certifications) == 0:
@@ -158,10 +158,10 @@ class Get:
 
         return self.result_certifications
 
-    def get_education(self) -> list:
+    def get_education(self) -> list[dict[str, str | int | bool]]:
         """
         Return education NESTED list objects from database by school.
-        :return list: Raw return grouped by 'origin_ + id/attr/value/state.'
+        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_education) == 0:
@@ -216,10 +216,10 @@ class Get:
 
         return self.result_education
 
-    def get_identification(self) -> list:
+    def get_identification(self) -> list[dict[str, str | int | bool]]:
         """
         Return identification list objects from database.
-        :return list: Raw return grouped by 'id/attr/value/state.'
+        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_identification) == 0:
@@ -251,10 +251,10 @@ class Get:
 
         return self.result_identification
 
-    def get_summary(self) -> list:
+    def get_summary(self) -> list[dict[str, str | int | bool]]:
         """
         Return summary list objects from database.
-        :return list: Raw return grouped by 'id/attr/value/state.'
+        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_summary) == 0:
@@ -282,10 +282,10 @@ class Get:
 
         return self.result_summary
 
-    def get_skills(self) -> list:
+    def get_skills(self) -> list[dict[str, str | int | bool]]:
         """
         Return skills list objects from database.
-        :return list: Raw return grouped by 'id/attr/value/state.'
+        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_skills) == 0:
@@ -332,10 +332,10 @@ class Get:
 
         return self.result_skills
 
-    def get_glossary(self) -> list:
+    def get_glossary(self) -> list[dict[str, str | int | bool]]:
         """
         Return glossary list objects from database.
-        :return list: Raw return grouped by 'id/attr/value/state.'
+        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_glossary) == 0:
@@ -369,10 +369,10 @@ class Get:
 
         return self.result_glossary
 
-    def get_positions(self) -> list:
+    def get_positions(self) -> list[dict[str, str | int | bool]]:
         """
         Return positions NESTED list objects from database by school.
-        :return list: Raw return grouped by 'origin_ + id/attr/value/state.'
+        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_positions) == 0:
@@ -417,10 +417,10 @@ class Get:
 
         return self.result_positions
 
-    def get_achievements(self) -> list:
+    def get_achievements(self) -> list[dict[str, str | int | bool]]:
         """
         Return achievements NESTED list objects from database by school.
-        :return list: Raw return grouped by 'origin_ + id/attr/value/state.'
+        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_achievements) == 0:

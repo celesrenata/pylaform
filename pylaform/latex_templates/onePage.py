@@ -36,6 +36,9 @@ class Generator:
         :return None: None
         """
 
+        # Let no files relax
+        self.doc.append(NoEscape(r'\let\nofiles\relax'))
+
         # Plugins
         self.doc.packages.append(Package('hyperref'))
         self.doc.packages.append(Package('bookmark'))

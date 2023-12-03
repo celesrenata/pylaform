@@ -65,7 +65,7 @@ class Common:
             data["www"]["value"], "https://" + data["www"]["value"])
 
         # Start writing.
-        doc.append(NoEscape(r"\name{' + f'{name if data['name']['state'] else ''}' + r'}") + self.cmd.vspace("0.1"))
+        doc.append(NoEscape(r"\name{" + f"{name if data['name']['state'] else ''}" + r"}") + self.cmd.vspace("0.1"))
         doc.append(NoEscape(r"\begin{resume}"))
         doc.append(NoEscape(r"\section{\sc Contact Information}"))
         doc.append(self.cmd.vspace(".05"))
@@ -180,7 +180,7 @@ class Common:
                                 else:
                                     skill_counter = skill_counter + 1
 
-    def retro_skills(self, doc):
+    def retro_skills(self, doc) -> None:
         """
         Print detailed retro professional_experience.se
         :param Document doc: PyLatex document handler.
@@ -209,7 +209,7 @@ class Common:
                             doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(skill['longdesc'], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))
 
-    def modern_work_history(self, doc):
+    def modern_work_history(self, doc) -> None:
         """
         Print standard detail work history.
         :param Document doc: PyLatex document handler.
@@ -252,12 +252,13 @@ class Common:
                                                 itemize.add_item(NoEscape(
                                                     self.cmd.glossary_inject(achievement["shortdesc"], "modern")))
 
-    def retro_work_history(self, doc):
+    def retro_work_history(self, doc) -> None:
         """
         Print standard detail work history, however for res.cls.
         :param Document doc: PyLatex document handler.
         :return None: None
         """
+
         doc.append(NoEscape(r"\section{\sc Employment}"))
         companies = self.cmd.unique([sub["employer"] for sub in listify(self.resume_data.get_achievements())])
         for employer in companies:
@@ -285,7 +286,14 @@ class Common:
                     doc.append(NoEscape(r"\end{list2}"))
 
     @staticmethod
-    def count_instances(self, instance_list, x):
+    def count_instances(instance_list, x):
+        """
+        Count the number of times a list element shows up.
+        :param list[str | bool] instance_list:
+        :param any x:
+        :return int: Match count.
+        """
+
         count_int = 0
         for element in instance_list:
             if element == x:
