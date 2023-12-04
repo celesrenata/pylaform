@@ -5,7 +5,7 @@
         <form method="post">
             <!-- Iterate payload -->
         {% for i in payload %}
-            {{ form_group(i["employer"], i["employername"] ,i["location"], i["employerstate"], i["position"], i["positionname"], i["startdate"], i["enddate"], i["positionstate"]) }}
+            {{ form_group(payload, i["employer"], i["employername"] ,i["location"], i["employerstate"], i["position"], i["positionname"], i["startdate"], i["enddate"], i["positionstate"]) }}
         {% endfor %}
         <div id="newinput"></div>
         <button id="rowAdder" type="button" class="btn btn-dark">
@@ -19,18 +19,16 @@
         </form>
     </div>
 {% endblock %}
+
 {% block scripts %}
     <script type="text/javascript">
-        clicks = 0;
-        $("#rowAdder").click(function () {
-            clicks += 1;
-            newRowAdd = `{{ form_group("new", "", "", true, "", "", "", "", true) }}`;
-            $("#newinput").append(newRowAdd);
-        });
-        $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest("div").attr("id");
-            $("#" + div_id).remove();
-            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-        });
+    clicks = 0;
+    $("body").on("click", "#rowAdder", function () {
+        clicks += 1;
+        $("#newinput").append("<hr>");
+        newRowAdd = `{{ form_group(payload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
+        $("#newinput").append(newRowAdd);
+    });
     </script>
+    {% include "_scripts.html" %}
 {% endblock %}

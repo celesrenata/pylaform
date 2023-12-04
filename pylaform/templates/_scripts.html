@@ -1,0 +1,57 @@
+{% block scripts %}
+    <script type="text/javascript">
+    function commit_value (commit_id) {
+        console.log(commit_id);
+        var currentValue = document.getElementById(commit_id).value;
+        console.log(currentValue);
+        document.getElementById(commit_id).setAttribute('value', currentValue);
+    };
+        {#$("body").on("input", ".updatevalue", function () {#}
+        {#    var currentValue = $(this).text();#}
+        {#    var currentId = $(this).attr("id");#}
+        {#    var prefix_builder = currentId.split("_");#}
+        {#    if (prefix_builder.length == 3) {#}
+        {#        var prefix = prefix_builder[0] + "_" + prefix_builder[1];#}
+        {#    } else {#}
+        {#        var prefix = prefix_builder[0];#}
+        {#    }#}
+        {#    console.log(currentValue);#}
+        {#    console.log(prefix);#}
+        {#    $(this).val(currentValue);#}
+        {##}
+        {#});#}
+        $("body").on("click", "#deleteRow", function () {
+            div_id = $(this).closest("div").attr("id");
+            $("#" + div_id).remove();
+            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
+        });
+
+        $("body").on("change", ".dropdown", function() {
+
+            var selectedValue = $(this).val();
+            var currentId = $(this).attr('name');
+
+                        var prefix_builder = currentId.split("_");
+            if (prefix_builder.length == 3) {
+                var selectedName = prefix_builder[0] + "_" + prefix_builder[1];
+            } else {
+                var selectedName = prefix_builder[0];
+            };
+            console.log("selectedValue: " + selectedValue);
+            console.log("selectedName: " + selectedName);
+            switch(selectedValue) {
+                case "EDIT":
+                    $("#" + selectedName + "_div").removeClass("d-none");
+                    break;
+                case "ADD":
+                    $("#" + selectedName + "_div").addClass("d-none");
+                    $('#rowAdder').click();
+                    break;
+                default:
+                    $("#" + selectedName + "_div").addClass("d-none");
+                    $("#" + selectedName).val(selectedValue);
+                    break;
+            }
+        });
+    </script>
+{% endblock %}

@@ -1,4 +1,5 @@
-{% macro form_group(employerid, employer, location, employerstate, positionid, position, startdate, enddate, positionstate) %}
+{% from "_dropdown.html" import drop_down with context %}
+{% macro form_group(payload, employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, hidden=True) %}
     <!-- Test if new template element -->
     {% if employerid == "new" %}
         {% set employerid = "new` + clicks + `"|safe %}
@@ -8,25 +9,33 @@
         <table>
             <tr>
                 <td>
-                    <label for="{{ employerid }}_employer">Employer Name</label>
+                    {{ drop_down(employerid, payload, "employer") }}
                     <br>
-                    <input type="text" name="{{ employerid }}_employer" id="{{ employerid }}_employer"
-                           value="{{ employer if employer is defined else "" }}">
-                    <br>
-                    <label for="{{ employerid }}_location">Employer Location</label>
-                    <br>
-                    <input type="text" name="{{ employerid }}_location" id="{{ employerid }}_location"
-                           value="{{ location if location is defined else "" }}">
-                    <br>
+                    <div class="{{ "d-none" if hidden else "" }}" id="{{ employerid }}_employer_div">
+                        <input type="text" name="{{ employerid }}_employer" id="{{ employerid }}_employer"
+                               value="{{ employername if employername is defined else "" }}" onfocusout="commit_value('{{ employerid }}_employer');">
+                        <br>
+                        <label for="{{ employerid }}_location">Employer Location</label>
+                        <br>
+                        <input type="text" name="{{ employerid }}_location" id="{{ employerid }}_location"
+                               value="{{ location if location is defined else "" }}"  onfocusout="commit_value('{{ employerid }}_location');">
+                        <br>
+                    </div>
                     <label for="{{ employerid }}_employer_enabled">Displayed</label>
                     <input type="checkbox" name="{{ employerid }}_employer_enabled"
                     {{ "checked" if employerstate }}>
                 </td>
                 <td class="align-items-center">
-                    <label for="{{ positionid }}_position">Position Held</label>
+                    {{ drop_down(positionid, payload, "employer", secondary="position") }}
                     <br>
-                    <input type="text" name="{{ positionid }}_position" id="{{ positionid }}_position"
-                           value="{{ position if position is defined else "" }}">
+                    <div class="{{ "d-none" if hidden else "" }}" id="{{ positionid }}_position_div">
+                        <input type="text" name="{{ positionid }}_position" id="{{ positionid }}_position"
+                               value="{{ positionname if positionname is defined else "" }}" onfocusout="commit_value('{{ positionid }}_position');">
+                        <br>
+                    </div>
+                    <label for="{{ positionid }}_position_enabled">Displayed</label>
+                    <input type="checkbox" name="{{ positionid }}_position_enabled"
+                            {{ "checked" if positionstate }}>
                 </td>
                 <td>
                     <label for="{{ positionid }}_startdate">Start Date</label>
@@ -38,10 +47,6 @@
                     <br>
                     <input type="text" name="{{ positionid }}_enddate" id="{{ positionid }}_enddate"
                            value="{{ enddate if enddate is defined else "" }}">
-                    <br>
-                    <label for="{{ positionid }}_enddate_enabled">Displayed</label>
-                    <input type="checkbox" name="{{ positionid }}_enddate_enabled"
-                            {{ "checked" if positionstate }}>
                 </td>
                 <td>
                     <button class="btn btn-danger"

@@ -90,20 +90,29 @@ def listify(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str 
             item_split = str(item["id"])
         else:
             item_split = item["id"].split("_")
+        # Dynamically set state
+        if "state" not in item:
+            if len(item_split) == 2:
+                if item_split[0].replace("id", "") + "state" not in working_result:
+                    dynamic_state: bool = False
+                else:
+                    dynamic_state: bool = bool(working_result[item_split[0].replace("id", "") + "state"])
+            else:
+                if "state" not in working_result:
+                    dynamic_state: bool = False
+                else:
+                    dynamic_state: bool = bool(working_result["state"])
+        else:
+            dynamic_state: bool = bool(item["state"])
 
         # NESTED Update working result.
         if len(item_split) == 2:
             working_result.update({item_split[0]: item_split[1], item["attr"]: item["value"],
-                                   item_split[0].replace("id", "") + "state": False})
+                                   item_split[0].replace("id", "") + "state": dynamic_state})
 
         # REGULAR Update working result
         else:
-            working_result.update({"id": item["id"], item["attr"]: item["value"], "state": False})
-        # Update state from int to bool.
-        if item["state"] == 1 and len(item_split) == 2:
-            working_result.update({item_split[0].replace("id", "") + "state": True})
-        elif item["state"] == 1 and len(item_split) == 1:
-            working_result.update({"state": True})
+            working_result.update({"id": item["id"], item["attr"]: item["value"], "state": dynamic_state})
 
         # NESTED Update result
         if len(item_split) == 2:

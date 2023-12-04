@@ -24,6 +24,7 @@
         clicks = 0;
         $("#rowAdder").click(function () {
             clicks += 1;
+            $("#newinput").append("<hr>");
             newRowAdd = `{{ form_group("new", "", "", "", true) }}`;
             $("#newinput").append(newRowAdd);
         });

@@ -196,14 +196,14 @@ class Common:
             current_subcategory = ""
             sub_category = []
             for employer in companies:
-                if employer["employer"] != current_subcategory and employer["employer"] not in sub_category:
-                    current_subcategory = employer["employer"]
-                    sub_category.append(employer["employer"])
-                    employer_name = self.resume_data.query_name(employer["employer"], "employer")
+                if employer["employername"] != current_subcategory and employer["employername"] not in sub_category:
+                    current_subcategory = employer["employername"]
+                    sub_category.append(employer["employername"])
+                    employer_name = self.resume_data.query_name(employer["employername"], "employer")
                     with doc.create(Subsection(employer_name, False)):
                         for position in unique(listify(self.resume_data.get_positions())):
-                            if employer["employer"] == position["employer"]:
-                                position_name = self.resume_data.query_name(position["position"], "position")
+                            if employer["employername"] == position["employer"]:
+                                position_name = self.resume_data.query_name(position["positionname"], "position")
                                 with doc.create(Subsection(position_name, False)) as position_sub:
                                     position_sub.append(self.cmd.vspace("-0.25"))
                                     end_date = "Present" if self.cmd.format_date(
@@ -217,7 +217,7 @@ class Common:
                                     position_sub.append(NewLine())
                                     for achievement in unique(listify(self.resume_data.get_achievements())):
                                         if position["employer"] == achievement["employer"] and (
-                                                position["position"] == achievement["position"]):
+                                                position["positionname"] == achievement["position"]):
                                             with doc.create(Itemize()) as itemize:
                                                 itemize.add_item(NoEscape(
                                                     self.cmd.glossary_inject(
@@ -239,7 +239,7 @@ class Common:
             doc.append(NewLine())
             for position in listify(self.resume_data.get_positions()):
                 if employer == position["employer"]:
-                    position_name = self.resume_data.query_name(position["position"], "position")
+                    position_name = self.resume_data.query_name(position["positionname"], "position")
                     end_date = "Present" if self.cmd.format_date(
                         position["enddate"]) == "" else self.cmd.format_date(position["enddate"])
                     doc.append(NoEscape(
@@ -253,7 +253,7 @@ class Common:
                         + r"}}"))
                     doc.append(NoEscape(r"\begin{list2}"))
                     for achievement in listify(self.resume_data.get_achievements()):
-                        if employer == achievement["employer"] and position["position"] == achievement["position"]:
+                        if employer == achievement["employer"] and position["positionname"] == achievement["position"]:
                             doc.append(NoEscape(
                                 r"\item " + self.cmd.glossary_inject(achievement["longdesc"], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))

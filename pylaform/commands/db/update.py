@@ -121,8 +121,8 @@ class Post:
                 match item["attr"]:
                     case "location":
                         result.update({"location": item["value"], "state": int(item["state"])})
-                    case "employer":
-                        result.update({"employer": item["value"], "state": int(item["state"])})
+                    case "employername":
+                        result.update({"employername": item["value"], "state": int(item["state"])})
                 # Detect last iteration.
                 if len(result) == 3:
                     # Cleanup dates for (hidden) and 'Present' value detection.
@@ -137,13 +137,13 @@ class Post:
                         f"""
                         SELECT *
                         FROM `employer`
-                        WHERE `employer` = '{result["employer"]}'
+                        WHERE `employername` = '{result["employer"]}'
                         """)
                     if len(check_employer.fetchall()) == 0:  # If no employer.
                         self.cursor.execute(
                             f"""
                                 INSERT INTO `employer`
-                                (`employer`, `location`, `state`)
+                                (`employername`, `location`, `state`)
                                 VALUES ('{result["employer"]}', '{result["location"]}', '{result["state"]}');
                             """)
 
@@ -155,11 +155,12 @@ class Post:
                 # Create result based on current attribute value.
                 match item["attr"]:
                     case "employer":
-                        if item["attr"] == "employer":
-                            item["value"] = str(self.query.query_id(item["value"], "employer"))
-                        result.update({"employer": item["value"]})
+                        item["value"] = str(self.query.query_id(item["value"], "employer"))
+                        result.update({"employername": item["value"]})
+                        employerid: str = str(self.query.query_id(item["value"], "employer"))
+                        result.update({"employer": employerid})
                     case "position":
-                        result.update({"position": item["value"]})
+                        result.update({"positionname": item["value"]})
                     case "startdate":
                         result.update({"startdate": item["value"]})
                     case "enddate":
@@ -172,12 +173,12 @@ class Post:
                             item["value"] = "9999-01-01"
                         if item["value"] == "hidden":
                             item["value"] = "0001-01-01"
-                        result["employer"] = self.query.query_id(result["employer"], "employer")
+                        result["employer"] = self.query.query_id(result["employername"], "employer")
                     self.cursor.execute(
                         f"""
                         INSERT INTO `position`
-                        (`employer`, `position`, `startdate`, `enddate`, `state`)
-                        VALUES ('{result["employer"]}', '{result["position"]}', 
+                        (`employername`, `position`, `startdate`, `enddate`, `state`)
+                        VALUES ('{result["employername"]}', '{result["positionname"]}', 
                                 '{result["startdate"]}', '{result["enddate"]}', '{result["state"]}');
                         """)
 
@@ -203,27 +204,16 @@ class Post:
                             self.cursor.execute(
                                 f"""
                                 INSERT INTO `employer`
-                                (`employer`, `location`, `state`)
-                                VALUES ('{result["employer"]}', '{result["location"]}', '{result["state"]}');
+                                (`employername`, `location`, `state`)
+                                VALUES ('{result["employername"]}', '{result["location"]}', '{result["state"]}');
                                 """)
                 # Detect if enough data to update employers.
-                if "location" in item["attr"] or "employer" in item["attr"]:
-                    self.cursor.execute(
-                        f"""
-                        UPDATE `employer`
-                        SET {item["attr"]} = '{item["value"]}',
-                        state = {item["state"]}
-                        WHERE id = {int(item["id"])}
-                        """)
+                if "location" in item["attr"] or "employername" in item["attr"]:
+                    self.update_target_table(item, "employer")
                 # Detect if enough data to update positions.
-                elif "delete" not in item['attr'] and "new" not in item['attr']:
-                    self.cursor.execute(
-                        f"""
-                         UPDATE `position`
-                         SET {item["attr"]} = '{item["value"]}',
-                         state = {item["state"]}
-                         WHERE id = {int(item["id"])}
-                         """)
+                elif "delete" not in item["attr"] and "new" not in item["attr"]:
+                    if item["attr"] == "position":
+                        self.update_target_table(item, "position")
 
         # Commit changes.
         self.conn.commit()
@@ -374,7 +364,7 @@ class Post:
                     case "location":
                         result.update({"location": item["value"], "state": int(item["state"])})
                     case "school":
-                        result.update({"school": item["value"], "state": int(item["state"])})
+                        result.update({"schoolname": item["value"], "state": int(item["state"])})
                 # Detect last iteration.
                 if len(result) == 3:
                     # Cleanup dates for (hidden) and 'Present' value detection.
@@ -388,14 +378,14 @@ class Post:
                         f"""
                         SELECT *
                         FROM `school`
-                        WHERE `school` = '{result["school"]}'
+                        WHERE `school` = '{result["schoolname"]}'
                         """)
                     if len(check_school.fetchall()) == 0:  # If no school.
                         self.cursor.execute(
                             f"""
                             INSERT INTO `school`
                                         (`school`, `location`, `state`)
-                            VALUES      ('{result["school"]}', '{result["location"]}', '{result["state"]}');
+                            VALUES      ('{result["schoolname"]}', '{result["location"]}', '{result["state"]}');
                             """)
 
                         # Commit changes.
@@ -408,9 +398,9 @@ class Post:
                     case "school":
                         # get ID from name.
                         item["value"] = str(self.query.query_id(item["value"], "school"))
-                        result.update({"school": item["value"]})
-                    case "focus":
-                        result.update({"focus": item["value"]})
+                        result.update({"schoolname": item["value"]})
+                    case "focusname":
+                        result.update({"focusname": item["value"]})
                     case "startdate":
                         result.update({"startdate": item["value"]})
                     case "enddate":
@@ -423,13 +413,13 @@ class Post:
                             item["value"] = "9999-01-01"
                         if item["value"] == "hidden":
                             item["value"] = "0001-01-01"
-                        result["school"] = self.query.query_id(result["school"], "school")
+                        result["school"] = self.query.query_id(result["schoolname"], "school")
                     self.cursor.execute(
                         f"""
                         INSERT INTO `focus`
                                     (`school`, `focus`,
                                     `startdate`, `enddate`, `state`)
-                        VALUES      ('{result["school"]}', '{result["focus"]}',
+                        VALUES      ('{result["school"]}', '{result["focusname"]}',
                                     '{result["startdate"]}', '{result["enddate"]}', '{result["state"]}');
                         """)
 
@@ -441,24 +431,15 @@ class Post:
                         item["value"] = "9999-01-01"
                     if item["value"] == "hidden":
                         item["value"] = "0001-01-01"
-                # Detect if enough data to update school.
-                if "location" in item["attr"] or "school" in item["attr"]:
-                    self.cursor.execute(
-                        f"""
-                                UPDATE `school`
-                                SET {item["attr"]} = "{item["value"]}",
-                                `state` = {item["state"]}
-                                WHERE `id` = {int(item["id"])}
-                            """)
-                # Detect if enough data to update focus.
-                elif "delete" not in item["attr"] and "new" not in item["attr"]:
-                    self.cursor.execute(
-                        f"""
-                             UPDATE `focus`
-                             SET {item["attr"]} = "{item["value"]}",
-                             `state` = {item["state"]}
-                             WHERE `id` = {int(item["id"])}
-                         """)
+
+                if "delete" not in item["attr"] and "new" not in item["attr"]:
+                    # Detect if enough data to update school.
+                    if "location" in item["attr"] or "school" in item["attr"]:
+                        self.update_target_table(item, "school")
+                    # Detect if enough data to update focus.
+                    if "focus" in item["attr"]:
+                        if item["attr"] == "focus":
+                            self.update_target_table(item, "focus")
 
         # Commit changes.
         self.conn.commit()
@@ -582,6 +563,37 @@ class Post:
                     WHERE id = {item["id"]}
                     """)
         
+        # Commit changes.
+        self.conn.commit()
+        return
+
+    def update_target_table(self, item: dict[str, str | bool], table: str):
+        """
+        :param dict[str, str | bool] item: Decompiled attribute pack.
+        :param str table: table to update.
+        :return:
+        """
+
+        try:
+            item["value"] = int(item["value"])
+            self.cursor.execute(
+                f"""
+                UPDATE `{table}`
+                SET    `id` = {item["value"]},
+                       `state` = {item["state"]}
+                WHERE  `id` = {int(item["id"])}
+                """
+            )
+        except ValueError:
+            self.cursor.execute(
+                f"""
+                 UPDATE `{table}`
+                 SET    `{item["attr"]}` = '{item["value"]}',
+                        `state` = {item["state"]}
+                 WHERE  `id` = {int(item["id"])}
+                 """)
+            pass
+
         # Commit changes.
         self.conn.commit()
         return

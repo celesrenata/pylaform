@@ -81,22 +81,22 @@ class Get:
                 f"""
                 SELECT `id`
                 FROM `employer`
-                WHERE `employer` = '{value}';
-                """)
+                WHERE employer = '{value}';
+                """ )
         if attr == "position":
             sub_result = self.query(
                 f"""
                 SELECT `id`
                 FROM `position`
-                WHERE `position` = '{value}'
-                """)
+                WHERE positionname = '{value}'
+                """ )
         if attr == "school":
             sub_result = self.query(
                 f"""
                 SELECT `id`
                 FROM `school`
-                WHERE `school` = '{value}'
-                """)
+                WHERE school = '{value}'
+                """ )
         result: int = 0
         for item in sub_result:
             result = int(item[0])
@@ -111,19 +111,19 @@ class Get:
         :return str: Name associated with ID.
         """
 
+        sub_result: sqlite.Cursor = sqlite3.Cursor
         result: str = ""
-        sub_result: sqlite3.Cursor = self.query()
         if attr == "employer":
             sub_result = self.query(
                 f"""
-                SELECT `employer`
+                SELECT employer
                 FROM `employer`
                 WHERE `id` = '{value}';
-                """)
+                """ )
         if attr == "position":
             sub_result = self.query(
                 f"""
-                SELECT `position`
+                SELECT `positionname`
                 FROM `position`
                 WHERE `id` = '{value}'
                 """)
@@ -179,11 +179,11 @@ class Get:
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
             for (focusid, focus, startdate, enddate, focusstate,
-                 schoolid, school, location, schoolstate) in result:
+                 schoolid, schoolname, location, schoolstate) in result:
                 self.result_education.append({
                     "id": "school_" + str(schoolid),
                     "attr": "schoolname",
-                    "value": school,
+                    "value": schoolname,
                     "state": schoolstate,
                 })
                 self.result_education.append({
@@ -301,7 +301,7 @@ class Get:
                 """)
 
             # Create raw list based on 'id/attr/value/state.'
-            for skills_id, category, subcategory, employer, position, shortdesc, longdesc, state in result:
+            for skills_id, category, subcategory, employername, positionname, shortdesc, longdesc, state in result:
                 self.result_skills.append({
                     "id": skills_id,
                     "attr": "category",
@@ -314,13 +314,13 @@ class Get:
                     "state": state})
                 self.result_skills.append({
                     "id": skills_id,
-                    "attr": "employer",
-                    "value": employer,
+                    "attr": "employername",
+                    "value": employername,
                     "state": state})
                 self.result_skills.append({
                     "id": skills_id,
-                    "attr": "position",
-                    "value": position,
+                    "attr": "positionname",
+                    "value": positionname,
                     "state": state})
                 self.result_skills.append({
                     "id": skills_id,
@@ -390,7 +390,7 @@ class Get:
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
             for (employer_id, employer, location, employer_state,
-                 position_id, position, start_date, end_date, position_state) in result:
+                 position_id, positionname, start_date, end_date, position_state) in result:
                 self.result_positions.append({
                     "id": "employer_" + str(employer_id),
                     "attr": "employername",
@@ -404,19 +404,16 @@ class Get:
                 self.result_positions.append({
                     "id": "position_" + str(position_id),
                     "attr": "positionname",
-                    "value": position,
+                    "value": positionname,
                     "state": position_state})
                 self.result_positions.append({
                     "id": "position_" + str(position_id),
                     "attr": "startdate",
-                    "value": start_date,
-                    "state": position_state})
+                    "value": start_date})
                 self.result_positions.append({
                     "id": "position_" + str(position_id),
                     "attr": "enddate",
-                    "value": end_date,
-                    "state": position_state,
-                })
+                    "value": end_date})
 
         return self.result_positions
 
@@ -438,19 +435,19 @@ class Get:
                 """)
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
-            for (employer_id, employer, employer_state,
-                 position_id, position, position_state,
+            for (employer_id, employername, employer_state,
+                 position_id, positionname, position_state,
                  achievement_id, shortdesc, longdesc, achievement_state) in result:
                 self.result_achievements.append({
                     "id": "employer_" + str(employer_id),
                     "attr": "employername",
-                    "value": employer,
+                    "value": employername,
                     "state": employer_state,
                 })
                 self.result_achievements.append({
                     "id": "position_" + str(position_id),
                     "attr": "positionname",
-                    "value": position,
+                    "value": positionname,
                     "state": position_state,
                 })
                 self.result_achievements.append({
