@@ -25,31 +25,31 @@ class Delete:
         :param str target_table: Target table.
         :return None: None
         """
-
-        find_target = self.cursor.execute(
-            f"""
-            SELECT {target_table}
-            FROM {associated_table}
-            WHERE `id` = {int(associated_id)};
-            """)
-
-        # If no other associations to target.
-        if len(find_target.fetchall()) <= 1:
-            self.cursor.execute(
+        if "new" not in associated_id:
+            find_target = self.cursor.execute(
                 f"""
-                DELETE FROM {target_table}
+                SELECT {target_table}
+                FROM {associated_table}
                 WHERE `id` = {int(associated_id)};
                 """)
 
-        # Delete association
-        self.cursor.execute(
-            f"""
-            DELETE FROM {associated_table}
-            WHERE `id` = {int(associated_id)};
-            """)
+            # If no other associations to target.
+            if len(find_target.fetchall()) <= 1:
+                self.cursor.execute(
+                    f"""
+                    DELETE FROM {target_table}
+                    WHERE `id` = {int(associated_id)};
+                    """)
 
-        # Commit changes.
-        self.conn.commit()
+            # Delete association
+            self.cursor.execute(
+                f"""
+                DELETE FROM {associated_table}
+                WHERE `id` = {int(associated_id)};
+                """)
+
+            # Commit changes.
+            self.conn.commit()
         return
 
     def delete_target(self, target_id: str, target_table: str) -> None:
