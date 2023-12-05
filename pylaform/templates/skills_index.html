@@ -5,7 +5,7 @@
         <form method="post">
             <!-- Iterate payload -->
         {% for i in payload %}
-            {{ form_group(payload, i["id"], i["category"], i["subcategory"], i["employername"], i["positionname"], i["shortdesc"], i["longdesc"], i["state"]) }}
+            {{ form_group(payload, i["id"], i["category"], i["subcategory"], i["employer"], i["employername"], i["position"], i["positionname"], i["shortdesc"], i["longdesc"], i["state"]) }}
         {% endfor %}
         <div id="newinput"></div>
         <button id="rowAdder" type="button" class="btn btn-dark">
@@ -26,7 +26,7 @@
     $("body").on("click", "#rowAdder", function () {
         clicks += 1;
         $("#newinput").append("<hr>");
-        newRowAdd = `{{ form_group(payload, "new", "", "", "", "", "", "", true, hidden=False) }}`;
+        newRowAdd = `{{ form_group(payload, "new", "", "", "", "", "", "", "", "", true, hidden=False) }}`;
         $("#newinput").append(newRowAdd);
     });
     </script>

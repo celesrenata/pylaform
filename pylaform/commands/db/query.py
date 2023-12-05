@@ -75,28 +75,28 @@ class Get:
         :return int: ID associated with Name.
         """
 
-        sub_result: sqlite3.Cursor = self.query()
+        sub_result: Cursor = self.query("")
         if attr == "employer":
             sub_result = self.query(
                 f"""
                 SELECT `id`
                 FROM `employer`
                 WHERE employer = '{value}';
-                """ )
+                """)
         if attr == "position":
             sub_result = self.query(
                 f"""
                 SELECT `id`
                 FROM `position`
                 WHERE positionname = '{value}'
-                """ )
+                """)
         if attr == "school":
             sub_result = self.query(
                 f"""
                 SELECT `id`
                 FROM `school`
                 WHERE school = '{value}'
-                """ )
+                """)
         result: int = 0
         for item in sub_result:
             result = int(item[0])
@@ -294,14 +294,14 @@ class Get:
         if len(self.result_skills) == 0:
             result: Cursor = self.query(
                 """
-                SELECT s.id, s.category, s.subcategory, e.employer, p.position, s.shortdesc, s.longdesc, s.state
+                SELECT s.id, s.category, s.subcategory, e.id, e.employer, p.id, p.position, s.shortdesc, s.longdesc, s.state
                 FROM `skill` s, `position` p, `employer` e
                 WHERE p.id = s.position and e.id = s.employer
                 ORDER BY `categoryorder`, `skillorder`;
                 """)
 
             # Create raw list based on 'id/attr/value/state.'
-            for skills_id, category, subcategory, employername, positionname, shortdesc, longdesc, state in result:
+            for skills_id, category, subcategory, employer, employername, position, positionname, shortdesc, longdesc, state in result:
                 self.result_skills.append({
                     "id": skills_id,
                     "attr": "category",
@@ -314,8 +314,18 @@ class Get:
                     "state": state})
                 self.result_skills.append({
                     "id": skills_id,
+                    "attr": "employer",
+                    "value": employer,
+                    "state": state})
+                self.result_skills.append({
+                    "id": skills_id,
                     "attr": "employername",
                     "value": employername,
+                    "state": state})
+                self.result_skills.append({
+                    "id": skills_id,
+                    "attr": "position",
+                    "value": position,
                     "state": state})
                 self.result_skills.append({
                     "id": skills_id,

@@ -1,4 +1,4 @@
-{% macro drop_down(id, payload, primary, secondary=None, primarybyname=False, secondarybyname=False, extra=True) %}
+{% macro drop_down(id, payload, primary, secondary=None, primarybyname=False, secondarybyname=False, extra=True, secondaryid=None) %}
     <!-- Test if primary -->
     {% if secondary == None %}
         {% set name = namespace(primary=primary + "name") %}
@@ -6,10 +6,10 @@
         <br>
         <select class="dropdown" name="{{ id }}_{{ primary }}_dropdown" id="{{ id }}_{{ primary }}_dropdown">
         {% for i in payload %}
-            <option value="{{ i[primary] }}">{{ i[primary] if primarybyname else i[name.primary] }}</option>
+            <option {{ 'selected="selected"' if i[primary] == id }} value="{{ i[primary] }}">{{ i[primary] if primarybyname else i[name.primary] }}</option>
         {% endfor %}
         {% if extra == True %}
-            <option value="EDIT">Edit</option>
+            <option {{ 'selected="selected"' if "new" in id|string }} value="EDIT">Edit</option>
             <option value="ADD">New</option>
         {% endif %}
         </select>
@@ -19,13 +19,11 @@
         <br>
         <select class="dropdown" name="{{ id }}_{{ secondary }}_dropdown" id="{{ id }}_{{ secondary }}_dropdown">
         {% for i in payload %}
-            {{ i }}
-            SECONDARY:{{ i[secondary] }}
-            <option value="{{ i[secondary] }}">{{ i[secondary] if secondarybyname else i[name.secondary] }}</option>
+            <option {{ 'selected="selected"' if i[secondary] == secondaryid }} value="{{ i[secondary] }}">{{ i[secondary] if secondarybyname else i[name.secondary] }}</option>
 
         {% endfor %}
         {% if extra == True %}
-            <option value="EDIT">Edit</option>
+            <option {{ 'selected="selected"' if "new" in id|string }} value="EDIT">Edit</option>
             <option value="ADD">New</option>
         {% endif %}
         </select>

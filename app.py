@@ -58,7 +58,7 @@ def certifications():
 def skills():
     if request.method == 'POST':
         resume_update.update_skills(request.form)
-        resume_query.purge_cache()
+        resume_query.purge_cache("skills")
     return render_template("skills_index.html", **fatten(resume_query.get_skills()))
 
 

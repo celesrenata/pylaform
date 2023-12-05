@@ -3,7 +3,7 @@ from tenacity import retry, stop_after_delay
 from werkzeug.datastructures.structures import ImmutableMultiDict
 
 from . import connect, delete, query
-from ...utilities.commands import transform_get_id
+from ...utilities.commands import transform_get_id, unique
 
 
 class Post:
@@ -101,7 +101,11 @@ class Post:
         :param ImmutableMultiDict form_data: Form data from template.
         :return None: None
         """
-        
+
+        # Get item count.
+        attrs: list[str] = list(form_data.keys())
+        attrs_per_id: int = 0
+
         # Transform from template.
         transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
         counter: str = ""
@@ -110,110 +114,90 @@ class Post:
             if counter != str(item["id"]):
                 counter = str(item["id"])
                 result = {}
-                
+
+            # Build attrs to expect per ID.
+            attrs_per_id = len(unique(transform_form_data))
+
             # Delete position, and employer (if necessary).
             if "delete" in item["attr"]:
                 self.delete.delete_association(item["id"], "employer", "position")
-            
-            # Create employer.
-            elif "new" in item["id"] and ("employer" in item["attr"] or "location" in item["attr"]):
-                # Create result based on current attribute value.
-                match item["attr"]:
-                    case "location":
-                        result.update({"location": item["value"], "state": int(item["state"])})
-                    case "employername":
-                        result.update({"employername": item["value"], "state": int(item["state"])})
-                # Detect last iteration.
-                if len(result) == 3:
-                    # Cleanup dates for (hidden) and 'Present' value detection.
-                    if "date" in item["attr"]:
-                        if item["value"] == "":
-                            item["value"] = "9999-01-01"
-                        if item["value"] == "hidden":
-                            item["value"] = "0001-01-01"
-                            
-                    # Check for employer.
-                    check_employer = self.cursor.execute(
-                        f"""
-                        SELECT *
-                        FROM `employer`
-                        WHERE `employername` = '{result["employer"]}'
-                        """)
-                    if len(check_employer.fetchall()) == 0:  # If no employer.
-                        self.cursor.execute(
-                            f"""
-                                INSERT INTO `employer`
-                                (`employername`, `location`, `state`)
-                                VALUES ('{result["employer"]}', '{result["location"]}', '{result["state"]}');
-                            """)
 
-                        # Commit changes.
-                        self.conn.commit()
-
-            # Create position.
+            # Create position, and employer if necessary.
             elif "new" in item["id"]:
                 # Create result based on current attribute value.
                 match item["attr"]:
+                    case "employer_dropdown":
+                        if item["value"] != "EDIT" and item["value"] != "ADD":
+                            result.update({"employerid": int(item["value"])})
+                    case "position_dropdown":
+                        if item["value"] not in ["EDIT", "ADD"]:
+                            result.update({"positionid": int(item["value"])})
+                    case "location":
+                        result.update({"location": item["value"]})
                     case "employer":
-                        item["value"] = str(self.query.query_id(item["value"], "employer"))
-                        result.update({"employername": item["value"]})
-                        employerid: str = str(self.query.query_id(item["value"], "employer"))
-                        result.update({"employer": employerid})
+                        result.update({"employername": item["value"], "state": int(item["state"])})
                     case "position":
-                        result.update({"positionname": item["value"]})
+                        result.update({"positionname": item["value"], "state": int(item["state"])})
                     case "startdate":
                         result.update({"startdate": item["value"]})
                     case "enddate":
-                        result.update({"enddate": item["value"], "state": int(item["state"])})
-                # Detect last iteration.
-                if len(result) == 6:
-                    # Cleanup dates for (hidden) and 'Present' value detection.
-                    if "date" in item["attr"]:
-                        if item["value"] == "":
-                            item["value"] = "9999-01-01"
-                        if item["value"] == "hidden":
-                            item["value"] = "0001-01-01"
-                        result["employer"] = self.query.query_id(result["employername"], "employer")
-                    self.cursor.execute(
-                        f"""
-                        INSERT INTO `position`
-                        (`employername`, `position`, `startdate`, `enddate`, `state`)
-                        VALUES ('{result["employername"]}', '{result["positionname"]}', 
-                                '{result["startdate"]}', '{result["enddate"]}', '{result["state"]}');
-                        """)
+                        result.update({"enddate": item["value"]})
 
-            # Update employer and position.
-            else:
-                # Detect last iteration.
-                if len(result) == 6:
-                    # Cleanup dates for (hidden) and 'Present' value detection.
-                    if "date" in item['attr']:
-                        if item["value"] == "":
-                            item["value"] = "9999-01-01"
-                        if item["value"] == "hidden":
-                            item["value"] = "0001-01-01"
-                    if item["attr"] == "employer":
-                        # Check for employer.
+                # Cleanup dates for (hidden) and 'Present' value detection.
+                if "date" in item["attr"]:
+                    if item["value"] == "":
+                        item["value"] = "9999-01-01"
+                    if item["value"] == "hidden":
+                        item["value"] = "0001-01-01"
+                if all(key in result for key in ["location", "employername", "positionname", "startdate", "enddate", "state"]):
+                    if "employerid" not in result:
+                        result.update({"employerid": self.query.query_id(result["employername"], "employer")})
+
+                    # Check for employer.
+                    if result["employerid"] == 0:
                         check_employer = self.cursor.execute(
                             f"""
                             SELECT *
                             FROM `employer`
-                            WHERE `employer` = '{item["id"]}'
+                            WHERE `employer` = '{result["employername"]}'
                             """)
                         if len(check_employer.fetchall()) == 0:  # If no employer.
                             self.cursor.execute(
                                 f"""
                                 INSERT INTO `employer`
-                                (`employername`, `location`, `state`)
-                                VALUES ('{result["employername"]}', '{result["location"]}', '{result["state"]}');
+                                            (`employer`, `location`, `state`)
+                                VALUES      ('{result["employername"]}', '{result["location"]}', '{result["state"]}');
                                 """)
-                # Detect if enough data to update employers.
-                if "location" in item["attr"] or "employername" in item["attr"]:
-                    self.update_target_table(item, "employer")
-                # Detect if enough data to update positions.
-                elif "delete" not in item["attr"] and "new" not in item["attr"]:
-                    if item["attr"] == "position":
-                        self.update_target_table(item, "position")
+
+                            # Commit changes.
+                            self.conn.commit()
+                            result.update({"employerid": self.query.query_id(result["employername"], "employer")})
+                    self.cursor.execute(
+                        f"""
+                        INSERT INTO `position`
+                                    (`employer`, `position`,
+                                    `startdate`, `enddate`, `state`)
+                        VALUES      ('{result["employerid"]}', '{result["positionname"]}',
+                                    '{result["startdate"]}', '{result["enddate"]}', '{result["state"]}');
+                        """)
+
+            # Update employer and position.
+            else:
+                # Cleanup dates for (hidden) and "Present" value detection.
+                if "date" in item["attr"]:
+                    if item["value"] == "":
+                        item["value"] = "9999-01-01"
+                    if item["value"] == "hidden":
+                        item["value"] = "0001-01-01"
+
+                if "delete" not in item["attr"] and "new" not in item["attr"]:
+                    # Detect if enough data to update employer.
+                    if item["attr"] == "location" or item["attr"] == "employer":
+                        self.update_target_table(item, "employer")
+                    # Detect if enough data to update position.
+                    if "position" in item["attr"]:
+                        if item["attr"] == "position":
+                            self.update_target_table(item, "position")
 
         # Commit changes.
         self.conn.commit()
@@ -249,17 +233,18 @@ class Post:
                 # Create result based on current attribute value.
                 match item["attr"]:
                     case "category":
-                        result.update({"category": item["value"]})
+                        result.update({"category": item["value"], "state": int(item["state"])})
                     case "subcategory":
                         result.update({"subcategory": item["value"]})
-                    case "employer":
+                    case "employer_dropdown":
                         result.update({"employer": item["value"]})
-                    case "position":
+                    case "position_dropdown":
                         result.update({"position": item["value"]})
                     case "shortdesc":
                         result.update({"shortdesc": item["value"]})
                     case "longdesc":
-                        result.update({"longdesc": item["value"], "state": int(item["state"])})
+                        result.update({"longdesc": item["value"]})
+
                 # Detect last iteration.
                 if len(result) == 7:
                     # TODO: Implement ordering support.
@@ -275,13 +260,14 @@ class Post:
                         """)
             # Update skill.
             else:
-                self.cursor.execute(
-                    f"""
-                        UPDATE `skill`
-                        SET `{item["attr"]}` = '{item["value"]}',
-                        `state` = {item["state"]}
-                        WHERE `id` = {int(item["id"])}
-                    """)
+                if "dropdown" not in item["attr"]:
+                    self.cursor.execute(
+                        f"""
+                            UPDATE `skill`
+                            SET `{item["attr"]}` = '{item["value"]}',
+                            `state` = {item["state"]}
+                            WHERE `id` = {int(item["id"])}
+                        """)
         
         # Commit changes.
         self.conn.commit()
@@ -344,6 +330,10 @@ class Post:
         :return None: None
         """
 
+        # Get item count.
+        attrs: list[str] = list(form_data.keys())
+        attrs_per_id: int = 0
+
         # Transform from template.
         transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
         counter: str = ""
@@ -353,77 +343,73 @@ class Post:
                 counter = str(item["id"])
                 result = {}
 
+            # Build attrs to expect per ID.
+            attrs_per_id = len(unique(transform_form_data))
+
             # Delete focus, and school (if necessary).
             if "delete" in item["attr"]:
                 self.delete.delete_association(item["id"], "school", "focus")
-                
-            # Create school.
-            elif "new" in item["id"] and ("school" in item["attr"] or "location" in item["attr"]):
-                # Create result based on current attribute value.
-                match item["attr"]:
-                    case "location":
-                        result.update({"location": item["value"], "state": int(item["state"])})
-                    case "school":
-                        result.update({"schoolname": item["value"], "state": int(item["state"])})
-                # Detect last iteration.
-                if len(result) == 3:
-                    # Cleanup dates for (hidden) and 'Present' value detection.
-                    if "date" in item["attr"]:
-                        if item["value"] == "":
-                            item["value"] = "9999-01-01"
-                        if item["value"] == "hidden":
-                            item["value"] = "0001-01-01"
-                    # Check for school.
-                    check_school = self.cursor.execute(
-                        f"""
-                        SELECT *
-                        FROM `school`
-                        WHERE `school` = '{result["schoolname"]}'
-                        """)
-                    if len(check_school.fetchall()) == 0:  # If no school.
-                        self.cursor.execute(
-                            f"""
-                            INSERT INTO `school`
-                                        (`school`, `location`, `state`)
-                            VALUES      ('{result["schoolname"]}', '{result["location"]}', '{result["state"]}');
-                            """)
 
-                        # Commit changes.
-                        self.conn.commit()
-            
-            # Create focus.
+            # Create focus, and school if necessary.
             elif "new" in item["id"]:
                 # Create result based on current attribute value.
                 match item["attr"]:
+                    case "school_dropdown":
+                        if item["value"] != "EDIT" and item["value"] != "ADD":
+                            result.update({"schoolid": int(item["value"])})
+                    case "focus_dropdown":
+                        if item["value"] not in ["EDIT", "ADD"]:
+                            result.update({"focusid": int(item["value"])})
+                    case "location":
+                        result.update({"location": item["value"]})
                     case "school":
-                        # get ID from name.
-                        item["value"] = str(self.query.query_id(item["value"], "school"))
-                        result.update({"schoolname": item["value"]})
-                    case "focusname":
-                        result.update({"focusname": item["value"]})
+                        result.update({"schoolname": item["value"], "state": int(item["state"])})
+                    case "focus":
+                        result.update({"focusname": item["value"], "state": int(item["state"])})
                     case "startdate":
                         result.update({"startdate": item["value"]})
                     case "enddate":
-                        result.update({"enddate": item["value"], "state": int(item["state"])})
-                # Detect last iteration.
-                if len(result) == 6:
-                    # Cleanup dates for (hidden) and 'Present' value detection.
-                    if "date" in item["attr"]:
-                        if item["value"] == "":
-                            item["value"] = "9999-01-01"
-                        if item["value"] == "hidden":
-                            item["value"] = "0001-01-01"
-                        result["school"] = self.query.query_id(result["schoolname"], "school")
+                        result.update({"enddate": item["value"]})
+
+                # Cleanup dates for (hidden) and 'Present' value detection.
+                if "date" in item["attr"]:
+                    if item["value"] == "":
+                        item["value"] = "9999-01-01"
+                    if item["value"] == "hidden":
+                        item["value"] = "0001-01-01"
+                if all(key in result for key in ["location", "schoolname", "focusname", "startdate", "enddate", "state"]):
+                    if "schoolid" not in result:
+                        result.update({"schoolid": self.query.query_id(result["schoolname"], "school")})
+
+                    # Check for school.
+                    if result["schoolid"] == 0:
+                        check_school = self.cursor.execute(
+                            f"""
+                            SELECT *
+                            FROM `school`
+                            WHERE `school` = '{result["schoolname"]}'
+                            """)
+                        if len(check_school.fetchall()) == 0:  # If no school.
+                            self.cursor.execute(
+                                f"""
+                                INSERT INTO `school`
+                                            (`school`, `location`, `state`)
+                                VALUES      ('{result["schoolname"]}', '{result["location"]}', '{result["state"]}');
+                                """)
+
+                            # Commit changes.
+                            self.conn.commit()
+                            result.update({"schoolid": self.query.query_id(result["schoolname"], "school")})
                     self.cursor.execute(
                         f"""
                         INSERT INTO `focus`
                                     (`school`, `focus`,
                                     `startdate`, `enddate`, `state`)
-                        VALUES      ('{result["school"]}', '{result["focusname"]}',
+                        VALUES      ('{result["schoolid"]}', '{result["focusname"]}',
                                     '{result["startdate"]}', '{result["enddate"]}', '{result["state"]}');
                         """)
 
-            # Update focus.
+            # Update school and focus.
             else:
                 # Cleanup dates for (hidden) and "Present" value detection.
                 if "date" in item["attr"]:
@@ -434,7 +420,7 @@ class Post:
 
                 if "delete" not in item["attr"] and "new" not in item["attr"]:
                     # Detect if enough data to update school.
-                    if "location" in item["attr"] or "school" in item["attr"]:
+                    if item["attr"] == "location" or item["attr"] == "school":
                         self.update_target_table(item, "school")
                     # Detect if enough data to update focus.
                     if "focus" in item["attr"]:

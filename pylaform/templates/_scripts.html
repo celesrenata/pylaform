@@ -2,7 +2,7 @@
     <script type="text/javascript">
     function commit_value (commit_id) {
         console.log(commit_id);
-        var currentValue = document.getElementById(commit_id).value;
+        var currentValue = document.getElementById(commit_id).text;
         console.log(currentValue);
         document.getElementById(commit_id).setAttribute('value', currentValue);
     };
@@ -41,6 +41,7 @@
             console.log("selectedName: " + selectedName);
             switch(selectedValue) {
                 case "EDIT":
+
                     $("#" + selectedName + "_div").removeClass("d-none");
                     break;
                 case "ADD":
@@ -49,7 +50,11 @@
                     break;
                 default:
                     $("#" + selectedName + "_div").addClass("d-none");
-                    $("#" + selectedName).val(selectedValue);
+                    var selectText = $("#" + currentId + " option:selected").text();
+                    if( selectedText === undefined) {
+                        selectedText = "";
+                    }
+                    $("#" + selectedName).val(selectText);
                     break;
             }
         });

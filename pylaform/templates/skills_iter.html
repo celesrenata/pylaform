@@ -1,5 +1,5 @@
 {% from "_dropdown.html" import drop_down with context %}
-{% macro form_group(payload, id, category, subcategory, employername, position, shortdesc, longdesc, state, hidden=True) %}
+{% macro form_group(payload, id, category, subcategory, employer, employername, position, positionname, shortdesc, longdesc, state, hidden=True) %}
     <!-- Test if new template element -->
     {% if id == "new" %}
         {% set id = "new` + clicks + `"|safe %}
@@ -16,7 +16,7 @@
                     </div>
                 </td>
                 <td class="align-items-center">
-                    {{ drop_down(id, payload, "category", secondary="subcategory", primarybyname=True) }}
+                    {{ drop_down(id, payload, "category", secondary="subcategory", primarybyname=True, secondarybyname=True) }}
                     <div class="{{ "d-none" if hidden else "" }}" id="{{ id }}_subcategory_div">
                         <br>
                         <input type="text" name="{{ id }}_subcategory" id="{{ id }}_subcategory"

@@ -142,9 +142,15 @@ def transform_get_id(form_data: ImmutableMultiDict) -> list[dict[str, str | bool
     result: list[dict[str, str | bool]] = []
     for item in form_data:
         item_split = str(item).split("_")
-        if "_enabled" in item:
-            result[-1].update({"state": True})
-        if "_enabled" not in item:
+        if len(item_split) == 3:
+            if item_split[2] == "dropdown":
+                result.append({"id": item_split[0], "attr": item_split[1] + "_dropdown", "value": form_data[item], "state": False})
+            if item_split[2] == "enabled":
+                indexes = find_nested_indexes(result, 'id', item_split[0])
+                if len(indexes) > 0:
+                    for index in indexes:
+                        result[index].update({"state": True})
+        else:
             result.append({"id": item_split[0], "attr": item_split[1], "value": form_data[item], "state": False})
 
     return result
@@ -166,3 +172,30 @@ def unique(list1: list) -> list:
             unique_list.append(x)
 
     return unique_list
+
+
+def find_nested_indexes(input_list: list[dict[str, str | bool]], key: str | list[str], value: str | list) -> list[int]:
+    """
+    Find nested indexes of a list of dictionaries.
+    :param list[dict[str, str | bool]] input_list: List of dictionaries.
+    :param str | list[str] key: dictionary keys to search.
+    :param str | list value: dictionary values to find.
+    :return list[int]: list of indexes where keyvals match.
+    """
+
+    result: list = []
+    if type(key) == str:
+        for i, item in enumerate(input_list):
+            if item[key] == value:
+                result.append(i)
+
+    if type(key) == list:
+        for i, item in enumerate(input_list):
+            count = 0
+            for sub_i, k in enumerate(key):
+                if item[key[sub_i]] == value[sub_i]:
+                    count = count + 1
+                if count == len(key):
+                    result.append(i)
+
+    return result

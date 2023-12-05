@@ -11,39 +11,40 @@
                 <td>
                     {{ drop_down(schoolid, payload, "school") }}
                     <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ schoolid }}_school_div">
+                        <label for="{{ schoolid }}_school">School Name:</label>
                         <br>
                         <input type="text" name="{{ schoolid }}_school" id="{{ schoolid }}_school"
                                value="{{ schoolname if schoolname is defined else "" }}" onfocusout="commit_value('{{ schoolid }}_school');">
                         <br>
-                        <label for="{{ schoolid }}_location">School Location</label>
+                        <label for="{{ schoolid }}_location">School Location:</label>
                         <br>
                         <input type="text" name="{{ schoolid }}_location" id="{{ schoolid }}_location"
                                value="{{ location if location is defined else "" }}" onfocusout="commit_value('{{ schoolid }}_location');">
                     </div>
                     <br>
-                    <label for="{{ schoolid }}_school_enabled">Displayed</label>
+                    <label for="{{ schoolid }}_school_enabled">Displayed:</label>
                     <input type="checkbox" name="{{ schoolid }}_school_enabled"
                     {{ "checked" if schoolstate }}>
                 </td>
                 <td class="align-items-center">
-                    {{ drop_down(focusid, payload, "school", secondary="focus", secondarybyname=True) }}
+                    {{ drop_down(focusid, payload, "school", secondary="focus", secondarybyname=True, secondaryid=focus) }}
                     <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ focusid }}_focus_div">
                         <br>
                         <input type="text" name="{{ focusid }}_focus" id="{{ focusid }}_focus"
                                value="{{ focus if focus is defined else "" }}" onfocusout="commit_value('{{ focusid }}_school');">
                     </div>
                     <br>
-                    <label for="{{ focusid }}_enddate_enabled">Displayed</label>
+                    <label for="{{ focusid }}_enddate_enabled">Displayed:</label>
                     <input type="checkbox" name="{{ focusid }}_enddate_enabled"
                             {{ "checked" if focusstate }}>
                 </td>
                 <td>
-                    <label for="{{ focusid }}_startdate">Start Date</label>
+                    <label for="{{ focusid }}_startdate">Start Date:</label>
                     <br>
                     <input type="text" name="{{ focusid }}_startdate" id="{{ focusid }}_startdate"
                            value="{{ startdate if startdate is defined else "" }}">
                     <br>
-                    <label for="{{ focusid }}_enddate">End Date</label>
+                    <label for="{{ focusid }}_enddate">End Date:</label>
                     <br>
                     <input type="text" name="{{ focusid }}_enddate" id="{{ focusid }}_enddate"
                            value="{{ enddate if enddate is defined else "" }}">
