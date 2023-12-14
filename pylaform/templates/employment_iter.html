@@ -26,7 +26,7 @@
                     {{ "checked" if employerstate }}>
                 </td>
                 <td class="align-items-center">
-                    {{ drop_down(positionid, payload, "employer", secondary="position") }}
+                    {{ drop_down(positionid, payload, "employer", secondary="position", secondaryid=positionid) }}
                     <br>
                     <div class="{{ "d-none" if hidden else "" }}" id="{{ positionid }}_position_div">
                         <input type="text" name="{{ positionid }}_position" id="{{ positionid }}_position"

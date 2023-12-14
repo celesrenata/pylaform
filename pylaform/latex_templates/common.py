@@ -1,4 +1,4 @@
-from pylaform.commands.db.query import Get
+from pylaform.commands.db.query import Queries
 from pylaform.commands.latex import Commands
 from pylaform.utilities.commands import contact_flatten, listify, slim, unique
 from pylatex import Itemize, NewLine, Section, Subsection, Tabular, Tabularx, Document
@@ -12,7 +12,7 @@ class Common:
     """
 
     def __init__(self) -> None:
-        self.resume_data = Get()
+        self.resume_data = Queries()
         self.cmd = Commands()
 
     def modern_contact_header(self, doc: Document) -> None:

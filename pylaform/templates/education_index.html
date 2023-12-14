@@ -6,7 +6,7 @@
             <!-- Iterate payload -->
         {% for i in payload %}
             {% if i|length > 0 %}
-                {{ form_group(payload, i["school"], i["schoolname"], i["location"], i["schoolstate"], i["focusid"], i["focus"], i["startdate"], i["enddate"], i["focusstate"]) }}
+                {{ form_group(payload, ddpayload, i["school"], i["schoolname"], i["location"], i["schoolstate"], i["focus"], i["focusname"], i["startdate"], i["enddate"], i["focusstate"]) }}
             {% endif %}
         {% endfor %}
 
@@ -28,7 +28,7 @@
         $("#rowAdder").click(function () {
             clicks += 1;
             $("#newinput").append("<hr>");
-            newRowAdd = `{{ form_group(payload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
+            newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
             $("#newinput").append(newRowAdd);
         });
         $("body").on("click", "#deleteRow", function () {

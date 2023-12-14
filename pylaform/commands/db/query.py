@@ -1,12 +1,11 @@
 import sqlite3
 from sqlite3 import Cursor, Connection
-
 from tenacity import retry, stop_after_delay
 
 from . import connect
 
 
-class Get:
+class Queries:
     """
     Collection of queries to run against the local database.
     Actions: SELECT
@@ -15,6 +14,7 @@ class Get:
 
     @retry(stop=(stop_after_delay(10)))
     def __init__(self) -> None:
+        self.result_dropdown = []
         self.conn: Connection = connect.db()
         self.cursor: Cursor = self.conn.cursor()
         self.result_certifications: list[dict[str, str | int | bool]] = []
@@ -50,8 +50,10 @@ class Get:
                 self.result_positions = []
             case "summary":
                 self.result_summary = []
+            case "dropdown":
+                self.result_dropdown = []
 
-    @retry
+    @retry(stop=(stop_after_delay(10)))
     def query(self, query: str) -> sqlite3.Cursor:
         """
         Query worker that handles all main SELECT requests.
@@ -88,15 +90,15 @@ class Get:
                 f"""
                 SELECT `id`
                 FROM `position`
-                WHERE positionname = '{value}'
+                WHERE " = '{value}'
                 """)
         if attr == "school":
             sub_result = self.query(
                 f"""
                 SELECT `id`
-                FROM `school`
-                WHERE school = '{value}'
-                """)
+                FROM school
+                WHERE `name` = '{value}'
+                """ )
         result: int = 0
         for item in sub_result:
             result = int(item[0])
@@ -111,24 +113,86 @@ class Get:
         :return str: Name associated with ID.
         """
 
-        sub_result: sqlite.Cursor = sqlite3.Cursor
+        sub_result: sqlite3.Cursor = sqlite3.Cursor
         result: str = ""
         if attr == "employer":
             sub_result = self.query(
                 f"""
                 SELECT employer
                 FROM `employer`
-                WHERE `id` = '{value}';
+                WHERE `id` = {value};
                 """ )
         if attr == "position":
             sub_result = self.query(
                 f"""
-                SELECT `positionname`
+                SELECT `position`
                 FROM `position`
-                WHERE `id` = '{value}'
+                WHERE `id` = {value}
                 """)
+        if attr == "school":
+            sub_result = self.query(
+                f"""
+                SELECT `name`
+                FROM `school`
+                WHERE `id` = {value}
+                """)
+        if attr == "focus":
+            sub_result = self.query(
+                f"""
+                SELECT `name`
+                FROM `focus`
+                WHERE `id` = {value}
+                """)
+
         for item in sub_result:
             result = str(item[0])
+
+        return result
+
+    def row_count(self, table: str, column: str, value: str | int) -> int:
+        """
+        returns row count for basic Select From Where clauses.
+        :param str table: Table name.
+        :param str column: Column name.
+        :param str | int value: Value to search.
+        :return int: Row count.
+        """
+
+        try:
+            value = int(value)
+            response = self.cursor.execute(
+                f"""
+                SELECT * 
+                FROM `{table}`
+                WHERE `{column}` = {value}
+                """)
+
+        except ValueError:
+            response = self.cursor.execute(
+                f"""
+                SELECT * 
+                FROM `{table}`
+                WHERE `{column}` = '{value}'
+                """)
+
+        return len(response.fetchall())
+
+    def get_options(self, tables: list[str], columns: list[str]) -> dict[str, list[dict[int, str]]]:
+        """
+        Returns all results under given column.
+        :param list[str] tables: Table name.
+        :param list[str] columns: Column name.
+        :return dict[str, list[dict[int, str]]]: List of all values under column.
+        """
+        result: dict = {}
+        for i, table in enumerate(tables):
+            response = self.query(
+                f"""
+                SELECT `id`, `{columns[i]}`
+                FROM `{tables[i]}`
+                ORDER BY `{columns[i]}`""")
+            result.update({tables[i]: [{"id": int(item[0]), "name": item[1]} for item in response.fetchall()]})
+
         return result
 
     def get_certifications(self) -> list[dict[str, str | int | bool]]:
@@ -140,7 +204,7 @@ class Get:
         if len(self.result_certifications) == 0:
             result = self.query(
                 """
-                SELECT `id`, `certification`, `year`, `state`
+                SELECT `id`, name, `year`, `state`
                 FROM `certification`
                 """)
 
@@ -170,15 +234,15 @@ class Get:
         if len(self.result_education) == 0:
             result: Cursor = self.query(
                 """
-                SELECT f.id, f.focus, f.startdate, f.enddate, f.state,
-                       s.id, s.school, s.location, s.state
+                SELECT f.id, f.name, f.startdate, f.enddate, f.state,
+                       s.id, s.name, s.location, s.state
                 FROM `school` AS s
                 JOIN `focus` AS f on s.id = f.school
                 ORDER BY f.startdate DESC
                 """)
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
-            for (focusid, focus, startdate, enddate, focusstate,
+            for (focusid, focusname, startdate, enddate, focusstate,
                  schoolid, schoolname, location, schoolstate) in result:
                 self.result_education.append({
                     "id": "school_" + str(schoolid),
@@ -193,25 +257,25 @@ class Get:
                     "state": schoolstate,
                 })
                 self.result_education.append({
-                    "id": "focusid_" + str(focusid),
-                    "attr": "focus",
-                    "value": focus,
+                    "id": "focus_" + str(focusid),
+                    "attr": "focusname",
+                    "value": focusname,
                     "state": focusstate,
                 })
                 self.result_education.append({
-                    "id": "focusid_" + str(focusid),
+                    "id": "focus_" + str(focusid),
                     "attr": "startdate",
                     "value": startdate,
                     "state": focusstate,
                 })
                 self.result_education.append({
-                    "id": "focusid_" + str(focusid),
+                    "id": "focus_" + str(focusid),
                     "attr": "enddate",
                     "value": enddate,
                     "state": focusstate,
                 })
                 self.result_education.append({
-                    "id": "focusid_" + str(focusid),
+                    "id": "focus_" + str(focusid),
                     "attr": "enddate",
                     "value": enddate,
                     "state": focusstate,

@@ -5,10 +5,10 @@ from tenacity import retry, stop_after_delay
 from . import connect
 
 
-class Delete:
+class Deletes:
     """
     Collection of queries to run against the local database.
-    Actions: INSERT INTO, DELETE FROM, UPDATE
+    Actions: DELETE FROM
     :return None: None
     """
     
@@ -17,7 +17,8 @@ class Delete:
         self.conn: Connection = connect.db()
         self.cursor: Cursor = self.conn.cursor()
 
-    def delete_association(self, associated_id: str, associated_table: str, target_table: str) -> None:
+    @retry(stop=(stop_after_delay(10)))
+    def single_association(self, associated_id: str, associated_table: str, target_table: str) -> None:
         """
         Dynamically find a resource and delete its association.
         :param str associated_id: Find target by associated ID.
@@ -28,7 +29,7 @@ class Delete:
         if "new" not in associated_id:
             find_target = self.cursor.execute(
                 f"""
-                SELECT {target_table}
+                SELECT `name`
                 FROM {associated_table}
                 WHERE `id` = {int(associated_id)};
                 """)
@@ -52,6 +53,7 @@ class Delete:
             self.conn.commit()
         return
 
+    @retry(stop=(stop_after_delay(10)))
     def delete_target(self, target_id: str, target_table: str) -> None:
         """
         Deletes target.
@@ -60,12 +62,14 @@ class Delete:
         :return None: None
         """
 
-        self.cursor.execute(
-            f"""
-            DELETE FROM {target_table}
-            WHERE `id` = {int(target_id)};
-            """)
+        if "new" not in target_id:
+            self.cursor.execute(
+                f"""
+                DELETE FROM {target_table}
+                WHERE `id` = {int(target_id)};
+                """)
 
-        # Commit changes.
-        self.conn.commit()
+            # Commit changes.
+            self.conn.commit()
+
         return

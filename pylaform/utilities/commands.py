@@ -140,18 +140,35 @@ def transform_get_id(form_data: ImmutableMultiDict) -> list[dict[str, str | bool
     """
 
     result: list[dict[str, str | bool]] = []
+    item_count = sum('_dropdown' in key for key in list(form_data))
+
     for item in form_data:
         item_split = str(item).split("_")
-        if len(item_split) == 3:
-            if item_split[2] == "dropdown":
-                result.append({"id": item_split[0], "attr": item_split[1] + "_dropdown", "value": form_data[item], "state": False})
-            if item_split[2] == "enabled":
+        if "dropdown" in item_split[-1]:
+            result.append(
+                {"id": item_split[0], "attr": item_split[1] + "_dropdown", "value": form_data[item], "state": False})
+        elif "enabled" in item_split[-1]:
+            result.append(
+                {"id": item_split[0], "attr": item_split[1] + "_enabled", "value": bool(form_data[item]), "state": False})
+        elif len(item_split) < 3:
+            result.append({"id": item_split[0], "attr": item_split[1], "value": form_data[item], "state": False})
+        else:
+            result.append({"id": item_split[0], "attr": "_".join(item_split[-2:]), "value": form_data[item], "state": False})
+
+    for item in form_data:
+        item_split = str(item).split("_")
+        if item_split[-1] == "enabled":
+            if item_count > 1:
+                indexes = find_nested_indexes(result, ['id', 'attr'], [item_split[0], item_split[1]])
+                if len(indexes) > 0:
+                    if item_split[0] + "_" + item_split[1] in item:
+                        for index in indexes:
+                            result[index].update({"state": True})
+            else:
                 indexes = find_nested_indexes(result, 'id', item_split[0])
                 if len(indexes) > 0:
                     for index in indexes:
                         result[index].update({"state": True})
-        else:
-            result.append({"id": item_split[0], "attr": item_split[1], "value": form_data[item], "state": False})
 
     return result
 
@@ -186,16 +203,33 @@ def find_nested_indexes(input_list: list[dict[str, str | bool]], key: str | list
     result: list = []
     if type(key) == str:
         for i, item in enumerate(input_list):
-            if item[key] == value:
+            if str(item[key]).startswith(value):
                 result.append(i)
 
     if type(key) == list:
         for i, item in enumerate(input_list):
             count = 0
             for sub_i, k in enumerate(key):
-                if item[key[sub_i]] == value[sub_i]:
+                if str(item[key[sub_i]]).startswith(value[sub_i]):
                     count = count + 1
                 if count == len(key):
                     result.append(i)
+
+    return result
+
+
+def date_adapter(value: str) -> str:
+    """
+    Updates text overloaded dates to be accepted by the DB with static dates.
+    :param str value: YYYY-MM-DD date format as string. with "Present" and "" as acceptable values.
+    :return str: YYYY-MM-DD only
+    """
+
+    # TODO: Add present checkbox to academic and employment templates.
+    result: str = value
+    if value == "":
+        result = "9999-01-01"
+    if value == "hidden":
+        result = "0001-01-01"
 
     return result

@@ -1,4 +1,4 @@
-from pylaform.commands.db.query import Get
+from pylaform.commands.db.query import Queries
 from pylaform.commands.latex import Commands
 from pylatex import Command, Document, Package
 from pylatex.utils import NoEscape
@@ -13,7 +13,7 @@ class Generator:
     """
 
     def __init__(self) -> None:
-        self.resume_data = Get()
+        self.resume_data = Queries()
         self.cmd = Commands()
         self.common = Common()
         self.doc = Document()

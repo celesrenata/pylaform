@@ -1,5 +1,5 @@
 from datetime import datetime
-from pylaform.commands.db.query import Get
+from pylaform.commands.db.query import Queries
 from pylaform.utilities.commands import listify, unique
 from pylatex import escape_latex, NoEscape
 import re
@@ -12,7 +12,7 @@ class Commands:
     """
 
     def __init__(self) -> None:
-        self.queries = Get()
+        self.queries = Queries()
 
     @staticmethod
     def format_date(date_date: datetime | str) -> str:

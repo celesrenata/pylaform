@@ -1,5 +1,5 @@
 {% from "_dropdown.html" import drop_down with context %}
-{% macro form_group(payload, schoolid, schoolname, location, schoolstate, focusid, focus, startdate, enddate, focusstate, hidden=True) %}
+{% macro form_group(payload, ddpayload, schoolid, schoolname, location, schoolstate, focusid, focusname, startdate, enddate, focusstate, hidden=True) %}
     <!-- Test if new template element -->
     {% if schoolid == "new" %}
         {% set schoolid = "new` + clicks + `"|safe %}
@@ -9,44 +9,45 @@
         <table>
             <tr>
                 <td>
-                    {{ drop_down(schoolid, payload, "school") }}
-                    <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ schoolid }}_school_div">
-                        <label for="{{ schoolid }}_school">School Name:</label>
-                        <br>
-                        <input type="text" name="{{ schoolid }}_school" id="{{ schoolid }}_school"
-                               value="{{ schoolname if schoolname is defined else "" }}" onfocusout="commit_value('{{ schoolid }}_school');">
-                        <br>
-                        <label for="{{ schoolid }}_location">School Location:</label>
-                        <br>
-                        <input type="text" name="{{ schoolid }}_location" id="{{ schoolid }}_location"
-                               value="{{ location if location is defined else "" }}" onfocusout="commit_value('{{ schoolid }}_location');">
-                    </div>
+                    {{ drop_down(focusid, payload, ddpayload, "school") }}
                     <br>
-                    <label for="{{ schoolid }}_school_enabled">Displayed:</label>
-                    <input type="checkbox" name="{{ schoolid }}_school_enabled"
+                    <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ focusid }}_school_div">
+                        <label for="{{ focusid }}_school_name">School Name:</label>
+                        <br>
+                        <input type="text" name="{{ focusid }}_school_name" id="{{ focusid }}_school_name"
+                               value="{{ schoolname if schoolname is defined else "" }}" onfocusout="commit_value('{{ focusid }}_school');">
+                        <br>
+                        <label for="{{ focusid }}_school_location">School Location:</label>
+                        <br>
+                        <input type="text" name="{{ focusid }}_school_location" id="{{ focusid }}_school_location"
+                               value="{{ location if location is defined else "" }}" onfocusout="commit_value('{{ focusid }}_school_location');">
+                    </div>
+                    <label for="{{ focusid }}_school_enabled">Displayed:</label>
+                    <input type="checkbox" name="{{ focusid }}_school_enabled" id="{{ focusid }}_school_enabled"
                     {{ "checked" if schoolstate }}>
                 </td>
                 <td class="align-items-center">
-                    {{ drop_down(focusid, payload, "school", secondary="focus", secondarybyname=True, secondaryid=focus) }}
+                    {{ drop_down(focusid, payload, ddpayload, "school", secondary="focus", secondaryid=focusid) }}
+                    <br>
                     <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ focusid }}_focus_div">
+                        <label for="{{ focusid }}_focus_name">Focus Name:</label>
                         <br>
-                        <input type="text" name="{{ focusid }}_focus" id="{{ focusid }}_focus"
+                        <input type="text" name="{{ focusid }}_focus_name" id="{{ focusid }}_focus_name"
                                value="{{ focus if focus is defined else "" }}" onfocusout="commit_value('{{ focusid }}_school');">
                     </div>
-                    <br>
-                    <label for="{{ focusid }}_enddate_enabled">Displayed:</label>
-                    <input type="checkbox" name="{{ focusid }}_enddate_enabled"
+                    <label for="{{ focusid }}_focus_enabled">Displayed:</label>
+                    <input type="checkbox" name="{{ focusid }}_focus_enabled"
                             {{ "checked" if focusstate }}>
                 </td>
                 <td>
                     <label for="{{ focusid }}_startdate">Start Date:</label>
                     <br>
-                    <input type="text" name="{{ focusid }}_startdate" id="{{ focusid }}_startdate"
+                    <input type="text" name="{{ focusid }}_focus_startdate" id="{{ focusid }}_focus_startdate"
                            value="{{ startdate if startdate is defined else "" }}">
                     <br>
                     <label for="{{ focusid }}_enddate">End Date:</label>
                     <br>
-                    <input type="text" name="{{ focusid }}_enddate" id="{{ focusid }}_enddate"
+                    <input type="text" name="{{ focusid }}_focus_enddate" id="{{ focusid }}_focus_enddate"
                            value="{{ enddate if enddate is defined else "" }}">
                 </td>
                 <td>
