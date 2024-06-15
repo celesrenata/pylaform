@@ -54,15 +54,15 @@ class Generator:
 
         # Summary
         self.common.modern_summary_details(self.doc)
-        
+
         # Skills
         self.common.modern_skills(self.doc)
-        
+        #
         # Work History
         self.common.modern_work_history(self.doc)
-        
+
         # End page
-        self.doc.create(NoEscape(r"\end{document}"))
+        self.doc.append(NoEscape(r"\end{document}"))
 
         # Generate the page
         self.generate()

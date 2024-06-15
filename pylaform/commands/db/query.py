@@ -19,6 +19,7 @@ class Queries:
         self.cursor: Cursor = self.conn.cursor()
         self.result_certifications: list[dict[str, str | int | bool]] = []
         self.result_education: list[dict[str, str | int | bool]] = []
+        self.result_employers: list[dict[str, str | int | bool]] = []
         self.result_identification: list[dict[str, str | int | bool]] = []
         self.result_skills: list[dict[str, str | int | bool]] = []
         self.result_achievements: list[dict[str, str | int | bool]] = []
@@ -118,7 +119,7 @@ class Queries:
         if attr == "employer":
             sub_result = self.query(
                 f"""
-                SELECT employer
+                SELECT `employer`
                 FROM `employer`
                 WHERE `id` = {value};
                 """ )
@@ -237,7 +238,7 @@ class Queries:
                 SELECT f.id, f.name, f.startdate, f.enddate, f.state,
                        s.id, s.name, s.location, s.state
                 FROM `school` AS s
-                JOIN `focus` AS f on s.id = f.school
+                LEFT JOIN `focus` AS f on s.id = f.school
                 ORDER BY f.startdate DESC
                 """)
 
@@ -359,7 +360,9 @@ class Queries:
             result: Cursor = self.query(
                 """
                 SELECT s.id, s.category, s.subcategory, e.id, e.employer, p.id, p.position, s.shortdesc, s.longdesc, s.state
-                FROM `skill` s, `position` p, `employer` e
+                FROM `skill` s
+                LEFT JOIN `position` p ON s.position = p.id AND s.employer = p.employer
+                LEFT JOIN `employer` e ON s.employer = e.id
                 WHERE p.id = s.position and e.id = s.employer
                 ORDER BY `categoryorder`, `skillorder`;
                 """)
@@ -458,7 +461,7 @@ class Queries:
                 SELECT e.id, e.employer, e.location, e.state,
                        p.id, p.position, p.startdate, p.enddate, p.state
                 FROM `employer` AS e
-                JOIN `position` AS p on e.id = p.employer
+                LEFT JOIN `position` AS p on e.id = p.employer
                 ORDER BY p.startdate DESC
                 """)
 
@@ -493,7 +496,7 @@ class Queries:
 
     def get_achievements(self) -> list[dict[str, str | int | bool]]:
         """
-        Return achievements NESTED list objects from database by school.
+        Return achievements NESTED list objects from database by achievement.
         :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
@@ -504,8 +507,8 @@ class Queries:
                        p.id as position_id, p.position, p.state as position_state,
                        a.id as achievement_id, a.shortdesc, a.longdesc, a.state as achievement_state
                 FROM `achievement` a
-                JOIN `position` p ON a.position = p.id AND a.employer = p.employer
-                JOIN `employer` e ON a.employer = e.id;
+                LEFT JOIN `position` p ON a.position = p.id AND a.employer = p.employer
+                LEFT JOIN `employer` e ON a.employer = e.id;
                 """)
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'

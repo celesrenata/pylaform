@@ -92,7 +92,7 @@ def listify(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str 
             item_split = item["id"].split("_")
         # Dynamically set state
         if "state" not in item:
-            if len(item_split) == 2:
+            if len(item_split) == 2 and type(item_split) == list:
                 if item_split[0].replace("id", "") + "state" not in working_result:
                     dynamic_state: bool = False
                 else:
@@ -106,7 +106,7 @@ def listify(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str 
             dynamic_state: bool = bool(item["state"])
 
         # NESTED Update working result.
-        if len(item_split) == 2:
+        if len(item_split) == 2 and type(item_split) == list:
             working_result.update({item_split[0]: item_split[1], item["attr"]: item["value"],
                                    item_split[0].replace("id", "") + "state": dynamic_state})
 
@@ -115,7 +115,7 @@ def listify(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str 
             working_result.update({"id": item["id"], item["attr"]: item["value"], "state": dynamic_state})
 
         # NESTED Update result
-        if len(item_split) == 2:
+        if len(item_split) == 2 and type(item_split) == list:
             if item["id"] not in sub_mask:
                 sub_mask.append(item["id"])
                 sub_mask_group_count.append(re.sub("[^A-Za-z]", "", item["id"]))

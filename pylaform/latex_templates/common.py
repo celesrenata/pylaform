@@ -106,6 +106,7 @@ class Common:
             doc.append(NoEscape(
                 r"\textbf{" + summary["shortdesc"] + r":} " 
                 + self.cmd.glossary_inject(summary["longdesc"], "retro")))
+            doc.append(self.cmd.vspace("0.06"))
             doc.append(NewLine())
 
     def modern_skills(self, doc: Document) -> None:
@@ -170,11 +171,11 @@ class Common:
                                 for sub in listify(self.resume_data.get_skills())])
         for category in categories:
             doc.append(bold(category))
+            doc.append(NewLine())
             for subcategory in subcategories:
 
                 # Start writing.
                 if category == subcategory["category"]:
-                    doc.append(NewLine())
                     doc.append(NoEscape(r"{\textit {" + subcategory["subcategory"] + r"}}"))
                     doc.append(NoEscape(r"\begin{list2}"))
                     for skill in listify(self.resume_data.get_skills()):
@@ -233,13 +234,15 @@ class Common:
         # Start writing.
         doc.append(NoEscape(r"\section{\sc Employment}"))
         companies = unique([sub["employer"] for sub in listify(self.resume_data.get_achievements())])
+        positions = listify(self.resume_data.get_positions())
+        achievements = listify(self.resume_data.get_achievements())
         for employer in companies:
             employer_name = self.resume_data.query_name(employer, "employer")
             doc.append(bold(employer_name))
             doc.append(NewLine())
-            for position in listify(self.resume_data.get_positions()):
+            for position in positions:
                 if employer == position["employer"]:
-                    position_name = self.resume_data.query_name(position["positionname"], "position")
+                    position_name = self.resume_data.query_name(position["position"], "position")
                     end_date = "Present" if self.cmd.format_date(
                         position["enddate"]) == "" else self.cmd.format_date(position["enddate"])
                     doc.append(NoEscape(
@@ -252,8 +255,8 @@ class Common:
                         + f"{end_date}"
                         + r"}}"))
                     doc.append(NoEscape(r"\begin{list2}"))
-                    for achievement in listify(self.resume_data.get_achievements()):
-                        if employer == achievement["employer"] and position["positionname"] == achievement["position"]:
+                    for achievement in achievements:
+                        if employer == achievement["employer"] and position["position"] == achievement["position"]:
                             doc.append(NoEscape(
                                 r"\item " + self.cmd.glossary_inject(achievement["longdesc"], "retro")))
                     doc.append(NoEscape(r"\end{list2}"))

@@ -4,6 +4,7 @@ from pylatex import Command, Document, Package
 from pylatex.utils import NoEscape
 from tenacity import retry, stop_after_delay
 from .common import Common
+import os
 
 
 class Generator:
@@ -23,12 +24,9 @@ class Generator:
         Class main logic.
         :return None: None
         """
-        # Let no files relax
-        self.doc.append(NoEscape(r"\let\nofiles\relax"))
 
         # DocumentClass
         self.doc.documentclass = Command("documentclass", options=["margin", "line"], arguments="res")
-
         # Margins
         self.doc.append(NoEscape(r"""
             \oddsidemargin - .5 in
@@ -128,5 +126,12 @@ class Generator:
         :return None: None
         """
 
-        self.doc.generate_pdf("data/hybrid", clean_tex=True)
         self.doc.generate_tex("data/hybrid")
+
+        norelax = r"\let\nofiles\relax"
+        with open("data/hybrid.tex", 'r+') as f:
+            content = f.read()
+            f.seek(0, 0)
+            f.write(norelax.rstrip('\r\n') + '\n' + content)
+        os.system("pdflatex -output-directory data/ data/hybrid.tex ")
+        #self.doc.generate_pdf("data/hybrid", clean_tex=True)
