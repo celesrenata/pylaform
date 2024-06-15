@@ -1,5 +1,5 @@
 {% from "_dropdown.html" import drop_down with context %}
-{% macro form_group(payload, employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, hidden=True) %}
+{% macro form_group(payload, ddpayload, employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, hidden=True) %}
     <!-- Test if new template element -->
     {% if employerid == "new" %}
         {% set employerid = "new` + clicks + `"|safe %}
@@ -9,7 +9,7 @@
         <table>
             <tr>
                 <td>
-                    {{ drop_down(employerid, payload, "employer") }}
+                    {{ drop_down(employerid, payload, ddpayload, "employer", primarybyname=True) }}
                     <br>
                     <div class="{{ "d-none" if hidden else "" }}" id="{{ employerid }}_employer_div">
                         <input type="text" name="{{ employerid }}_employer" id="{{ employerid }}_employer"
@@ -26,7 +26,7 @@
                     {{ "checked" if employerstate }}>
                 </td>
                 <td class="align-items-center">
-                    {{ drop_down(positionid, payload, "employer", secondary="position", secondaryid=positionid) }}
+                    {{ drop_down(positionid, payload, ddpayload, "employer", secondary="position", secondaryid=positionid) }}
                     <br>
                     <div class="{{ "d-none" if hidden else "" }}" id="{{ positionid }}_position_div">
                         <input type="text" name="{{ positionid }}_position" id="{{ positionid }}_position"
