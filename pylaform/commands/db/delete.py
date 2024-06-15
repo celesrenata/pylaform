@@ -1,4 +1,4 @@
-from sqlite3 import Connection, Cursor
+from sqlite3 import Connection, Cursor, DatabaseError, ProgrammingError
 
 from tenacity import retry, stop_after_delay
 
@@ -27,14 +27,22 @@ class Deletes:
         :return None: None
         """
         if "new" not in associated_id:
-            find_target = self.cursor.execute(
-                f"""
-                SELECT `name`
-                FROM {associated_table}
-                WHERE `id` = {int(associated_id)};
-                """)
+            try:
+                find_target = self.cursor.execute(
+                    f"""
+                    SELECT `name`
+                    FROM {associated_table}
+                    WHERE `id` = {int(associated_id)};
+                    """)
+            except (DatabaseError, ProgrammingError):
+                find_target = self.cursor.execute(
+                    f"""
+                        SELECT `{associated_table}`
+                        FROM {associated_table}
+                        WHERE `id` = {int(associated_id)};
+                    """)
 
-            # If no other associations to target.
+                # If no other associations to target.
             if len(find_target.fetchall()) <= 1:
                 self.cursor.execute(
                     f"""

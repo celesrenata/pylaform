@@ -1,5 +1,5 @@
 {% from "_dropdown.html" import drop_down with context %}
-{% macro form_group(payload, id, category, subcategory, employer, employername, position, positionname, shortdesc, longdesc, state, hidden=True) %}
+{% macro form_group(payload, ddpayload, id, category, subcategory, employer, employername, position, positionname, shortdesc, longdesc, state, hidden=True) %}
     <!-- Test if new template element -->
     {% if id == "new" %}
         {% set id = "new` + clicks + `"|safe %}
@@ -8,7 +8,7 @@
         <table>
             <tr>
                 <td>
-                    {{ drop_down(id, payload, "category", primarybyname=True) }}
+                    {{ drop_down(id, payload, ddpayload, "category", primarybyname=True) }}
                     <br>
                     <div class="{{ "d-none" if hidden else "" }}" id="{{ id }}_category_div">
                         <input type="text" name="{{ id }}_category" id="{{ id }}_category"
@@ -16,7 +16,7 @@
                     </div>
                 </td>
                 <td class="align-items-center">
-                    {{ drop_down(id, payload, "category", secondary="subcategory", primarybyname=True, secondarybyname=True) }}
+                    {{ drop_down(id, payload, ddpayload, "category", secondary="subcategory", secondarybyname=True) }}
                     <div class="{{ "d-none" if hidden else "" }}" id="{{ id }}_subcategory_div">
                         <br>
                         <input type="text" name="{{ id }}_subcategory" id="{{ id }}_subcategory"
@@ -24,9 +24,9 @@
                     </div>
                 </td>
                 <td>
-                    {{ drop_down(id, payload, "employer", extra=False) }}
+                    {{ drop_down(id, payload, ddpayload, "employer", extra=False, primarybyname=True) }}
                     <br>
-                    {{ drop_down(id, payload, "employer", "position", extra=False) }}
+                    {{ drop_down(id, payload, ddpayload, "position", extra=False, primarybyname=True) }}
                 </td>
                 <td>
                     <button class="btn btn-danger"

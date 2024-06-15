@@ -6,7 +6,7 @@
             <br>
             <select class="dropdown" name="{{ id }}_{{ primary }}_dropdown" id="{{ id }}_{{ primary }}_dropdown">
         {% for i in ddpayload[primary] %}
-            <option {{ "selected" if i["id"]|string == payload[id|int - 1][primary]|string }} value="{{ i["id"] }}">{{ i["id"] if primarybyname else i["name"] }}</option>
+            <option {{ "selected" if i["id"]|string == payload[id|int - 1][primary]|string }} value="{{ i["id"] }}">{{ i["name"] if primarybyname else i["id"] }}</option>
         {% endfor %}
         {% if extra == True %}
             <option {{ "selected" if "new" in id|string }} value="EDIT">Edit</option>
@@ -19,7 +19,7 @@
             <br>
             <select class="dropdown" name="{{ id }}_{{ secondary }}_dropdown" id="{{ id }}_{{ secondary }}_dropdown">
         {% for i in ddpayload[secondary] %}
-            <option {{ "selected" if i["id"]|string == payload[id|int - 1][secondary]|string }} value="{{ i["id"] }}">{{ i["id"] if secondarybyname else i["name"] }}</option>
+            <option {{ "selected" if i["id"]|string == payload[id|int - 1][secondary]|string }} value="{{ i["id"] }}">{{ i["name"] if secondarybyname else i["id"] }}</option>
         {% endfor %}
         {% if extra == True %}
             <option {{ "selected" if "new" in id|string }} value="EDIT">Edit</option>
