@@ -30,7 +30,7 @@
         $("#newinput").append(newRowAdd);
     });
     $("body").on("click", "#deleteRow", function () {
-        div_id = $(this).closest("div").attr("id");
+        div_id = $(this).attr("value");
         $("#" + div_id).remove();
         $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
     });

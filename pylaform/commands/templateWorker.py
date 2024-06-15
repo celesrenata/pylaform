@@ -504,6 +504,7 @@ class Worker:
         :return:
         """
 
+
         try:
             item["value"] = int(item["value"])
             self.cursor.execute(
@@ -515,13 +516,20 @@ class Worker:
                 """
             )
         except ValueError:
-            self.cursor.execute(
-                f"""
-                 UPDATE `{table}`
-                 SET    `{item["attr"]}` = '{item["value"]}',
-                        `state` = {item["state"]}
-                 WHERE  `id` = {int(item["id"])}
-                 """)
+            if item["value"] is None:
+                self.cursor.execute(
+                    f"""
+                    DELETE FROM `{table}`
+                    WHERE `id` = {int(item["id"])}"""
+                )
+            else:
+                self.cursor.execute(
+                    f"""
+                     UPDATE `{table}`
+                     SET    `{item["attr"]}` = '{item["value"]}',
+                            `state` = {item["state"]}
+                     WHERE  `id` = {int(item["id"])}
+                     """)
             pass
 
         # Commit changes.
