@@ -91,7 +91,7 @@ class Queries:
                 f"""
                 SELECT `id`
                 FROM `position`
-                WHERE " = '{value}'
+                WHERE `position` = '{value}'
                 """)
         if attr == "school":
             sub_result = self.query(
@@ -100,6 +100,13 @@ class Queries:
                 FROM school
                 WHERE `name` = '{value}'
                 """ )
+        if attr == "focus":
+            sub_result = self.query(
+                f"""
+                SELECT `id`
+                FROM `focus`
+                WHERE `name` = '{value}'
+                """)
         result: int = 0
         for item in sub_result:
             result = int(item[0])

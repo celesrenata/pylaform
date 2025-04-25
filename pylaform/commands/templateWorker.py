@@ -41,7 +41,8 @@ class Worker:
             case "achievements":
                 return self.query.get_options(["employer", "position"], ["employer", "position"])
             case "skills":
-                return self.query.get_options(["skills", "skills", "employer", "position"], ["category", "subcategory", "employer", "position"])
+                return self.query.get_options(["skills", "skills", "employer", "position"],
+                                              ["category", "subcategory", "employer", "position"])
 
     def identification(self, form_data: ImmutableMultiDict) -> None:
         """
@@ -148,7 +149,8 @@ class Worker:
                 # Cleanup dates for (hidden) and 'Present' value detection.
                 if "date" in item["attr"]:
                     item["value"] = date_adapter(item["value"])
-                if all(key in result for key in ["location", "employername", "positionname", "startdate", "enddate", "state"]):
+                if all(key in result for key in
+                       ["location", "employername", "positionname", "startdate", "enddate", "state"]):
                     if "employerid" not in result:
                         result.update({"employerid": self.query.query_id(result["employername"], "employer")})
 
@@ -226,7 +228,8 @@ class Worker:
             # Create skill.
             if "new" in item["id"]:
                 # Detect last iteration.
-                if all(key in result for key in ["employer", "position", "shortdesc", "longdesc", "category", "subcategory", "state"]):
+                if all(key in result for key in
+                       ["employer", "position", "shortdesc", "longdesc", "category", "subcategory", "state"]):
                     # TODO: Implement ordering support.
                     self.insert.multi_column("skill", **result)
 
@@ -257,10 +260,10 @@ class Worker:
             if counter != str(item["id"]):
                 counter = str(item["id"])
                 result = {}
-            
+
             # Build attrs to expect per ID.
             attrs_per_id = len(unique(transform_form_data))
-            
+
             # Delete summary.
             if "delete" in item["attr"]:
                 self.delete.delete_target(item["id"], "summary")
@@ -293,11 +296,8 @@ class Worker:
         :return None: None
         """
 
-        # Get item count.
         attrs: list[str] = list(form_data.keys())
-        attrs_per_id: int = 0
 
-        # Transform from template.
         transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
         counter: str = ""
         school_query_builder: dict[str, str | int] = {}
@@ -307,57 +307,123 @@ class Worker:
         school_keys = ["school_location", "school_name", "school_state"]
         focus_keys = ["focus_name", "focus_state", "focus_startdate", "focus_enddate", "focus_school"]
 
-        # Build attrs to expect per ID.
         attrs_per_id = len(unique(transform_form_data))
-        school_dropdown_id = 0
-        focus_dropdown_id = 0
+        school_dropdown_id = None  # Changed to None for clarity
+        focus_dropdown_id = None
+        school_name = ""
+
+        # First pass - collect row_ids to ensure we maintain them for updates
+        row_ids = {}
+        for item in transform_form_data:
+            if item["attr"] == "rowid":
+                row_ids[item["id"]] = item["value"]
+
         for i, item in enumerate(transform_form_data):
+            focus_school_value = None
+
             if counter != str(item["id"]):
                 counter = str(item["id"])
 
-            # Delete focus, and school (if necessary).
             if "delete" in item["attr"]:
                 self.delete.single_association(item["id"], "school", "focus")
                 continue
 
-            # Cleanup dates for (hidden) and 'Present' value detection.
             if "date" in item["attr"]:
                 item["value"] = date_adapter(item["value"])
 
-            # Create result based on current attribute value.
             match item["attr"]:
                 case "school_dropdown":
                     school_dropdown_id = {"id": item["id"], "value": item["value"]}
+                    # If the row_id exists, keep the original school ID for updating
+                    if item["id"] in row_ids:
+                        original_school_id = row_ids[item["id"]]
+                        if original_school_id and original_school_id.isdigit():
+                            school_query_builder["id"] = int(original_school_id)
                 case "school_location":
                     school_query_builder.update({"school_location": item["value"]})
                 case "school_name":
-                    if "new" in item["id"]:
+                    # Get the original ID from the row_id field, not the dropdown value
+                    is_new = False
+                    if item["id"] in row_ids:
+                        original_id = row_ids[item["id"]]
+                        is_new = original_id == "new"
+
+                    if is_new:
                         school_query_builder.update({"school_name": item["value"], "school_state": int(item["state"])})
-                    elif "new" not in str(school_dropdown_id["id"]):
-                        school_query_builder.update({"id": int(school_dropdown_id["id"]), "school_name": item["value"], "school_state": int(item["state"])})
+                    else:
+                        try:
+                            # If we already have an ID in the builder (from rowid), use that
+                            if "id" not in school_query_builder and item["id"] in row_ids:
+                                original_id = row_ids[item["id"]]
+                                if original_id and original_id.isdigit():
+                                    school_query_builder["id"] = int(original_id)
+
+                            # Now update the name and state
+                            school_query_builder.update({
+                                "school_name": item["value"],
+                                "school_state": int(item["state"])
+                            })
+                        except ValueError:
+                            pass
                 case "focus_dropdown":
                     focus_dropdown_id = {"id": item["id"], "value": item["value"]}
+                    # If the row_id exists and it's not new, set the focus ID directly
+                    if item["id"] in row_ids:
+                        focus_id = item["id"]  # This is the focus ID, not the school ID
+                        if focus_id and focus_id.isdigit():
+                            focus_query_builder["id"] = int(focus_id)
                 case "focus_name":
-                    if "new" in item["id"]:
+                    # Use the actual focus_id as the ID for updates
+                    if item["id"] not in row_ids or row_ids[item["id"]] == "new":
                         focus_query_builder.update({"focus_name": item["value"], "focus_state": int(item["state"])})
-                    elif "new" not in str(focus_dropdown_id["id"]):
-                        focus_query_builder.update({"id": int(focus_dropdown_id["id"]), "focus_name": item["value"], "focus_state": int(item["state"])})
+                    else:
+                        try:
+                            if "id" not in focus_query_builder:
+                                focus_query_builder["id"] = int(item["id"])
+                            focus_query_builder.update({
+                                "focus_name": item["value"],
+                                "focus_state": int(item["state"])
+                            })
+                        except ValueError:
+                            pass
                 case "focus_startdate":
                     focus_query_builder.update({"focus_startdate": item["value"]})
                 case "focus_enddate":
                     focus_query_builder.update({"focus_enddate": item["value"]})
 
-            # Build school queries.
             if all(key in school_query_builder for key in school_keys):
-                # If school doesn't exist, create it.
+                # Key fix: Maintain the existing school ID from rowid if it's not new
+                if "id" not in school_query_builder and item["id"] in row_ids:
+                    original_id = row_ids[item["id"]]
+                    if original_id != "new" and original_id.isdigit():
+                        school_query_builder["id"] = int(original_id)
+
+                # But allow the school to be changed if a different one is selected
+                if isinstance(school_dropdown_id, dict) and "value" in school_dropdown_id:
+                    if school_dropdown_id["value"] not in ["EDIT", "ADD"]:
+                        # Use the selected school ID from the dropdown instead
+                        selected_school_id = int(school_dropdown_id["value"])
+                        # Don't update the ID, just query for name to use in focus relationship
+                        school_name = self.query.query_name(selected_school_id, "school")
+                        focus_query_builder.update({"focus_school": selected_school_id})
+
+                        # We'll still update the existing school record, but we'll link the focus to a different school
+                        if "id" in school_query_builder:
+                            school_queries.append(school_query_builder)
+                        school_query_builder = {}
+                        continue
+
+                # Regular processing when not changing schools
                 if "id" not in school_query_builder:
-                    school_query_builder.update({"id": self.query.query_id(school_query_builder["school_name"], "school")})
-                if school_query_builder["id"] == 0:  # If no school.
+                    school_query_builder.update(
+                        {"id": self.query.query_id(school_query_builder["school_name"], "school")})
+                if school_query_builder["id"] == 0:
                     school_query_builder.pop("id")
                 school_queries.append(school_query_builder)
                 if "school_name" in school_query_builder and "id" in school_query_builder:
                     if school_query_builder["school_name"] == "":
-                        school_query_builder["school_name"] = self.query.query_name(school_query_builder["id"], "school")
+                        school_query_builder["school_name"] = self.query.query_name(school_query_builder["id"],
+                                                                                    "school")
                 focus_query_builder.update(
                     {"focus_school": self.query.query_id(school_query_builder["school_name"], "school")})
                 school_name = school_query_builder["school_name"]
@@ -366,39 +432,41 @@ class Worker:
             if len(school_queries) > 0:
                 for school_i, query in enumerate(school_queries):
                     if "id" not in query:
-                        # Insert School.
                         self.insert.multi_column("school", **query)
                     else:
-                        # Update School.
                         self.update.multi_column("school", **query)
                     school_queries.pop(school_i)
 
-            # Build focus queries.
-            print(focus_query_builder.keys())
             if all(key in focus_query_builder for key in focus_keys):
-                # If focus doesn't exist, create it.
-                if "id" not in focus_query_builder:
-                    focus_query_builder.update({"id": self.query.query_id(focus_query_builder["focus_name"], "focus")})
-                elif str(focus_query_builder["focus_school"]) != str(school_dropdown_id["value"]):
-                    focus_query_builder.update(
-                        {"focus_school": int(school_dropdown_id["value"])})
-                if "focus_name" in school_query_builder and "id" in school_query_builder:
-                    if school_query_builder["school_name"] == "":
-                        school_query_builder["school_name"] = self.query.query_name(school_query_builder["id"], "school")
-                if focus_query_builder["focus_school"] == 0:  # If no focus.
+                # Use the existing focus ID from the actual item ID
+                if "id" not in focus_query_builder and item["id"] != "new" and item["id"].isdigit():
+                    focus_query_builder.update({"id": int(item["id"])})
+
+                focus_school_value = focus_query_builder.get("focus_school")
+
+                # If user selected a different school in the dropdown, use that
+                if isinstance(school_dropdown_id, dict) and "value" in school_dropdown_id and \
+                        school_dropdown_id["value"] not in ["EDIT", "ADD"]:
+                    try:
+                        focus_query_builder.update({"focus_school": int(school_dropdown_id["value"])})
+                    except ValueError:
+                        pass
+
+                if "focus_name" in focus_query_builder and "id" in focus_query_builder:
+                    if focus_query_builder["focus_name"] == "":
+                        focus_query_builder["focus_name"] = self.query.query_name(focus_query_builder["id"], "focus")
+                if focus_query_builder.get("focus_school", 0) == 0:
                     focus_query_builder.update(
                         {"focus_school": self.query.query_id(school_name, "school")})
-                if focus_query_builder["id"] == 0:  # If no focus.
-                    focus_query_builder.pop("id")
+                if focus_query_builder.get("id", 0) == 0:
+                    focus_query_builder.pop("id", None)
                 focus_queries.append(focus_query_builder)
                 focus_query_builder = {}
 
         for query in focus_queries:
             if "id" not in query:
-                # Insert Focus.
                 self.insert.multi_column("focus", **query)
             else:
-                # Update Focus.
                 self.update.multi_column("focus", **query)
 
         return
@@ -418,7 +486,7 @@ class Worker:
             if counter != str(item["id"]):
                 counter = str(item["id"])
                 result = {}
-            
+
             # Delete achievement.
             if "delete" in item["attr"]:
                 self.delete.delete_target(item["id"], "achievement")
@@ -443,7 +511,7 @@ class Worker:
                 # Detect last iteration.
                 if all(key in result for key in ["employer", "position", "shortdesc", "longdesc", "state"]):
                     self.insert.multi_column("achievement", **result)
-                    
+
             # Update achievement.
             else:
                 # Get ID from name.
@@ -471,7 +539,7 @@ class Worker:
             if counter != item["id"]:
                 counter = item["id"]
                 result = {}
-                
+
             # Delete term.
             if "delete" in item["attr"]:
                 self.delete.delete_target(item["id"], "glossary")
@@ -490,7 +558,7 @@ class Worker:
                 if all(key in result for key in ["term", "url", "description", "state"]):
                     self.insert.multi_column("glossary", **result)
 
-                    
+
             # Update term.
             else:
                 self.update.single_item("glossary", item)
@@ -503,7 +571,6 @@ class Worker:
         :param str table: table to update.
         :return:
         """
-
 
         try:
             item["value"] = int(item["value"])

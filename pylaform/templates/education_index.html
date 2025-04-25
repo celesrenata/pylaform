@@ -4,21 +4,21 @@
     <div class="lead d-flex align-items-bottom justify-content-center">
         <form method="post">
             <!-- Iterate payload -->
-        {% for i in payload %}
-            {% if i|length > 0 %}
-                {{ form_group(payload, ddpayload, i["school"], i["schoolname"], i["location"], i["schoolstate"], i["focus"], i["focusname"], i["startdate"], i["enddate"], i["focusstate"]) }}
-            {% endif %}
-        {% endfor %}
+            {% for i in payload %}
+                {% if i|length > 0 and i.get("focus") is not none and i.get("focus") != "None" and i.get("focus")|string != "None" %}
+                    {{ form_group(payload, ddpayload, i["school"], i["schoolname"], i["location"], i["schoolstate"], i["focus"], i["focusname"], i["startdate"], i["enddate"], i["focusstate"]) }}
+                {% endif %}
+            {% endfor %}
 
-        <div id="newinput"></div>
-        <button id="rowAdder" type="button" class="btn btn-dark">
+            <div id="newinput"></div>
+            <button id="rowAdder" type="button" class="btn btn-dark">
                         <span class="bi bi-plus-square-dotted">
                         </span> ADD
-                    </button>
-        <button type="submit" class="btn btn-success">
+            </button>
+            <button type="submit" class="btn btn-success">
                         <span class="bi bi-plus-square-dotted">
                         </span> SUBMIT
-                    </button>
+            </button>
         </form>
     </div>
 {% endblock %}
@@ -31,6 +31,30 @@
             newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
             $("#newinput").append(newRowAdd);
         });
+
+        $("body").on("click", ".rowEditor", function () {
+            var div_id = $(this).closest("div").attr("id");
+            var currentRow = $("#" + div_id);
+            var schoolVal = currentRow.find("[name$='school']").val();
+            var schoolNameVal = currentRow.find("[name$='schoolname']").val();
+            var locationVal = currentRow.find("[name$='location']").val();
+            var focusVal = currentRow.find("[name$='focus']").val();
+            var focusNameVal = currentRow.find("[name$='focusname']").val();
+            var startDateVal = currentRow.find("[name$='startdate']").val();
+            var endDateVal = currentRow.find("[name$='enddate']").val();
+
+            newRowAdd = `{{ form_group(payload, ddpayload, "edit", "", "", true, "", "", "", "", true, hidden=False) }}`;
+            currentRow.html(newRowAdd);
+
+            currentRow.find("[name$='school']").val(schoolVal);
+            currentRow.find("[name$='schoolname']").val(schoolNameVal);
+            currentRow.find("[name$='location']").val(locationVal);
+            currentRow.find("[name$='focus']").val(focusVal);
+            currentRow.find("[name$='focusname']").val(focusNameVal);
+            currentRow.find("[name$='startdate']").val(startDateVal);
+            currentRow.find("[name$='enddate']").val(endDateVal);
+        });
+
         $("body").on("click", "#deleteRow", function () {
             div_id = $(this).closest("div").attr("id");
             $("#" + div_id).remove();

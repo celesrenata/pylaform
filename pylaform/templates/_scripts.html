@@ -1,62 +1,105 @@
 {% block scripts %}
-    <script type="text/javascript">
-    function commit_value (commit_id) {
+<script type="text/javascript">
+    // Use let/const to avoid accidental globals and provide better scoping
+    function commit_value(commit_id) {
         console.log(commit_id);
-        var currentValue = document.getElementById(commit_id).text;
-        console.log(currentValue);
-        document.getElementById(commit_id).setAttribute('value', currentValue);
-    };
-        {#$("body").on("input", ".updatevalue", function () {#}
-        {#    var currentValue = $(this).text();#}
-        {#    var currentId = $(this).attr("id");#}
-        {#    var prefix_builder = currentId.split("_");#}
-        {#    if (prefix_builder.length == 3) {#}
-        {#        var prefix = prefix_builder[0] + "_" + prefix_builder[1];#}
-        {#    } else {#}
-        {#        var prefix = prefix_builder[0];#}
-        {#    }#}
-        {#    console.log(currentValue);#}
-        {#    console.log(prefix);#}
-        {#    $(this).val(currentValue);#}
-        {##}
-        {#});#}
-        $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest("div").attr("id");
-            $("#" + div_id).remove();
-            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-        });
-
-        $("body").on("change", ".dropdown", function() {
-
-            var selectedValue = $(this).val();
-            var currentId = $(this).attr('name');
-
-                        var prefix_builder = currentId.split("_");
-            if (prefix_builder.length == 3) {
-                var selectedName = prefix_builder[0] + "_" + prefix_builder[1];
-            } else {
-                var selectedName = prefix_builder[0];
-            };
-            console.log("selectedValue: " + selectedValue);
-            console.log("selectedName: " + selectedName);
-            switch(selectedValue) {
-                case "EDIT":
-
-                    $("#" + selectedName + "_div").removeClass("d-none");
-                    break;
-                case "ADD":
-                    $("#" + selectedName + "_div").addClass("d-none");
-                    $('#rowAdder').click();
-                    break;
-                default:
-                    $("#" + selectedName + "_div").addClass("d-none");
-                    var selectText = $("#" + currentId + " option:selected").text();
-                    if( selectedText === undefined) {
-                        selectedText = "";
-                    }
-                    $("#" + selectedName).val(selectText);
-                    break;
+        const el = document.getElementById(commit_id);
+        // Try to get .value, fallback to .innerText
+        let currentValue = '';
+        if (el) {
+            if ('value' in el) {
+                currentValue = el.value;
+            } else if ('innerText' in el) {
+                currentValue = el.innerText;
             }
+        }
+        console.log(currentValue);
+        // For input fields, set the property, not attribute
+        if ('value' in el) {
+            el.value = currentValue;
+        } else {
+            el.setAttribute('value', currentValue);
+        }
+    }
+
+    // Always use class selectors for dynamic content and to avoid ID duplication
+    $("body").on("click", ".deleteRow", function () {
+        const div_id = $(this).closest("div").attr("id");
+        if (div_id) {
+            $("#" + div_id).remove();
+            $("#newinput").append(
+                `<input type="hidden" id="${div_id}_delete" name="${div_id}_delete" value="True">`
+            );
+        }
+    });
+
+    // Handle dropdown change events
+    $("body").on("change", ".dropdown", function () {
+        const dropdown = $(this);
+        const selectedValue = dropdown.val();
+        const selectedText = dropdown.find("option:selected").text();
+        const currentId = dropdown.attr('name');
+        const prefix_builder = currentId ? currentId.split("_") : [];
+
+        // Get rowId (e.g., "1" from "1_school_dropdown")
+        const rowId = prefix_builder.length >= 1 ? prefix_builder[0] : '';
+
+        // Get field type (e.g., "school" from "1_school_dropdown")
+        const fieldType = prefix_builder.length >= 2 ? prefix_builder[1] : '';
+
+        const selectedName =
+            prefix_builder.length === 3
+                ? prefix_builder[0] + "_" + prefix_builder[1]
+                : prefix_builder[0] || '';
+
+        // If a normal value is selected (not EDIT/ADD), update the hidden fields
+        if (selectedValue !== "EDIT" && selectedValue !== "ADD") {
+            // Update the name field with the text from the selected option
+            const nameField = $(`#${rowId}_${fieldType}_name`);
+            if (nameField.length) {
+                nameField.val(selectedText);
+            }
+
+            // For school dropdowns, potentially look up the location if available in data attributes
+            if (fieldType === "school") {
+                // If you have school location data available, update it
+                // This assumes you might add data-location attributes to your options in the future
+                const locationData = dropdown.find("option:selected").attr('data-location');
+                if (locationData) {
+                    $(`#${rowId}_school_location`).val(locationData);
+                }
+            }
+
+            // Store the selected value in the data attributes for potential future reference
+            if (fieldType === "school") {
+                dropdown.attr('data-school-id', selectedValue);
+            } else if (fieldType === "focus") {
+                dropdown.attr('data-focus-id', selectedValue);
+            }
+        }
+
+        switch (selectedValue) {
+            case "EDIT":
+                $(`#${selectedName}_div`).removeClass("d-none");
+                dropdown.prop("disabled", true);
+                break;
+            case "ADD":
+                $(`#${selectedName}_div`).addClass("d-none");
+                dropdown.prop("disabled", false);
+                break;
+            default:
+                $(`#${selectedName}_div`).addClass("d-none");
+                dropdown.prop("disabled", false);
+                break;
+        }
+    });
+
+    // Initialize on page load: sync any dropdowns with their corresponding fields
+    $(document).ready(function() {
+        $(".dropdown").each(function() {
+            // Trigger the change event to initialize all fields correctly
+            $(this).trigger("change");
         });
-    </script>
+    });
+</script>
 {% endblock %}
