@@ -82,19 +82,23 @@ class Worker:
             # Create result based on current attribute value.
             match item["attr"]:
                 case "certification":
-                    result.update({"id": int(item["id"]), "name": item["value"], "state": int(item["state"])})
+                    result.update({"id": item["id"], "name": item["value"], "state": int(item["state"])})
                 case "year":
                     result.update({"year": item["value"]})
 
             # Detect last iteration.
             if all(key in result for key in certification_keys):
                 # Create certifications.
-                if "new" in item["id"]:
-                    self.insert.multi_column("certification", **result)
-
+                if "new" in str(result["id"]):
+                    # For new records, we don't need the ID in the insert
+                    insert_data = {k: v for k, v in result.items() if k != "id" or not str(v).startswith("new")}
+                    self.insert.multi_column("certification", **insert_data)
                 # Update certifications.
                 else:
-                    self.update.multi_column("certification", **result)
+                    # For updates, convert the ID to int
+                    update_data = dict(result)
+                    update_data["id"] = int(update_data["id"])
+                    self.update.multi_column("certification", **update_data)
 
         return
 

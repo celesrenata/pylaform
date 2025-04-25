@@ -5,7 +5,9 @@
         <form method="post">
             <!-- Iterate payload -->
         {% for i in payload %}
-            {{ form_group(i["id"], i["certification"], i["year"], i["state"]) }}
+            {% if i.get("id") is not none and i.get("id") != "None" and i.get("id")|string != "None" %}
+                {{ form_group(i["id"], i["certification"], i["year"], i["state"]) }}
+            {% endif %}
         {% endfor %}
         <div id="newinput"></div>
         <button id="rowAdder" type="button" class="btn btn-dark">
@@ -34,4 +36,5 @@
             $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
         });
     </script>
+    {% include "_scripts.html" %}
 {% endblock %}
