@@ -4,36 +4,62 @@
     <div class="lead d-flex align-items-bottom justify-content-center">
         <form method="post">
             <!-- Iterate payload -->
-        {% for i in payload %}
-            {{ form_group(payload, ddpayload, i["employer"], i["employername"] ,i["location"], i["employerstate"], i["position"], i["positionname"], i["startdate"], i["enddate"], i["positionstate"]) }}
-        {% endfor %}
-        <div id="newinput"></div>
-        <button id="rowAdder" type="button" class="btn btn-dark">
+            {% for i in payload %}
+                {% if i|length > 0 and i.get("position") is not none and i.get("position") != "None" and i.get("position")|string != "None" %}
+                    {{ form_group(payload, ddpayload, i["employer"], i["employername"], i["location"], i["employerstate"], i["position"], i["positionname"], i["startdate"], i["enddate"], i["positionstate"]) }}
+                {% endif %}
+            {% endfor %}
+
+            <div id="newinput"></div>
+            <button id="rowAdder" type="button" class="btn btn-dark">
                         <span class="bi bi-plus-square-dotted">
                         </span> ADD
-                    </button>
-        <button type="submit" class="btn btn-success">
+            </button>
+            <button type="submit" class="btn btn-success">
                         <span class="bi bi-plus-square-dotted">
                         </span> SUBMIT
-                    </button>
+            </button>
         </form>
     </div>
 {% endblock %}
-
 {% block scripts %}
     <script type="text/javascript">
-    clicks = 0;
-    $("body").on("click", "#rowAdder", function () {
-        clicks += 1;
-        $("#newinput").append("<hr>");
-        newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
-        $("#newinput").append(newRowAdd);
-    });
-    $("body").on("click", "#deleteRow", function () {
-        div_id = $(this).attr("value");
-        $("#" + div_id).remove();
-        $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-    });
+        clicks = 0;
+        $("#rowAdder").click(function () {
+            clicks += 1;
+            $("#newinput").append("<hr>");
+            newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
+            $("#newinput").append(newRowAdd);
+        });
+
+        $("body").on("click", ".rowEditor", function () {
+            var div_id = $(this).closest("div").attr("id");
+            var currentRow = $("#" + div_id);
+            var employerVal = currentRow.find("[name$='employer']").val();
+            var employerNameVal = currentRow.find("[name$='employername']").val();
+            var locationVal = currentRow.find("[name$='location']").val();
+            var positionVal = currentRow.find("[name$='position']").val();
+            var positionNameVal = currentRow.find("[name$='positionname']").val();
+            var startDateVal = currentRow.find("[name$='startdate']").val();
+            var endDateVal = currentRow.find("[name$='enddate']").val();
+
+            newRowAdd = `{{ form_group(payload, ddpayload, "edit", "", "", true, "", "", "", "", true, hidden=False) }}`;
+            currentRow.html(newRowAdd);
+
+            currentRow.find("[name$='employer']").val(employerVal);
+            currentRow.find("[name$='employername']").val(employerNameVal);
+            currentRow.find("[name$='location']").val(locationVal);
+            currentRow.find("[name$='position']").val(positionVal);
+            currentRow.find("[name$='positionname']").val(positionNameVal);
+            currentRow.find("[name$='startdate']").val(startDateVal);
+            currentRow.find("[name$='enddate']").val(endDateVal);
+        });
+
+        $("body").on("click", "#deleteRow", function () {
+            div_id = $(this).closest("div").attr("id");
+            $("#" + div_id).remove();
+            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
+        });
     </script>
     {% include "_scripts.html" %}
 {% endblock %}
