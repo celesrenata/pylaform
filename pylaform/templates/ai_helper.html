@@ -1,0 +1,158 @@
+<!-- pylaform/templates/ai_helper.html -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai_helper.css') }}">
+
+<div class="ai-helper-footer">
+    <div class="ai-helper-toggle">
+        <div>
+            <i class="bi bi-cpu ai-icon"></i>
+            <span>AI Resume Helper</span>
+        </div>
+        <div class="arrow">
+            <i class="bi bi-chevron-up"></i>
+        </div>
+    </div>
+
+    <div class="ai-helper-content">
+        <h5>Improve Your Resume Content</h5>
+        <p>Select an improvement type and paste your text to get AI assistance.</p>
+
+        <div class="ai-helper-options">
+            <div class="ai-helper-option" data-type="tenet">Core Principle/Tenet</div>
+            <div class="ai-helper-option" data-type="list">Convert to List</div>
+            <div class="ai-helper-option" data-type="sentence_restructure">Restructure Sentence</div>
+            <div class="ai-helper-option" data-type="sentence_summarization">Summarize</div>
+        </div>
+
+        <div class="form-group ai-helper-input">
+            <label for="ai-text-input">Your Text:</label>
+            <textarea class="form-control" id="ai-text-input" rows="3" placeholder="Enter text to improve..."></textarea>
+        </div>
+
+        <button id="ai-submit" class="btn btn-primary" disabled>Improve Text</button>
+
+        <div class="ai-helper-loading">
+            <i class="bi bi-hourglass-split"></i> Processing...
+        </div>
+
+        <div class="ai-helper-result" style="display: none;"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Toggle the AI helper footer
+        const aiHelper = document.querySelector('.ai-helper-footer');
+        const aiToggle = document.querySelector('.ai-helper-toggle');
+        const aiOptions = document.querySelectorAll('.ai-helper-option');
+        const aiTextInput = document.getElementById('ai-text-input');
+        const aiSubmitBtn = document.getElementById('ai-submit');
+        const aiResultDiv = document.querySelector('.ai-helper-result');
+        const aiLoadingDiv = document.querySelector('.ai-helper-loading');
+
+        let selectedImprovement = null;
+
+        aiToggle.addEventListener('click', function() {
+            aiHelper.classList.toggle('expanded');
+        });
+
+        // Handle option selection
+        aiOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                // Remove active class from all options
+                aiOptions.forEach(o => o.classList.remove('active'));
+
+                // Add active class to the clicked option
+                this.classList.add('active');
+
+                // Store the selected improvement type
+                selectedImprovement = this.dataset.type;
+
+                // Enable submit button if text is available
+                if (aiTextInput.value.trim()) {
+                    aiSubmitBtn.disabled = false;
+                }
+            });
+        });
+
+        // Handle text input
+        aiTextInput.addEventListener('input', function() {
+            // Enable submit button if text is available and an improvement type is selected
+            aiSubmitBtn.disabled = !(this.value.trim() && selectedImprovement);
+        });
+
+        // Handle submission
+        aiSubmitBtn.addEventListener('click', function() {
+            const text = aiTextInput.value.trim();
+
+            if (!text || !selectedImprovement) {
+                return;
+            }
+
+            // Show loading
+            aiResultDiv.style.display = 'none';
+            aiLoadingDiv.style.display = 'block';
+            aiSubmitBtn.disabled = true;
+
+            // Make API request
+            fetch('/api/improve-text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: text,
+                    type: selectedImprovement
+                })
+            })
+            .then(response => {
+                // Check if the response can be parsed as JSON
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Hide loading
+                aiLoadingDiv.style.display = 'none';
+
+                if (data.error) {
+                    aiResultDiv.textContent = `Error: ${data.error}`;
+                } else {
+                    aiResultDiv.textContent = data.response;
+                }
+
+                aiResultDiv.style.display = 'block';
+                aiSubmitBtn.disabled = false;
+            })
+            .catch(error => {
+                // Hide loading
+                aiLoadingDiv.style.display = 'none';
+                aiResultDiv.textContent = `Error: ${error}`;
+                aiResultDiv.style.display = 'block';
+                aiSubmitBtn.disabled = false;
+
+                console.error('API request error:', error);
+            });
+        });
+
+        // Add a click-to-copy feature for the result
+        aiResultDiv.addEventListener('click', function() {
+            const text = this.textContent;
+            if (text.startsWith('Error:')) {
+                return; // Don't copy error messages
+            }
+
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    const originalText = this.textContent;
+                    this.textContent = "Copied to clipboard!";
+                    setTimeout(() => {
+                        this.textContent = originalText;
+                    }, 1500);
+                })
+                .catch(err => {
+                    console.error('Could not copy text: ', err);
+                });
+        });
+    });
+</script>

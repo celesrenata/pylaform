@@ -1,9 +1,15 @@
-from flask import Flask, render_template, request, send_from_directory
+# Add this import at the top of app.py
+from flask import Flask, render_template, request, send_from_directory, jsonify
 import os
+import requests
 from pylaform.commands.db.query import Queries
 from pylaform.commands.templateWorker import Worker
 from pylaform.latex_templates import hybrid, onePage
 from pylaform.utilities.commands import fatten, listify
+from pylaform.services.ai_service import OllamaService
+
+# Initialize the AI service
+ai_service = OllamaService()
 
 app = Flask(__name__,
             static_url_path="",
@@ -22,6 +28,18 @@ uploads: str = os.path.join(app.root_path, 'data')
 def landing():
     return render_template("landing.html", **fatten(query.get_identification()))
 
+@app.route("/api/ai-status", methods=["GET"])
+def ai_status():
+    """Check if the Ollama service is available"""
+    try:
+        # Simple health check
+        response = requests.get(f"{ai_service.base_url}/api/tags")
+        if response.status_code == 200:
+            return jsonify({"status": "ok", "models": response.json().get("models", [])})
+        else:
+            return jsonify({"status": "error", "message": f"Ollama returned status code {response.status_code}"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/information", methods=["GET", "POST"])
 def information():
@@ -29,6 +47,26 @@ def information():
         worker.identification(request.form)
         query.purge_cache("identification")
     return render_template("information.html", **fatten(query.get_identification()))
+
+@app.route("/api/improve-text", methods=["POST"])
+def improve_text():
+    """API endpoint to get AI improvements for resume text"""
+    if not request.is_json:
+        return jsonify({"error": "Expected JSON data"}), 400
+
+    data = request.json
+    text = data.get("text", "")
+    improvement_type = data.get("type", "")
+
+    if not text or not improvement_type:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    result = ai_service.generate_improvement(text, improvement_type)
+
+    if "error" in result:
+        return jsonify(result), 500
+
+    return jsonify(result)
 
 
 @app.route("/summary", methods=["GET", "POST"])
