@@ -39,18 +39,69 @@ class Worker:
             case "employment":
                 return self.query.get_options(["employer", "position"], ["employer", "position"])
             case "achievements":
-                # Get options with employer-position mapping
-                options = self.query.get_options(["employer", "position", "achievement"], ["employer", "position", ""])
+                # Get employer and school options
+                employer_options = self.query.get_options(["employer"], ["employer"])["employer"]
+                school_options = self.query.get_options(["school"], ["name"])["school"]
 
-                # Add employer-position map for client-side filtering
-                employer_positions = {}
-                self.cursor.execute("SELECT id, employer FROM position")
-                for position_id, employer_id in self.cursor.fetchall():
-                    if str(employer_id) not in employer_positions:
-                        employer_positions[str(employer_id)] = []
-                    employer_positions[str(employer_id)].append(position_id)
+                # Get position options with employer ID
+                self.cursor.execute("""
+                                    SELECT p.id, p.position, p.employer
+                                    FROM position p
+                                    ORDER BY p.position
+                                    """)
+                position_options = [
+                    {"id": int(item[0]), "name": item[1], "employer": item[2], "type": "position"}
+                    for item in self.cursor.fetchall()
+                ]
 
-                options["employer_positions"] = employer_positions
+                # Get focus options with school ID
+                self.cursor.execute("""
+                                    SELECT f.id, f.name, f.school
+                                    FROM focus f
+                                    ORDER BY f.name
+                                    """)
+                focus_options = [
+                    {"id": int(item[0]), "name": item[1], "employer": item[2], "type": "focus"}
+                    for item in self.cursor.fetchall()
+                ]
+
+                # Combine employers and schools into one list
+                combined_orgs = []
+                for employer in employer_options:
+                    employer["type"] = "employer"
+                    combined_orgs.append(employer)
+
+                for school in school_options:
+                    school["type"] = "school"
+                    combined_orgs.append(school)
+
+                # Combine positions and focuses
+                combined_roles = position_options + focus_options
+
+                # Create mappings between organizations and roles
+                org_roles_map = {}
+
+                # Map employers to positions
+                for position in position_options:
+                    employer_id = str(position["employer"])
+                    if employer_id not in org_roles_map:
+                        org_roles_map[employer_id] = []
+                    org_roles_map[employer_id].append(position["id"])
+
+                # Map schools to focuses
+                for focus in focus_options:
+                    school_id = str(focus["employer"])
+                    if school_id not in org_roles_map:
+                        org_roles_map[school_id] = []
+                    org_roles_map[school_id].append(focus["id"])
+
+                # Build the result
+                options = {
+                    "employer": combined_orgs,  # Will contain both employers and schools
+                    "position": combined_roles,  # Will contain both positions and focuses
+                    "employer_positions": org_roles_map  # Maps org IDs to role IDs
+                }
+
                 return options
             case "skills":
                 # Get options with employer-position mapping
@@ -912,124 +963,71 @@ class Worker:
         self.conn.commit()
         return
 
-    def update_achievements(self, form_data: ImmutableMultiDict) -> None:
+    def update_achievements(self, form):
         """
-        Updates the achievement table with relationships to employer and position.
-        :param ImmutableMultiDict form_data: Form data from template.
-        :return None: None
+        Updates the achievement, employer, and position tables based on form data.
+        :param form: Form data from request.
         """
-        # Get raw form data as dictionary with arrays
-        raw_form_dict = form_data.to_dict(flat=False)
+        # Create a list of all achievement IDs
+        achievement_ids = []
 
-        # Process existing achievements
-        existing_achievements = {}
-        for key, value in raw_form_dict.items():
-            # Skip new entries
-            if key.startswith('new'):
+        # Process each form field to identify achievement IDs
+        for key in form:
+            if key.endswith("_rowid"):
+                achievement_id = key.split("_")[0]
+                achievement_ids.append(achievement_id)
+
+        # Process each achievement
+        for achievement_id in achievement_ids:
+            # Check if we need to delete this achievement
+            if f"{achievement_id}_delete" in form:
+                self.delete(f"DELETE FROM achievement WHERE id = {achievement_id}")
                 continue
 
-            # Process delete entries
-            if '_delete' in key:
-                achievement_id = key.split('_')[0]
-                self.delete.delete_target(achievement_id, 'achievement')
-                continue
+            # Get the employer/school ID and type
+            employer_id = form.get(f"{achievement_id}_rowid")
+            employer_type = form.get(f"{achievement_id}_employer_type", "employer")
 
-            # Process existing achievement fields
-            parts = key.split('_')
-            if len(parts) >= 2:
-                achievement_id = parts[0]
+            # Get the position/focus ID and type
+            position_value = form.get(f"{achievement_id}_position")
+            position_type = form.get(f"{achievement_id}_position_type", "position")
 
-                # Initialize record if it doesn't exist
-                if achievement_id not in existing_achievements:
-                    existing_achievements[achievement_id] = {}
+            # Get the achievement descriptions
+            shortdesc = form.get(f"{achievement_id}_shortdesc", "")
+            longdesc = form.get(f"{achievement_id}_longdesc", "")
 
-                # Store the field value
-                field_name = '_'.join(parts[1:])
-                existing_achievements[achievement_id][field_name] = value[0]
+            # Get the enabled state
+            longdesc_enabled = f"{achievement_id}_longdesc_enabled" in form
 
-        # Update existing achievements
-        for achievement_id, data in existing_achievements.items():
-            if achievement_id.isdigit():
-                # Handle employer and position dropdowns
-                employer_id = data.get('employer_dropdown', '')
-                position_id = data.get('position_dropdown', '')
+            # Check if this is a new achievement
+            if achievement_id.startswith("new"):
+                # Handle new achievement creation based on the types
+                if employer_type == "employer" and position_type == "position":
+                    # This is a regular employer/position achievement
+                    position_id = self.query.query_id(position_value, "position")
+                    employer_id = self.query.query_id(form.get(f"{achievement_id}_employer"), "employer")
 
-                # Validate that the position belongs to the employer
-                if employer_id and position_id:
-                    # Check if the position belongs to the selected employer
-                    self.cursor.execute(
-                        "SELECT employer FROM position WHERE id = ?",
-                        (position_id,)
+                    self.insert(
+                        "INSERT INTO achievement (employer, position, shortdesc, longdesc, state) VALUES (?, ?, ?, ?, ?)",
+                        (employer_id, position_id, shortdesc, longdesc, longdesc_enabled)
                     )
-                    result = self.cursor.fetchone()
-                    if result and str(result[0]) != str(employer_id):
-                        # Position doesn't belong to this employer, don't update
-                        continue
+                elif employer_type == "school" and position_type == "focus":
+                    # This is a school/focus achievement
+                    school_id = self.query.query_id(form.get(f"{achievement_id}_employer").replace(" (College)", ""),
+                                                    "school")
+                    focus_id = self.query.query_id(position_value.replace(" (Focus)", ""), "focus")
 
-                # Prepare achievement update data
-                update_data = {
-                    'id': int(achievement_id),
-                    'employer': employer_id if employer_id else None,
-                    'position': position_id if position_id else None,
-                    'shortdesc': data.get('shortdesc', ''),
-                    'longdesc': data.get('longdesc', ''),
-                    'state': 1 if 'longdesc_enabled' in data else 0
-                }
-
-                # Update achievement only if we have valid employer and position
-                if update_data['employer'] and update_data['position']:
-                    self.update.multi_column('achievement', **update_data)
-
-        # Process new achievement entries
-        new_achievements = {}
-        for key in raw_form_dict:
-            if key.startswith('new') and ('_shortdesc' in key or '_longdesc' in key):
-                entry_id = key.split('_')[0]  # Get 'new1', 'new2', etc.
-
-                if entry_id not in new_achievements:
-                    new_achievements[entry_id] = {}
-
-                # Store all fields for this entry
-                for field_key, field_values in raw_form_dict.items():
-                    if field_key.startswith(entry_id + '_'):
-                        field_name = '_'.join(field_key.split('_')[1:])
-                        new_achievements[entry_id][field_name] = field_values[0]
-
-        # Insert all new achievements
-        for entry_id, data in new_achievements.items():
-            # Handle employer and position dropdowns
-            employer_id = data.get('employer_dropdown', '')
-            position_id = data.get('position_dropdown', '')
-
-            # Validate that the position belongs to the employer
-            if employer_id and position_id:
-                # Check if the position belongs to the selected employer
-                self.cursor.execute(
-                    "SELECT employer FROM position WHERE id = ?",
-                    (position_id,)
+                    # For school achievements, we use the school ID as employer and focus ID as position
+                    self.insert(
+                        "INSERT INTO achievement (employer, position, shortdesc, longdesc, state) VALUES (?, ?, ?, ?, ?)",
+                        (school_id, focus_id, shortdesc, longdesc, longdesc_enabled)
+                    )
+            else:
+                # Update existing achievement
+                self.update(
+                    "UPDATE achievement SET shortdesc = ?, longdesc = ?, state = ? WHERE id = ?",
+                    (shortdesc, longdesc, longdesc_enabled, achievement_id)
                 )
-                result = self.cursor.fetchone()
-                if result and str(result[0]) != str(employer_id):
-                    # Position doesn't belong to this employer, skip this entry
-                    continue
-
-            # Only proceed if we have the required data
-            if 'shortdesc' in data and employer_id and position_id:
-                # Create a new achievement record
-                insert_data = {
-                    'employer': employer_id,
-                    'position': position_id,
-                    'shortdesc': data.get('shortdesc', ''),
-                    'longdesc': data.get('longdesc', ''),
-                    'state': 1 if 'longdesc_enabled' in data else 0
-                }
-
-                # Insert the new achievement
-                self.insert.multi_column('achievement', **insert_data)
-
-        # Commit changes
-        self.conn.commit()
-        return
 
     def update_target_table(self, item: dict[str, str | bool], table: str):
         """

@@ -11,35 +11,49 @@
         <table>
             <tr>
                 <td>
-                    {{ drop_down(
-                        achievementid,
-                        payload,
-                        ddpayload,
-                        "employer",
-                        primarybyname=True,
-                        selected_value=employerid,
-                        extra=False
-                    ) }}
+                    <label for="{{ achievementid }}_employer_dropdown">Employer/College:</label>
+                    <br>
+                    <select class="dropdown" name="{{ achievementid }}_employer_dropdown" id="{{ achievementid }}_employer_dropdown">
+                    {% for i in ddpayload["employer"] %}
+                        <option
+                                {% if (employerid is not none and i["id"]|string == employerid|string) %}
+                                    selected
+                                {% endif %}
+                                value="{{ i["id"] }}" data-org-type="{{ i.get('type', 'employer') }}">
+                                {{ i["name"] }}
+                                {% if i.get('type') == 'school' %}(College){% endif %}
+                        </option>
+                    {% endfor %}
+                    </select>
                     <input type="hidden" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
                            value="{{ employer if employer is defined else "" }}">
+                    <input type="hidden" name="{{ achievementid }}_employer_type" id="{{ achievementid }}_employer_type"
+                           value="">
                 </td>
                 <td>
-                    {{ drop_down(
-                        achievementid,
-                        payload,
-                        ddpayload,
-                        "employer",
-                        secondary="position",
-                        secondaryid=achievementid,
-                        secondarybyname=True,
-                        selected_value=positionid,
-                        extra=False
-                    ) }}
+                    <label for="{{ achievementid }}_position_dropdown">Position/Focus:</label>
+                    <br>
+                   <select class="dropdown" name="{{ achievementid }}_position_dropdown" id="{{ achievementid }}_position_dropdown">
+                    {% for i in ddpayload["position"] %}
+                        <option
+                            {% if (positionid is not none and i["id"]|string == positionid|string) %}
+                                selected
+                            {% endif %}
+                            value="{{ i["id"] }}"
+                            data-employer-id="{{ i['employer'] }}"
+                            data-role-type="{{ i['type'] }}">
+                            {{ i["name"] }}
+                            {% if i['type'] == 'focus' %}(Focus){% endif %}
+                        </option>
+                    {% endfor %}
+                    </select>
                     <input type="hidden" name="{{ achievementid }}_position" id="{{ achievementid }}_position"
                            value="{{ position if position is defined else "" }}">
+                    <input type="hidden" name="{{ achievementid }}_position_type" id="{{ achievementid }}_position_type"
+                           value="">
                 </td>
                 <td>
-                    <label for="{{ achievementid }}_position_enabled">Position Displayed</label>
+                    <label for="{{ achievementid }}_position_enabled">Position/Focus Displayed</label>
                     <input type="checkbox" name="{{ achievementid }}_position_enabled" id="{{ achievementid }}_position_enabled"
                            {{ "checked" if positionstate }} data-position-state="{{ positionstate }}" disabled>
                 </td>
