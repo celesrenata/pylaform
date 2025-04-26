@@ -1,4 +1,3 @@
-
 {% macro drop_down(id, payload, ddpayload, primary, secondary=None, primarybyname=False, secondarybyname=False, extra=True, secondaryid=None, selected_value=None) %}
 {% if debug %}
     <!-- Debug info -->
@@ -39,7 +38,7 @@
                 %}
                     selected
                 {% endif %}
-                value="{{ i["id"] }}">{{ i["name"] }}</option>
+                value="{{ i["id"] }}" data-employer-id="{{ i.get('employer', '') }}">{{ i["name"] }}</option>
         {% endfor %}
         {% if extra == True %}
             <option {{ "selected" if id == "new" or id == "edit" }} value="EDIT">Edit</option>

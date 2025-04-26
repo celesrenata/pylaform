@@ -194,12 +194,45 @@ class Queries:
         """
         result: dict = {}
         for i, table in enumerate(tables):
-            response = self.query(
-                f"""
-                SELECT `id`, `{columns[i]}`
-                FROM `{tables[i]}`
-                ORDER BY `{columns[i]}`""")
-            result.update({tables[i]: [{"id": int(item[0]), "name": item[1]} for item in response.fetchall()]})
+            # Skip special case 'achievement' which is just a hint for employer-position mapping
+            if table == "achievement":
+                continue
+
+            if table == "position" and columns[i] == "position":
+                # For positions, include employer ID information
+                response = self.query(
+                    """
+                    SELECT p.id, p.position, p.employer
+                    FROM position p
+                    ORDER BY p.position
+                    """)
+                result.update({
+                    tables[i]: [
+                        {"id": int(item[0]), "name": item[1], "employer": item[2]}
+                        for item in response.fetchall()
+                    ]
+                })
+            else:
+                response = self.query(
+                    f"""
+                    SELECT `id`, `{columns[i]}`
+                    FROM `{tables[i]}`
+                    ORDER BY `{columns[i]}`""")
+                result.update({tables[i]: [{"id": int(item[0]), "name": item[1]} for item in response.fetchall()]})
+
+            # If we're getting position data for achievements, also add employer-position mappings
+            if table == "position" and "achievement" in tables:
+                # Create an employer-position mapping
+                employer_positions = {}
+                for position in result[table]:
+                    employer_id = position.get("employer")
+                    if employer_id:
+                        if employer_id not in employer_positions:
+                            employer_positions[employer_id] = []
+                        employer_positions[employer_id].append(position["id"])
+
+                # Add to result
+                result["employer_positions"] = employer_positions
 
         return result
 
@@ -589,40 +622,83 @@ class Queries:
         if len(self.result_achievements) == 0:
             result: Cursor = self.query(
                 """
-                SELECT e.id, e.employer, e.state as employer_state,
-                       p.id as position_id, p.position, p.state as position_state,
-                       a.id as achievement_id, a.shortdesc, a.longdesc, a.state as achievement_state
+                SELECT e.id    as employer_id,
+                       e.employer,
+                       e.state as employer_state,
+                       p.id    as position_id,
+                       p.position,
+                       p.state as position_state,
+                       a.id    as achievement_id,
+                       a.shortdesc,
+                       a.longdesc,
+                       a.state as achievement_state
                 FROM `achievement` a
-                LEFT JOIN `position` p ON a.position = p.id AND a.employer = p.employer
-                LEFT JOIN `employer` e ON a.employer = e.id;
+                         LEFT JOIN `position` p ON a.position = p.id
+                         LEFT JOIN `employer` e ON a.employer = e.id;
                 """)
 
-            # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
+            # Create raw NESTED list based on 'id/attr/value/state.'
             for (employer_id, employername, employer_state,
                  position_id, positionname, position_state,
                  achievement_id, shortdesc, longdesc, achievement_state) in result:
                 self.result_achievements.append({
-                    "id": "employer_" + str(employer_id),
+                    "id": str(achievement_id),
+                    "attr": "employer",
+                    "value": str(employer_id),
+                    "state": employer_state,
+                })
+                self.result_achievements.append({
+                    "id": str(achievement_id),
                     "attr": "employername",
                     "value": employername,
                     "state": employer_state,
                 })
                 self.result_achievements.append({
-                    "id": "position_" + str(position_id),
+                    "id": str(achievement_id),
+                    "attr": "position",
+                    "value": str(position_id),
+                    "state": position_state,
+                })
+                self.result_achievements.append({
+                    "id": str(achievement_id),
                     "attr": "positionname",
                     "value": positionname,
                     "state": position_state,
                 })
                 self.result_achievements.append({
-                    "id": "achievement_" + str(achievement_id),
+                    "id": str(achievement_id),
+                    "attr": "achievement",
+                    "value": str(achievement_id),
+                    "state": achievement_state,
+                })
+                self.result_achievements.append({
+                    "id": str(achievement_id),
                     "attr": "shortdesc",
                     "value": shortdesc,
                     "state": achievement_state,
                 })
                 self.result_achievements.append({
-                    "id": "achievement_" + str(achievement_id),
+                    "id": str(achievement_id),
                     "attr": "longdesc",
                     "value": longdesc,
+                    "state": achievement_state,
+                })
+                self.result_achievements.append({
+                    "id": str(achievement_id),
+                    "attr": "employerstate",
+                    "value": employer_state,
+                    "state": employer_state,
+                })
+                self.result_achievements.append({
+                    "id": str(achievement_id),
+                    "attr": "positionstate",
+                    "value": position_state,
+                    "state": position_state,
+                })
+                self.result_achievements.append({
+                    "id": str(achievement_id),
+                    "attr": "achievementstate",
+                    "value": achievement_state,
                     "state": achievement_state,
                 })
 

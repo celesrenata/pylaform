@@ -96,13 +96,47 @@ def positions():
     return render_template("employment_index.html", ddpayload=worker.dropdowns("employment"), **fatten(query.get_positions()))
 
 
+
 @app.route("/achievements", methods=["GET", "POST"])
 def achievements():
     if request.method == 'POST':
         worker.update_achievements(request.form)
         query.purge_cache("achievements")
-    return render_template("achievements_index.html", ddpayload=worker.dropdowns("achievements"), **fatten(query.get_achievements()))
 
+    # Get dropdown data
+    dropdown_data = worker.dropdowns("achievements")
+
+    # Get raw achievement data
+    raw_achievements = query.get_achievements()
+
+    # Group achievements by ID
+    achievement_groups = {}
+    for achievement in raw_achievements:
+        achievement_id = achievement["id"]
+        if achievement_id not in achievement_groups:
+            achievement_groups[achievement_id] = {
+                "id": achievement_id,
+                "state": achievement.get("state", False)
+            }
+
+        # Add each attribute to the grouped object
+        attr_name = achievement["attr"]
+        achievement_groups[achievement_id][attr_name] = achievement["value"]
+
+    # Convert grouped data to list for template
+    processed_achievements = list(achievement_groups.values())
+
+    # Create payload with correct structure
+    payload = {
+        "payload": processed_achievements,
+        "attrs": ["employer", "employername", "position", "positionname",
+                  "achievement", "shortdesc", "longdesc", "employerstate",
+                  "positionstate", "achievementstate"]
+    }
+
+    return render_template("achievements_index.html",
+                           ddpayload=dropdown_data,
+                           **payload)
 
 @app.route("/glossary", methods=["GET", "POST"])
 def glossary():

@@ -21,17 +21,89 @@
 {% endblock %}
 {% block scripts %}
     <script type="text/javascript">
+        // Create a map of employer IDs to position IDs for client-side filtering
+        const employerPositionsMap = {{ ddpayload.get("employer_positions", {})|tojson|safe }};
+
+        // Track the number of added rows
         clicks = 0;
+
+        // Add a new row when the ADD button is clicked
         $("#rowAdder").click(function () {
             clicks += 1;
             $("#newinput").append("<hr>");
             newRowAdd = `{{ form_group("new", "", true, "", "", true, "", "", "", true) }}`;
             $("#newinput").append(newRowAdd);
+
+            // Initialize dropdowns for the new row
+            const newRowEmployerDropdown = $("#newinput").find("[id$='_employer_dropdown']").last();
+            if (newRowEmployerDropdown.length) {
+                newRowEmployerDropdown.trigger("change");
+            }
         });
+
+        // Handle employer dropdown changes to filter position options
+        $("body").on("change", "[id$='_employer_dropdown']", function() {
+            const employerId = $(this).val();
+            const rowId = this.id.split('_')[0];
+            const positionDropdown = $(`#${rowId}_position_dropdown`);
+
+            // Store the selected employer in the hidden field
+            $(`#${rowId}_employer`).val($(this).find("option:selected").text());
+
+            // Filter positions based on the employer-position mapping
+            const validPositionIds = employerPositionsMap[employerId] || [];
+
+            positionDropdown.find("option").each(function() {
+                const positionId = $(this).val();
+
+                // Only show positions that belong to the selected employer
+                if (validPositionIds.includes(parseInt(positionId))) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+
+            // If current selection is not valid for this employer, reset it
+            const currentPositionId = positionDropdown.val();
+            if (currentPositionId && !validPositionIds.includes(parseInt(currentPositionId))) {
+                // Find the first visible option and select it
+                const firstVisibleOption = positionDropdown.find("option:visible:first");
+                if (firstVisibleOption.length) {
+                    positionDropdown.val(firstVisibleOption.val());
+                } else {
+                    positionDropdown.val("");
+                }
+                // Trigger change to update hidden fields
+                positionDropdown.trigger("change");
+            }
+        });
+
+        // Handle position dropdown changes
+        $("body").on("change", "[id$='_position_dropdown']", function() {
+            const rowId = this.id.split('_')[0];
+
+            // Store the selected position in the hidden field
+            $(`#${rowId}_position`).val($(this).find("option:selected").text());
+        });
+
+        // Handle deletions
         $("body").on("click", "#deleteRow", function () {
             div_id = $(this).closest("div").attr("id");
             $("#" + div_id).remove();
             $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
         });
+
+        // Initialize all employer dropdowns when the page loads
+        $(document).ready(function() {
+            // First initialize the employer-position relationships
+            $("[id$='_employer_dropdown']").each(function() {
+                $(this).trigger("change");
+            });
+
+            // Debugging output to console
+            console.log("Employer-Position Map:", employerPositionsMap);
+        });
     </script>
+    {% include "_scripts.html" %}
 {% endblock %}

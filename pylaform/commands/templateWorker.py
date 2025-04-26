@@ -39,7 +39,8 @@ class Worker:
             case "employment":
                 return self.query.get_options(["employer", "position"], ["employer", "position"])
             case "achievements":
-                return self.query.get_options(["employer", "position"], ["employer", "position"])
+                # Use correct table name 'achievement' for the mapping hint
+                return self.query.get_options(["employer", "position", "achievement"], ["employer", "position", ""])
             case "skills":
                 return self.query.get_options(["skills", "skills", "employer", "position"],
                                               ["category", "subcategory", "employer", "position"])
@@ -58,47 +59,85 @@ class Worker:
 
         return
 
-    def certifications(self, transform_form_data: ImmutableMultiDict) -> None:
+    def certifications(self, form_data: ImmutableMultiDict) -> None:
         """
         Updates the certification table.
-        :param ImmutableMultiDict transform_form_data: Form data from template.
-        :return: list
+        :param ImmutableMultiDict form_data: Form data from template.
+        :return: None
         """
+        # Get raw form data as dictionary with arrays
+        raw_form_dict = form_data.to_dict(flat=False)
 
-        # Transform from template.
-        certification_keys = ["id", "name", "year", "state"]
-        transform_form_data: list[dict[str, str | bool]] = transform_get_id(transform_form_data)
-        counter: str = ""
-        result: dict[str, str | int] = {}
-        for item in transform_form_data:
-            if counter != str(item["id"]):
-                counter = str(item["id"])
-
-            # Delete certifications.
-            if "delete" in item["attr"]:
-                self.delete.delete_target(item["id"], "certification")
+        # Process existing certifications
+        existing_certs = {}
+        for key, value in raw_form_dict.items():
+            # Skip new entries
+            if key.startswith('new'):
                 continue
 
-            # Create result based on current attribute value.
-            match item["attr"]:
-                case "certification":
-                    result.update({"id": item["id"], "name": item["value"], "state": int(item["state"])})
-                case "year":
-                    result.update({"year": item["value"]})
+            # Process delete entries
+            if '_delete' in key:
+                cert_id = key.split('_')[0]
+                self.delete.delete_target(cert_id, 'certification')
+                continue
 
-            # Detect last iteration.
-            if all(key in result for key in certification_keys):
-                # Create certifications.
-                if "new" in str(result["id"]):
-                    # For new records, we don't need the ID in the insert
-                    insert_data = {k: v for k, v in result.items() if k != "id" or not str(v).startswith("new")}
-                    self.insert.multi_column("certification", **insert_data)
-                # Update certifications.
+            # Process existing certification fields
+            parts = key.split('_')
+            if len(parts) >= 2:
+                cert_id = parts[0]
+
+                # Initialize record if it doesn't exist
+                if cert_id not in existing_certs:
+                    existing_certs[cert_id] = {}
+
+                # Store the field value
+                field_name = '_'.join(parts[1:])
+                existing_certs[cert_id][field_name] = value[0]
+
+        # Update existing certifications
+        for cert_id, data in existing_certs.items():
+            if cert_id.isdigit() and 'certification' in data:
+                update_data = {
+                    'id': int(cert_id),
+                    'name': data.get('certification', ''),
+                    'year': data.get('year', ''),
+                    'state': 1 if 'year_enabled' in data else 0
+                }
+
+                self.update.multi_column('certification', **update_data)
+
+        # Get all new certification entries
+        new_cert_fields = {}
+        for key in raw_form_dict:
+            if key.startswith('new') and '_certification' in key:
+                entry_id = key.split('_')[0]  # Get 'new1', 'new2', etc.
+
+                if entry_id not in new_cert_fields:
+                    new_cert_fields[entry_id] = {}
+
+                new_cert_fields[entry_id]['name'] = raw_form_dict[key][0]
+
+                # Try to get corresponding year field
+                year_key = f"{entry_id}_year"
+                if year_key in raw_form_dict:
+                    new_cert_fields[entry_id]['year'] = raw_form_dict[year_key][0]
                 else:
-                    # For updates, convert the ID to int
-                    update_data = dict(result)
-                    update_data["id"] = int(update_data["id"])
-                    self.update.multi_column("certification", **update_data)
+                    new_cert_fields[entry_id]['year'] = ''
+
+                # Check if enabled
+                enabled_key = f"{entry_id}_year_enabled"
+                new_cert_fields[entry_id]['state'] = 1 if enabled_key in raw_form_dict else 0
+
+        # Insert all new certifications
+        for entry_id, data in new_cert_fields.items():
+            if 'name' in data and data['name']:  # Only insert if we have a name
+                insert_data = {
+                    'name': data['name'],
+                    'year': data.get('year', ''),
+                    'state': data.get('state', 1)
+                }
+
+                self.insert.multi_column('certification', **insert_data)
 
         return
 
@@ -110,6 +149,7 @@ class Worker:
         """
         import logging
         import sys
+        from werkzeug.datastructures import MultiDict
         # Configure logging
         logging.basicConfig(
             level=logging.DEBUG,
@@ -123,73 +163,57 @@ class Worker:
 
         logger.debug("Start update_positions - Form data received: %s", dict(form_data))
 
-        # Create a mapping to handle position ID mismatches
+        # Convert ImmutableMultiDict to a manageable structure that handles multiple entries
+        # MultiDict.to_dict(flat=False) returns lists for multiple values with the same key
+        raw_form_dict = form_data.to_dict(flat=False)
+        logger.debug(f"Raw form data dictionary: {raw_form_dict}")
+
+        # Process existing entries (not "new")
+        existing_entries = {}
+        for key, values in raw_form_dict.items():
+            position_id = key.split('_')[0]
+            if position_id != 'new' and not key.endswith('_delete'):
+                if position_id not in existing_entries:
+                    existing_entries[position_id] = {}
+                field_name = '_'.join(key.split('_')[1:])
+                existing_entries[position_id][field_name] = values[0]  # Take first value
+
+        # Process deletes
+        for key in raw_form_dict:
+            if key.endswith('_delete'):
+                position_id = key.split('_')[0]
+                if position_id.isdigit():
+                    # Get employer ID to delete associated entries
+                    self.cursor.execute("SELECT employer FROM position WHERE id = ?", (position_id,))
+                    result = self.cursor.fetchone()
+                    if result:
+                        employer_id = result[0]
+                        # Delete the position
+                        self.cursor.execute("DELETE FROM position WHERE id = ?", (position_id,))
+                        # Check if this was the last position for this employer
+                        self.cursor.execute("SELECT COUNT(*) FROM position WHERE employer = ?", (employer_id,))
+                        count = self.cursor.fetchone()[0]
+                        if count == 0:
+                            # No positions left, delete the employer too
+                            self.cursor.execute("DELETE FROM employer WHERE id = ?", (employer_id,))
+
+        # Create a mapping for existing positions
         id_mapping = {}  # Maps position_id -> actual DB position id
-        reverse_id_mapping = {}  # Maps actual DB position id -> array of form position_ids
-
-        # Find position IDs and their corresponding DB IDs (from rowid fields)
-        for key, value in form_data.items():
-            if key.endswith('_rowid'):
-                form_position_id = key.split('_')[0]
-                db_position_id = value
-                id_mapping[form_position_id] = db_position_id
-
-                if db_position_id not in reverse_id_mapping:
-                    reverse_id_mapping[db_position_id] = []
-                reverse_id_mapping[db_position_id].append(form_position_id)
+        for position_id, data in existing_entries.items():
+            if 'rowid' in data:
+                id_mapping[position_id] = data['rowid']
 
         logger.debug(f"ID mapping: {id_mapping}")
-        logger.debug(f"Reverse ID mapping: {reverse_id_mapping}")
 
-        # Extract and organize form data
-        position_rowids = {}  # Store position_id -> employer_id mappings
-        position_dropdowns = {}  # Store position_id -> selected position from dropdown
-
-        # First, extract all row_ids and position dropdown selections
-        for key, value in form_data.items():
-            if key.endswith('_rowid'):
-                position_id = key.split('_')[0]
-                position_rowids[position_id] = value
-                logger.debug(f"Position {position_id} is linked to employer {value}")
-            elif key.endswith('_position_dropdown'):
-                position_id = key.split('_')[0]
-                position_dropdowns[position_id] = value
-                logger.debug(f"Position {position_id} has position dropdown selection: {value}")
-
-        # Process updates in separate passes to avoid cross-contamination
-
-        # 1. Handle employer updates first
-        for position_id, employer_id in position_rowids.items():
-            if employer_id != 'new' and employer_id.isdigit():
+        # 1. Handle employer updates for existing entries
+        for position_id, data in existing_entries.items():
+            employer_id = data.get('rowid')
+            if employer_id and employer_id != 'new' and employer_id.isdigit():
                 # Update existing employer
-                employer_name = form_data.get(f"{position_id}_employer", "")
-                employer_location = form_data.get(f"{position_id}_location", "")
+                employer_name = data.get('employer', '')
+                employer_location = data.get('location', '')
+                employer_state = 1 if data.get('employer_enabled') == 'on' else 0
 
-                # If this position doesn't have employer info, check other positions with same DB ID
-                if not employer_name and position_id in id_mapping:
-                    db_id = id_mapping[position_id]
-                    for alt_position_id in reverse_id_mapping.get(db_id, []):
-                        if alt_position_id != position_id:
-                            alt_employer_name = form_data.get(f"{alt_position_id}_employer", "")
-                            if alt_employer_name:
-                                employer_name = alt_employer_name
-                                employer_location = form_data.get(f"{alt_position_id}_location", "")
-                                logger.debug(
-                                    f"Using employer data from form position {alt_position_id} for position {position_id}")
-                                break
-
-                # Check for employer_enabled across all related form fields
-                employer_state = 0
-                for pid in reverse_id_mapping.get(employer_id, []):
-                    if form_data.get(f"{pid}_employer_enabled"):
-                        employer_state = 1
-                        break
-
-                # Also check the position's own employer_enabled field
-                if form_data.get(f"{position_id}_employer_enabled"):
-                    employer_state = 1
-
-                # Only update if we have data
                 if employer_name:
                     logger.debug(
                         f"Updating employer ID {employer_id}: {employer_name}, {employer_location}, state={employer_state}")
@@ -198,14 +222,38 @@ class Worker:
                         (employer_name, employer_location, employer_state, employer_id)
                     )
 
-        # 2. Handle new employers
-        new_employer_ids = {}  # Map position_id -> new_employer_id
-        for position_id, employer_id in position_rowids.items():
-            if employer_id == 'new':
-                # Create new employer
-                employer_name = form_data.get(f"{position_id}_employer", "")
-                employer_location = form_data.get(f"{position_id}_location", "")
-                employer_state = 1 if form_data.get(f"{position_id}_employer_enabled") else 0
+        # 2. Process new entries
+        # Group new entries by their index
+        new_entries = {}
+
+        # Collect all 'new' keys and determine how many new entries we have
+        new_keys = [k for k in raw_form_dict.keys() if k.startswith('new_')]
+
+        # For each new entry field, process all values
+        for key in new_keys:
+            field_name = '_'.join(key.split('_')[1:])
+            values = raw_form_dict[key]
+
+            # Process each value as a separate new entry
+            for index, value in enumerate(values):
+                entry_id = f"new_{index}"
+                if entry_id not in new_entries:
+                    new_entries[entry_id] = {}
+                new_entries[entry_id][field_name] = value
+
+        logger.debug(f"Processed new entries: {new_entries}")
+
+        # Create new employers and positions
+        for entry_id, data in new_entries.items():
+            # 2a. Create new employer if needed
+            employer_dropdown = data.get('employer_dropdown')
+            new_employer_id = None
+
+            if employer_dropdown == 'EDIT':
+                # Create a new employer
+                employer_name = data.get('employer', '')
+                employer_location = data.get('location', '')
+                employer_state = 1 if data.get('employer_enabled') == 'on' else 0
 
                 if employer_name:
                     logger.debug(f"Creating new employer: {employer_name}, {employer_location}, state={employer_state}")
@@ -216,213 +264,69 @@ class Worker:
                     # Get the new employer ID
                     self.cursor.execute("SELECT last_insert_rowid()")
                     new_employer_id = self.cursor.fetchone()[0]
-                    new_employer_ids[position_id] = new_employer_id
                     logger.debug(f"Created new employer with ID {new_employer_id}")
+            elif employer_dropdown and employer_dropdown != 'ADD' and employer_dropdown.isdigit():
+                # Use existing employer from dropdown
+                new_employer_id = employer_dropdown
+                logger.debug(f"Using existing employer ID {new_employer_id} from dropdown")
 
-        # 3. Handle position updates for existing positions
-        for position_id, employer_id in position_rowids.items():
-            # Skip new positions for now
-            if position_id == 'new':
-                continue
+            # 2b. Create new position if needed
+            position_dropdown = data.get('position_dropdown')
 
-            # Check if this position should be updated or if we're using a dropdown selection
-            position_dropdown = position_dropdowns.get(position_id)
+            if position_dropdown == 'EDIT' and new_employer_id:
+                # Create a new position
+                position_name = data.get('position', '')
+                start_date = data.get('startdate', '')
+                end_date = data.get('enddate', '')
+                position_state = 1 if data.get('position_enabled') == 'on' else 0
 
-            # Find employer dropdown for this position
-            employer_dropdown = form_data.get(f"{position_id}_employer_dropdown")
-
-            # If not found, check if there are other form fields with same DB ID
-            if not employer_dropdown and position_id in id_mapping:
-                db_id = id_mapping[position_id]
-                for alt_position_id in reverse_id_mapping.get(db_id, []):
-                    if alt_position_id != position_id:
-                        alt_employer_dropdown = form_data.get(f"{alt_position_id}_employer_dropdown")
-                        if alt_employer_dropdown:
-                            employer_dropdown = alt_employer_dropdown
-                            logger.debug(
-                                f"Using employer dropdown from form position {alt_position_id} for position {position_id}")
-                            break
-
-            # Handle position dropdown selection - this is the key change!
-
-            # Inside the if statement where we handle position dropdown selection
-            if position_dropdown and position_dropdown not in ['EDIT',
-                                                               'ADD'] and position_dropdown.isdigit() and position_dropdown != position_id:
-                # We're selecting a different position from dropdown
-                logger.debug(f"Position {position_id} selected different position {position_dropdown} from dropdown")
-
-                # Get the selected position data
-                self.cursor.execute(
-                    "SELECT position, startdate, enddate, state, employer FROM position WHERE id = ?",
-                    (position_dropdown,)
-                )
-                selected_position = self.cursor.fetchone()
-
-                if selected_position:
-                    # Use the position data from the selected position instead of form data
-                    position_name = form_data.get(f"{position_id}_position", "") or selected_position[0]
-                    start_date = form_data.get(f"{position_id}_startdate", "") or selected_position[1]
-                    end_date = form_data.get(f"{position_id}_enddate", "") or selected_position[2]
-                    position_state = 1 if form_data.get(f"{position_id}_position_enabled") else selected_position[3]
-
-                    # For the employer, prioritize dropdown, then form value, then selected position's employer
-                    if employer_dropdown and employer_dropdown not in ['EDIT', 'ADD'] and employer_dropdown.isdigit():
-                        actual_employer_id = employer_dropdown
-                    else:
-                        actual_employer_id = employer_id
-
+                if position_name and start_date:
                     if start_date:
                         start_date = date_adapter(start_date)
                     if end_date:
                         end_date = date_adapter(end_date)
 
-                    logger.debug(f"Using position data from selected position {position_dropdown}")
                     logger.debug(
-                        f"Updating position {position_id} with name={position_name}, dates={start_date}-{end_date}, state={position_state}, employer={actual_employer_id}")
+                        f"Creating new position: {position_name}, dates: {start_date}-{end_date}, state={position_state}, employer={new_employer_id}")
+                    self.cursor.execute(
+                        "INSERT INTO position (position, startdate, enddate, state, employer) VALUES (?, ?, ?, ?, ?)",
+                        (position_name, start_date, end_date, position_state, new_employer_id)
+                    )
 
-                    # Update existing position - use the actual DB ID from the mapping if available
-                    actual_position_id = id_mapping.get(position_id, position_id)
-                    if actual_position_id.isdigit() and position_name:
-                        logger.debug(
-                            f"Updating position ID {actual_position_id}: {position_name}, dates: {start_date}-{end_date}, state={position_state}, employer={actual_employer_id}")
+        # 3. Update existing positions
+        for position_id, data in existing_entries.items():
+            if position_id.isdigit():
+                # Get employer for this position
+                employer_dropdown = data.get('employer_dropdown')
+                employer_id = None
 
-                        # Here, we need to check for existing selected_position or set to position's own ID
-                        self.cursor.execute("SELECT selected_position FROM position WHERE id = ?",
-                                            (actual_position_id,))
-                        result = self.cursor.fetchone()
-                        existing_selected_pos = result[0] if result and result[0] is not None else actual_position_id
+                if employer_dropdown and employer_dropdown != 'EDIT' and employer_dropdown != 'ADD' and employer_dropdown.isdigit():
+                    # Use employer from dropdown
+                    employer_id = employer_dropdown
+                else:
+                    # Use the original employer ID
+                    employer_id = data.get('rowid')
 
-                        self.cursor.execute(
-                            "UPDATE position SET position = ?, startdate = ?, enddate = ?, state = ?, employer = ?, selected_position = ? WHERE id = ?",
-                            (position_name, start_date, end_date, position_state, actual_employer_id,
-                             existing_selected_pos, actual_position_id)
-                        )
+                # Handle position data
+                position_name = data.get('position', '')
+                start_date = data.get('startdate', '')
+                end_date = data.get('enddate', '')
+                position_state = 1 if data.get('position_enabled') == 'on' else 0
+
+                if position_name and start_date and employer_id:
+                    if start_date:
+                        start_date = date_adapter(start_date)
+                    if end_date:
+                        end_date = date_adapter(end_date)
 
                     logger.debug(
-                        f"Updated position {actual_position_id} with data from position {position_dropdown}")
-                    continue  # Skip the normal update since we've handled this position
+                        f"Updating position ID {position_id}: {position_name}, dates: {start_date}-{end_date}, state={position_state}, employer={employer_id}")
+                    self.cursor.execute(
+                        "UPDATE position SET position = ?, startdate = ?, enddate = ?, state = ?, employer = ? WHERE id = ?",
+                        (position_name, start_date, end_date, position_state, employer_id, position_id)
+                    )
 
-            # Get position details - checking all form fields that might have the data
-            position_name = form_data.get(f"{position_id}_position", "")
-            position_state = 1 if form_data.get(f"{position_id}_position_enabled") else 0
-            start_date = form_data.get(f"{position_id}_startdate", "")
-            end_date = form_data.get(f"{position_id}_enddate", "")
-
-            # If data is missing and we have a DB ID mapping, check other form fields with same DB ID
-            if position_id in id_mapping:
-                db_id = id_mapping[position_id]
-                if not position_name or not start_date or not end_date:
-                    for alt_position_id in reverse_id_mapping.get(db_id, []):
-                        if alt_position_id != position_id:
-                            if not position_name:
-                                alt_name = form_data.get(f"{alt_position_id}_position", "")
-                                if alt_name:
-                                    position_name = alt_name
-                                    logger.debug(
-                                        f"Using position name from form position {alt_position_id} for position {position_id}")
-
-                            if not position_state and form_data.get(f"{alt_position_id}_position_enabled"):
-                                position_state = 1
-
-                            if not start_date:
-                                alt_start = form_data.get(f"{alt_position_id}_startdate", "")
-                                if alt_start:
-                                    start_date = alt_start
-                                    logger.debug(
-                                        f"Using start date from form position {alt_position_id} for position {position_id}")
-
-                            if not end_date:
-                                alt_end = form_data.get(f"{alt_position_id}_enddate", "")
-                                if alt_end:
-                                    end_date = alt_end
-                                    logger.debug(
-                                        f"Using end date from form position {alt_position_id} for position {position_id}")
-
-            # Determine which employer ID to use
-            actual_employer_id = employer_id
-            if employer_dropdown and employer_dropdown not in ['EDIT', 'ADD'] and employer_dropdown.isdigit():
-                actual_employer_id = employer_dropdown
-                logger.debug(f"Using employer ID {actual_employer_id} from dropdown for position {position_id}")
-            elif position_id in new_employer_ids:
-                actual_employer_id = new_employer_ids[position_id]
-                logger.debug(f"Using newly created employer ID {actual_employer_id} for position {position_id}")
-
-            if start_date:
-                start_date = date_adapter(start_date)
-            if end_date:
-                end_date = date_adapter(end_date)
-
-            # Update existing position - use the actual DB ID from the mapping if available
-            actual_position_id = id_mapping.get(position_id, position_id)
-            if actual_position_id.isdigit() and position_name:
-                logger.debug(
-                    f"Updating position ID {actual_position_id}: {position_name}, dates: {start_date}-{end_date}, state={position_state}, employer={actual_employer_id}")
-                self.cursor.execute(
-                    "UPDATE position SET position = ?, startdate = ?, enddate = ?, state = ?, employer = ? WHERE id = ?",
-                    (position_name, start_date, end_date, position_state, actual_employer_id, actual_position_id)
-                )
-
-        # 4. Handle new positions
-        if 'new' in position_rowids:
-            # Create new position
-            position_name = form_data.get(f"new_position", "")
-            position_state = 1 if form_data.get(f"new_position_enabled") else 0
-            start_date = form_data.get(f"new_startdate", "")
-            end_date = form_data.get(f"new_enddate", "")
-
-            # Determine employer for new position
-            employer_dropdown = form_data.get(f"new_employer_dropdown")
-
-            # Use dropdown value if provided and valid
-            if employer_dropdown and employer_dropdown not in ['EDIT', 'ADD'] and employer_dropdown.isdigit():
-                new_employer_id = employer_dropdown
-                logger.debug(f"Using existing employer ID {new_employer_id} from dropdown for new position")
-            else:
-                # Otherwise use the newly created employer (if any)
-                new_employer_id = new_employer_ids.get('new')
-
-            if start_date:
-                start_date = date_adapter(start_date)
-            if end_date:
-                end_date = date_adapter(end_date)
-
-            # Create position if we have all required data
-            if position_name and new_employer_id:
-                logger.debug(
-                    f"Creating new position: {position_name}, dates: {start_date}-{end_date}, state={position_state}, employer={new_employer_id}")
-                self.cursor.execute(
-                    "INSERT INTO position (position, startdate, enddate, state, employer) VALUES (?, ?, ?, ?, ?)",
-                    (position_name, start_date, end_date, position_state, new_employer_id)
-                )
-
-        # 5. Handle deletions
-        for key in form_data.keys():
-            if "_delete" in key:
-                id_to_delete = key.split("_")[0]
-                # If it's in our mapping, get the actual DB ID
-                if id_to_delete in id_mapping:
-                    id_to_delete = id_mapping[id_to_delete]
-
-                if id_to_delete.isdigit():
-                    logger.debug(f"Deleting position ID {id_to_delete}")
-
-                    # Get employer ID before deleting the position
-                    self.cursor.execute("SELECT employer FROM position WHERE id = ?", (id_to_delete,))
-                    employer_id_result = self.cursor.fetchone()
-
-                    # Delete the position
-                    self.cursor.execute("DELETE FROM position WHERE id = ?", (id_to_delete,))
-
-                    # Check if we should also delete the employer
-                    if employer_id_result:
-                        employer_id = employer_id_result[0]
-                        self.cursor.execute("SELECT COUNT(*) FROM position WHERE employer = ?", (employer_id,))
-                        remaining_positions = self.cursor.fetchone()[0]
-
-                        if remaining_positions == 0:
-                            logger.debug(f"Deleting unused employer ID {employer_id}")
-                            self.cursor.execute("DELETE FROM employer WHERE id = ?", (employer_id,))
-
+        # Commit all changes
         self.conn.commit()
         logger.debug("Finished update_positions - committed all changes")
         return
@@ -433,60 +337,149 @@ class Worker:
         :param ImmutableMultiDict form_data: Form data from template.
         :return None: None
         """
-        # Get item count.
-        attrs: list[str] = list(form_data.keys())
+        # Get raw form data as dictionary with arrays
+        raw_form_dict = form_data.to_dict(flat=False)
 
-        # Transform from template.
-        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
-        counter: str = ""
-        result: dict[str, str | int] = {}
-        for item in transform_form_data:
-            # Get ID from name.
-            if item["attr"] == "employer":
-                item["value"] = str(self.query.query_id(item["value"], "employer"))
-            if item["attr"] == "position":
-                item["value"] = str(self.query.query_id(item["value"], "position"))
-            if counter != str(item["id"]):
-                counter = str(item["id"])
-                result = {}
-
-            # Delete skill.
-            if "delete" in item["attr"]:
-                self.delete.delete_target(item["id"], "skill")
+        # Process existing skills
+        existing_skills = {}
+        for key, value in raw_form_dict.items():
+            # Skip new entries
+            if key.startswith('new'):
                 continue
 
-            # Create result based on current attribute value.
-            match item["attr"]:
-                case "category":
-                    result.update({"category": item["value"], "state": int(item["state"])})
-                case "subcategory":
-                    result.update({"subcategory": item["value"]})
-                case "employer_dropdown":
-                    result.update({"employer": item["value"]})
-                case "position_dropdown":
-                    result.update({"position": item["value"]})
-                case "shortdesc":
-                    result.update({"shortdesc": item["value"]})
-                case "longdesc":
-                    result.update({"longdesc": item["value"]})
-                case "categoryorder":
-                    result.update({"categoryorder": item["value"]})
-                case "skillorder":
-                    result.update({"skillorder": item["value"]})
+            # Process delete entries
+            if '_delete' in key:
+                skill_id = key.split('_')[0]
+                self.delete.delete_target(skill_id, 'skill')
+                continue
 
-            # Create skill.
-            if "new" in item["id"]:
-                # Detect last iteration.
-                if all(key in result for key in
-                       ["employer", "position", "shortdesc", "longdesc", "category", "subcategory", "state"]):
-                    # TODO: Implement ordering support.
-                    self.insert.multi_column("skill", **result)
+            # Process existing skills fields
+            parts = key.split('_')
+            if len(parts) >= 2:
+                skill_id = parts[0]
 
-            # Update skill.
-            else:
-                if "dropdown" not in item["attr"]:
-                    self.update.single_item("skill", item)
+                # Initialize record if it doesn't exist
+                if skill_id not in existing_skills:
+                    existing_skills[skill_id] = {}
 
+                # Store the field value
+                field_name = '_'.join(parts[1:])
+                existing_skills[skill_id][field_name] = value[0]
+
+        # Update existing skills
+        for skill_id, data in existing_skills.items():
+            if skill_id.isdigit():
+                # Handle employer and position dropdowns
+                employer_id = data.get('employer_dropdown', '')
+                position_id = data.get('position_dropdown', '')
+
+                # Ensure we're using valid IDs
+                if employer_id and employer_id not in ['EDIT', 'ADD']:
+                    employer = employer_id
+                else:
+                    # Try to get employer from the form data
+                    employer_name = data.get('employer', '')
+                    if employer_name:
+                        employer = str(self.query.query_id(employer_name, 'employer'))
+                    else:
+                        employer = ''
+
+                if position_id and position_id not in ['EDIT', 'ADD']:
+                    position = position_id
+                else:
+                    # Try to get position from the form data
+                    position_name = data.get('position', '')
+                    if position_name:
+                        position = str(self.query.query_id(position_name, 'position'))
+                    else:
+                        position = ''
+
+                # Prepare skill update data
+                update_data = {
+                    'id': int(skill_id),
+                    'category': data.get('category', ''),
+                    'subcategory': data.get('subcategory', ''),
+                    'employer': employer,
+                    'position': position,
+                    'shortdesc': data.get('shortdesc', ''),
+                    'longdesc': data.get('longdesc', ''),
+                    'state': 1 if 'longdesc_enabled' in data else 0
+                }
+
+                # Optional fields - only include if present
+                if 'categoryorder' in data:
+                    update_data['categoryorder'] = data.get('categoryorder', '0')
+                if 'skillorder' in data:
+                    update_data['skillorder'] = data.get('skillorder', '0')
+
+                # Update skill
+                self.update.multi_column('skill', **update_data)
+
+        # Process new skills entries
+        new_skills = {}
+        for key in raw_form_dict:
+            if key.startswith('new') and ('_category' in key or '_shortdesc' in key):
+                entry_id = key.split('_')[0]  # Get 'new1', 'new2', etc.
+
+                if entry_id not in new_skills:
+                    new_skills[entry_id] = {}
+
+                # Store all fields for this entry
+                for field_key, field_values in raw_form_dict.items():
+                    if field_key.startswith(entry_id + '_'):
+                        field_name = '_'.join(field_key.split('_')[1:])
+                        new_skills[entry_id][field_name] = field_values[0]
+
+        # Insert all new skills
+        for entry_id, data in new_skills.items():
+            if ('category' in data and data['category']) and ('shortdesc' in data and data['shortdesc']):
+                # Handle employer and position dropdowns
+                employer_id = data.get('employer_dropdown', '')
+                position_id = data.get('position_dropdown', '')
+
+                # Ensure we're using valid IDs
+                if employer_id and employer_id not in ['EDIT', 'ADD']:
+                    employer = employer_id
+                else:
+                    # Try to get employer from the form data
+                    employer_name = data.get('employer', '')
+                    if employer_name:
+                        employer = str(self.query.query_id(employer_name, 'employer'))
+                    else:
+                        employer = ''
+
+                if position_id and position_id not in ['EDIT', 'ADD']:
+                    position = position_id
+                else:
+                    # Try to get position from the form data
+                    position_name = data.get('position', '')
+                    if position_name:
+                        position = str(self.query.query_id(position_name, 'position'))
+                    else:
+                        position = ''
+
+                # Create a new skill record
+                insert_data = {
+                    'category': data.get('category', ''),
+                    'subcategory': data.get('subcategory', ''),
+                    'employer': employer,
+                    'position': position,
+                    'shortdesc': data.get('shortdesc', ''),
+                    'longdesc': data.get('longdesc', ''),
+                    'state': 1 if 'longdesc_enabled' in data else 0
+                }
+
+                # Optional fields - only include if present
+                if 'categoryorder' in data:
+                    insert_data['categoryorder'] = data.get('categoryorder', '0')
+                if 'skillorder' in data:
+                    insert_data['skillorder'] = data.get('skillorder', '0')
+
+                # Insert the new skill
+                self.insert.multi_column('skill', **insert_data)
+
+        # Commit changes
+        self.conn.commit()
         return
 
     def update_summary(self, form_data: ImmutableMultiDict) -> None:
@@ -544,232 +537,136 @@ class Worker:
         :param ImmutableMultiDict form_data: Form data from template.
         :return None: None
         """
+        # Get raw form data and analyze it
+        raw_form_dict = form_data.to_dict(flat=False)
 
-        attrs: list[str] = list(form_data.keys())
+        # Determine how many 'new' entries we have
+        new_entries_count = 0
+        if 'new_rowid' in raw_form_dict:
+            new_entries_count = len(raw_form_dict['new_rowid'])
 
-        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
-        counter: str = ""
-        school_query_builder: dict[str, str | int] = {}
-        school_queries: list[dict[str, str | int]] = []
-        focus_query_builder: dict[str, str | int] = {}
-        focus_queries: list[dict[str, str]] = []
-        school_keys = ["school_location", "school_name", "school_state"]
-        focus_keys = ["focus_name", "focus_state", "focus_startdate", "focus_enddate", "focus_school"]
-
-        attrs_per_id = len(unique(transform_form_data))
-        school_dropdown_id = None  # Changed to None for clarity
-        focus_dropdown_id = None
-        school_name = ""
-
-        # First pass - collect row_ids to ensure we maintain them for updates
-        row_ids = {}
-        for item in transform_form_data:
-            if item["attr"] == "rowid":
-                row_ids[item["id"]] = item["value"]
-
-        for i, item in enumerate(transform_form_data):
-            focus_school_value = None
-
-            if counter != str(item["id"]):
-                counter = str(item["id"])
-
-            if "delete" in item["attr"]:
-                self.delete.single_association(item["id"], "school", "focus")
+        # Process existing records first
+        existing_records = {}
+        for key, value in raw_form_dict.items():
+            # Skip new entries for now
+            if key.startswith('new_'):
                 continue
 
-            if "date" in item["attr"]:
-                item["value"] = date_adapter(item["value"])
+            # Handle existing entries
+            parts = key.split('_')
+            if len(parts) >= 2:
+                record_id = parts[0]
+                field_type = parts[1]
 
-            match item["attr"]:
-                case "school_dropdown":
-                    school_dropdown_id = {"id": item["id"], "value": item["value"]}
-                    # If the row_id exists, keep the original school ID for updating
-                    if item["id"] in row_ids:
-                        original_school_id = row_ids[item["id"]]
-                        if original_school_id and original_school_id.isdigit():
-                            school_query_builder["id"] = int(original_school_id)
-                case "school_location":
-                    school_query_builder.update({"school_location": item["value"]})
-                case "school_name":
-                    # Get the original ID from the row_id field, not the dropdown value
-                    is_new = False
-                    if item["id"] in row_ids:
-                        original_id = row_ids[item["id"]]
-                        is_new = original_id == "new"
+                # Initialize record if it doesn't exist
+                if record_id not in existing_records:
+                    existing_records[record_id] = {
+                        'school': {},
+                        'focus': {}
+                    }
 
-                    if is_new:
-                        school_query_builder.update({"school_name": item["value"], "school_state": int(item["state"])})
-                    else:
-                        try:
-                            # If we already have an ID in the builder (from rowid), use that
-                            if "id" not in school_query_builder and item["id"] in row_ids:
-                                original_id = row_ids[item["id"]]
-                                if original_id and original_id.isdigit():
-                                    school_query_builder["id"] = int(original_id)
+                # Handle different field types
+                if field_type == 'school':
+                    # Extract the attribute name (everything after 'school_')
+                    attr = '_'.join(parts[2:]) if len(parts) > 2 else parts[-1]
+                    existing_records[record_id]['school'][attr] = value[0]
+                elif field_type == 'focus':
+                    # Extract the attribute name (everything after 'focus_')
+                    attr = '_'.join(parts[2:]) if len(parts) > 2 else parts[-1]
+                    existing_records[record_id]['focus'][attr] = value[0]
+                elif field_type == 'rowid':
+                    existing_records[record_id]['rowid'] = value[0]
 
-                            # Now update the name and state
-                            school_query_builder.update({
-                                "school_name": item["value"],
-                                "school_state": int(item["state"])
-                            })
-                        except ValueError:
-                            pass
-                case "focus_dropdown":
-                    focus_dropdown_id = {"id": item["id"], "value": item["value"]}
-                    # If the row_id exists and it's not new, set the focus ID directly
-                    if item["id"] in row_ids:
-                        focus_id = item["id"]  # This is the focus ID, not the school ID
-                        if focus_id and focus_id.isdigit():
-                            focus_query_builder["id"] = int(focus_id)
-                case "focus_name":
-                    # Use the actual focus_id as the ID for updates
-                    if item["id"] not in row_ids or row_ids[item["id"]] == "new":
-                        focus_query_builder.update({"focus_name": item["value"], "focus_state": int(item["state"])})
-                    else:
-                        try:
-                            if "id" not in focus_query_builder:
-                                focus_query_builder["id"] = int(item["id"])
-                            focus_query_builder.update({
-                                "focus_name": item["value"],
-                                "focus_state": int(item["state"])
-                            })
-                        except ValueError:
-                            pass
-                case "focus_startdate":
-                    focus_query_builder.update({"focus_startdate": item["value"]})
-                case "focus_enddate":
-                    focus_query_builder.update({"focus_enddate": item["value"]})
+        # Process existing records
+        for record_id, data in existing_records.items():
+            school_data = data.get('school', {})
+            focus_data = data.get('focus', {})
 
-            if all(key in school_query_builder for key in school_keys):
-                # Key fix: Maintain the existing school ID from rowid if it's not new
-                if "id" not in school_query_builder and item["id"] in row_ids:
-                    original_id = row_ids[item["id"]]
-                    if original_id != "new" and original_id.isdigit():
-                        school_query_builder["id"] = int(original_id)
+            # Update school if we have school data
+            if 'name' in school_data and record_id.isdigit():
+                school_id = int(record_id)
 
-                # But allow the school to be changed if a different one is selected
-                if isinstance(school_dropdown_id, dict) and "value" in school_dropdown_id:
-                    if school_dropdown_id["value"] not in ["EDIT", "ADD"]:
-                        # Use the selected school ID from the dropdown instead
-                        selected_school_id = int(school_dropdown_id["value"])
-                        # Don't update the ID, just query for name to use in focus relationship
-                        school_name = self.query.query_name(selected_school_id, "school")
-                        focus_query_builder.update({"focus_school": selected_school_id})
+                # Prepare school update data
+                school_update = {
+                    'id': school_id,
+                    'name': school_data.get('name', ''),
+                    'location': school_data.get('location', ''),
+                    'state': 1 if 'enabled' in school_data else 0
+                }
 
-                        # We'll still update the existing school record, but we'll link the focus to a different school
-                        if "id" in school_query_builder:
-                            school_queries.append(school_query_builder)
-                        school_query_builder = {}
-                        continue
+                # Update school
+                self.update.multi_column('school', **school_update)
 
-                # Regular processing when not changing schools
-                if "id" not in school_query_builder:
-                    school_query_builder.update(
-                        {"id": self.query.query_id(school_query_builder["school_name"], "school")})
-                if school_query_builder["id"] == 0:
-                    school_query_builder.pop("id")
-                school_queries.append(school_query_builder)
-                if "school_name" in school_query_builder and "id" in school_query_builder:
-                    if school_query_builder["school_name"] == "":
-                        school_query_builder["school_name"] = self.query.query_name(school_query_builder["id"],
-                                                                                    "school")
-                focus_query_builder.update(
-                    {"focus_school": self.query.query_id(school_query_builder["school_name"], "school")})
-                school_name = school_query_builder["school_name"]
-                school_query_builder = {}
+            # Update focus if we have focus data
+            if 'name' in focus_data and record_id.isdigit():
+                focus_id = int(record_id)
 
-            if len(school_queries) > 0:
-                for school_i, query in enumerate(school_queries):
-                    if "id" not in query:
-                        self.insert.multi_column("school", **query)
-                    else:
-                        self.update.multi_column("school", **query)
-                    school_queries.pop(school_i)
+                # Prepare focus update data
+                focus_update = {
+                    'id': focus_id,
+                    'school': int(record_id),  # Link to school ID
+                    'name': focus_data.get('name', ''),
+                    'startdate': date_adapter(focus_data.get('startdate', '')),
+                    'enddate': date_adapter(focus_data.get('enddate', '')),
+                    'state': 1 if 'enabled' in focus_data else 0
+                }
 
-            if all(key in focus_query_builder for key in focus_keys):
-                # Use the existing focus ID from the actual item ID
-                if "id" not in focus_query_builder and item["id"] != "new" and item["id"].isdigit():
-                    focus_query_builder.update({"id": int(item["id"])})
+                # Update focus
+                self.update.multi_column('focus', **focus_update)
 
-                focus_school_value = focus_query_builder.get("focus_school")
+        # Now process new entries
+        for i in range(new_entries_count):
+            # First insert the school
+            school_name = raw_form_dict.get('new_school_name', [''])[i] if i < len(
+                raw_form_dict.get('new_school_name', [])) else ''
+            school_location = raw_form_dict.get('new_school_location', [''])[i] if i < len(
+                raw_form_dict.get('new_school_location', [])) else ''
+            school_enabled = 1 if 'new_school_enabled' in raw_form_dict and i < len(
+                raw_form_dict['new_school_enabled']) else 0
 
-                # If user selected a different school in the dropdown, use that
-                if isinstance(school_dropdown_id, dict) and "value" in school_dropdown_id and \
-                        school_dropdown_id["value"] not in ["EDIT", "ADD"]:
-                    try:
-                        focus_query_builder.update({"focus_school": int(school_dropdown_id["value"])})
-                    except ValueError:
-                        pass
-
-                if "focus_name" in focus_query_builder and "id" in focus_query_builder:
-                    if focus_query_builder["focus_name"] == "":
-                        focus_query_builder["focus_name"] = self.query.query_name(focus_query_builder["id"], "focus")
-                if focus_query_builder.get("focus_school", 0) == 0:
-                    focus_query_builder.update(
-                        {"focus_school": self.query.query_id(school_name, "school")})
-                if focus_query_builder.get("id", 0) == 0:
-                    focus_query_builder.pop("id", None)
-                focus_queries.append(focus_query_builder)
-                focus_query_builder = {}
-
-        for query in focus_queries:
-            if "id" not in query:
-                self.insert.multi_column("focus", **query)
-            else:
-                self.update.multi_column("focus", **query)
-
-        return
-
-    def update_achievements(self, form_data: ImmutableMultiDict) -> None:
-        """
-        Updates the achievements table.
-        :param ImmutableMultiDict form_data: Form data from template.
-        :return None: None
-        """
-
-        # Transform from template.
-        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
-        counter: str = ""
-        result: dict[str, str | int] = {}
-        for item in transform_form_data:
-            if counter != str(item["id"]):
-                counter = str(item["id"])
-                result = {}
-
-            # Delete achievement.
-            if "delete" in item["attr"]:
-                self.delete.delete_target(item["id"], "achievement")
+            # Skip if we don't have a school name
+            if not school_name:
                 continue
 
-            # Create achievement.
-            if "new" in item["id"]:
-                # Create result based on current attribute value.
-                match item["attr"]:
-                    case "position":
-                        item["value"] = str(self.query.query_id(item["value"], "position"))
-                        result.update({"position": item["value"], "state": int(item["state"])})
-                    case "employer":
-                        item["value"] = str(self.query.query_id(item["value"], "employer"))
-                        result.update({"employer": item["value"], "state": int(item["state"])})
-                    case "achievement":
-                        result.update({"achievement": item["value"]})
-                    case "shortdesc":
-                        result.update({"shortdesc": item["value"]})
-                    case "longdesc":
-                        result.update({"longdesc": item["value"], "state": int(item["state"])})
-                # Detect last iteration.
-                if all(key in result for key in ["employer", "position", "shortdesc", "longdesc", "state"]):
-                    self.insert.multi_column("achievement", **result)
+            # Insert school
+            school_insert = {
+                'name': school_name,
+                'location': school_location,
+                'state': school_enabled
+            }
 
-            # Update achievement.
-            else:
-                # Get ID from name.
-                match item["attr"]:
-                    case "position":
-                        item["value"] = str(self.query.query_id(item["value"], "position"))
-                    case "employer":
-                        item["value"] = str(self.query.query_id(item["value"], "employer"))
-                self.update.single_item("achievement", item)
+            # Insert the school first
+            self.insert.multi_column('school', **school_insert)
+
+            # Query the DB to get the school_id by name - more reliable than relying on a return value
+            school_id = self.query.query_id(school_name, 'school')
+
+            # Skip focus insert if we couldn't get the school_id
+            if not school_id:
+                continue
+
+            # Now insert the focus for this school
+            focus_name = raw_form_dict.get('new_focus_name', [''])[i] if i < len(
+                raw_form_dict.get('new_focus_name', [])) else ''
+            focus_startdate = raw_form_dict.get('new_focus_startdate', [''])[i] if i < len(
+                raw_form_dict.get('new_focus_startdate', [])) else ''
+            focus_enddate = raw_form_dict.get('new_focus_enddate', [''])[i] if i < len(
+                raw_form_dict.get('new_focus_enddate', [])) else ''
+            focus_enabled = 1 if 'new_focus_enabled' in raw_form_dict and i < len(
+                raw_form_dict['new_focus_enabled']) else 0
+
+            # Only insert focus if we have a name
+            if focus_name:
+                focus_insert = {
+                    'school': school_id,
+                    'name': focus_name,
+                    'startdate': date_adapter(focus_startdate),
+                    'enddate': date_adapter(focus_enddate),
+                    'state': focus_enabled
+                }
+
+                # Insert the focus
+                self.insert.multi_column('focus', **focus_insert)
 
         return
 
@@ -779,39 +676,211 @@ class Worker:
         :param ImmutableMultiDict form_data: Form data from template.
         :return None: None
         """
+        # Get raw form data as dictionary with arrays
+        raw_form_dict = form_data.to_dict(flat=False)
 
-        # Transform from template.
-        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
-        counter: str = ""
-        result: dict[str, str | int] = {}
-        for item in transform_form_data:
-            if counter != item["id"]:
-                counter = item["id"]
-                result = {}
+        # Process existing glossary items
+        existing_items = {}
+        for key, value in raw_form_dict.items():
+            # Skip new entries
+            if key.startswith('new'):
+                continue
 
-            # Delete term.
-            if "delete" in item["attr"]:
-                self.delete.delete_target(item["id"], "glossary")
+            # Process delete entries (if any)
+            if '_delete' in key:
+                item_id = key.split('_')[0]
+                self.delete.delete_target(item_id, 'glossary')
+                continue
 
-            # Create term.
-            elif "new" in item["id"]:
-                # Create result based on current attribute value.
-                match item["attr"]:
-                    case "term":
-                        result.update({"term": item["value"]})
-                    case "url":
-                        result.update({"url": item["value"]})
-                    case "description":
-                        result.update({"description": item["value"], "state": int(item["state"])})
-                # Detect last iteration.
-                if all(key in result for key in ["term", "url", "description", "state"]):
-                    self.insert.multi_column("glossary", **result)
+            # Process existing glossary fields
+            parts = key.split('_')
+            if len(parts) >= 2:
+                item_id = parts[0]
 
+                # Initialize record if it doesn't exist
+                if item_id not in existing_items:
+                    existing_items[item_id] = {}
 
-            # Update term.
-            else:
-                self.update.single_item("glossary", item)
+                # Store the field value
+                field_name = '_'.join(parts[1:])
+                existing_items[item_id][field_name] = value[0]
 
+        # Update existing glossary items
+        for item_id, data in existing_items.items():
+            if item_id.isdigit() and 'term' in data:
+                update_data = {
+                    'id': int(item_id),
+                    'term': data.get('term', ''),
+                    'url': data.get('url', ''),
+                    'description': data.get('description', ''),
+                    'state': 1 if 'description_enabled' in data else 0
+                }
+
+                self.update.multi_column('glossary', **update_data)
+
+        # Process new glossary entries
+        new_items = {}
+        for key in raw_form_dict:
+            if key.startswith('new') and '_term' in key:
+                entry_id = key.split('_')[0]  # Get 'new1', 'new2', etc.
+
+                if entry_id not in new_items:
+                    new_items[entry_id] = {}
+
+                # Get the term
+                new_items[entry_id]['term'] = raw_form_dict[key][0]
+
+                # Try to get corresponding URL
+                url_key = f"{entry_id}_url"
+                if url_key in raw_form_dict:
+                    new_items[entry_id]['url'] = raw_form_dict[url_key][0]
+                else:
+                    new_items[entry_id]['url'] = ''
+
+                # Try to get corresponding description
+                desc_key = f"{entry_id}_description"
+                if desc_key in raw_form_dict:
+                    new_items[entry_id]['description'] = raw_form_dict[desc_key][0]
+                else:
+                    new_items[entry_id]['description'] = ''
+
+                # Check if enabled
+                enabled_key = f"{entry_id}_description_enabled"
+                new_items[entry_id]['state'] = 1 if enabled_key in raw_form_dict else 0
+
+        # Insert all new glossary items
+        for entry_id, data in new_items.items():
+            if 'term' in data and data['term']:  # Only insert if we have a term
+                insert_data = {
+                    'term': data['term'],
+                    'url': data.get('url', ''),
+                    'description': data.get('description', ''),
+                    'state': data.get('state', 1)
+                }
+
+                self.insert.multi_column('glossary', **insert_data)
+
+        # Commit changes
+        self.conn.commit()
+        return
+
+    def update_achievements(self, form_data: ImmutableMultiDict) -> None:
+        """
+        Updates the achievement table with relationships to employer and position.
+        :param ImmutableMultiDict form_data: Form data from template.
+        :return None: None
+        """
+        # Get raw form data as dictionary with arrays
+        raw_form_dict = form_data.to_dict(flat=False)
+
+        # Process existing achievements
+        existing_achievements = {}
+        for key, value in raw_form_dict.items():
+            # Skip new entries
+            if key.startswith('new'):
+                continue
+
+            # Process delete entries
+            if '_delete' in key:
+                achievement_id = key.split('_')[0]
+                self.delete.delete_target(achievement_id, 'achievement')
+                continue
+
+            # Process existing achievement fields
+            parts = key.split('_')
+            if len(parts) >= 2:
+                achievement_id = parts[0]
+
+                # Initialize record if it doesn't exist
+                if achievement_id not in existing_achievements:
+                    existing_achievements[achievement_id] = {}
+
+                # Store the field value
+                field_name = '_'.join(parts[1:])
+                existing_achievements[achievement_id][field_name] = value[0]
+
+        # Update existing achievements
+        for achievement_id, data in existing_achievements.items():
+            if achievement_id.isdigit():
+                # Handle employer and position dropdowns
+                employer_id = data.get('employer_dropdown', '')
+                position_id = data.get('position_dropdown', '')
+
+                # Validate that the position belongs to the employer
+                if employer_id and position_id:
+                    # Check if the position belongs to the selected employer
+                    self.cursor.execute(
+                        "SELECT employer FROM position WHERE id = ?",
+                        (position_id,)
+                    )
+                    result = self.cursor.fetchone()
+                    if result and str(result[0]) != str(employer_id):
+                        # Position doesn't belong to this employer, don't update
+                        continue
+
+                # Prepare achievement update data
+                update_data = {
+                    'id': int(achievement_id),
+                    'employer': employer_id if employer_id else None,
+                    'position': position_id if position_id else None,
+                    'shortdesc': data.get('shortdesc', ''),
+                    'longdesc': data.get('longdesc', ''),
+                    'state': 1 if 'longdesc_enabled' in data else 0
+                }
+
+                # Update achievement only if we have valid employer and position
+                if update_data['employer'] and update_data['position']:
+                    self.update.multi_column('achievement', **update_data)
+
+        # Process new achievement entries
+        new_achievements = {}
+        for key in raw_form_dict:
+            if key.startswith('new') and ('_shortdesc' in key or '_longdesc' in key):
+                entry_id = key.split('_')[0]  # Get 'new1', 'new2', etc.
+
+                if entry_id not in new_achievements:
+                    new_achievements[entry_id] = {}
+
+                # Store all fields for this entry
+                for field_key, field_values in raw_form_dict.items():
+                    if field_key.startswith(entry_id + '_'):
+                        field_name = '_'.join(field_key.split('_')[1:])
+                        new_achievements[entry_id][field_name] = field_values[0]
+
+        # Insert all new achievements
+        for entry_id, data in new_achievements.items():
+            # Handle employer and position dropdowns
+            employer_id = data.get('employer_dropdown', '')
+            position_id = data.get('position_dropdown', '')
+
+            # Validate that the position belongs to the employer
+            if employer_id and position_id:
+                # Check if the position belongs to the selected employer
+                self.cursor.execute(
+                    "SELECT employer FROM position WHERE id = ?",
+                    (position_id,)
+                )
+                result = self.cursor.fetchone()
+                if result and str(result[0]) != str(employer_id):
+                    # Position doesn't belong to this employer, skip this entry
+                    continue
+
+            # Only proceed if we have the required data
+            if 'shortdesc' in data and employer_id and position_id:
+                # Create a new achievement record
+                insert_data = {
+                    'employer': employer_id,
+                    'position': position_id,
+                    'shortdesc': data.get('shortdesc', ''),
+                    'longdesc': data.get('longdesc', ''),
+                    'state': 1 if 'longdesc_enabled' in data else 0
+                }
+
+                # Insert the new achievement
+                self.insert.multi_column('achievement', **insert_data)
+
+        # Commit changes
+        self.conn.commit()
         return
 
     def update_target_table(self, item: dict[str, str | bool], table: str):

@@ -1,3 +1,4 @@
+{% from "_dropdown.html" import drop_down with context %}
 {% macro form_group(employerid, employer, employerstate, positionid, position, positionstate, achievementid, shortdesc, longdesc, achievementstate) %}
     <!-- Test if new template element -->
     {% if employerid == "new" %}
@@ -6,24 +7,41 @@
         {% set achievementid = "new` + clicks + `"|safe %}
     {% endif %}
     <div id="{{ achievementid }}" class="lead d-flex align-items-bottom justify-content-center">
+        <input type="hidden" name="{{ achievementid }}_rowid" value="{{ employerid }}">
         <table>
             <tr>
                 <td>
-                    <label for="{{ achievementid }}_employer">Employer Name</label>
-                    <br>
-                    <input type="text" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
+                    {{ drop_down(
+                        achievementid,
+                        payload,
+                        ddpayload,
+                        "employer",
+                        primarybyname=True,
+                        selected_value=employerid,
+                        extra=False
+                    ) }}
+                    <input type="hidden" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
                            value="{{ employer if employer is defined else "" }}">
                 </td>
                 <td>
-                    <label for="{{ achievementid }}_position">Position Held</label>
-                    <br>
-                    <input type="text" name="{{ achievementid }}_position" id="{{ employerid }}_position"
+                    {{ drop_down(
+                        achievementid,
+                        payload,
+                        ddpayload,
+                        "employer",
+                        secondary="position",
+                        secondaryid=achievementid,
+                        secondarybyname=True,
+                        selected_value=positionid,
+                        extra=False
+                    ) }}
+                    <input type="hidden" name="{{ achievementid }}_position" id="{{ achievementid }}_position"
                            value="{{ position if position is defined else "" }}">
                 </td>
                 <td>
-                    <label for="{{ achievementid }}_position_enabled">Displayed</label>
-                    <input type="checkbox" name="{{ achievementid }}_position_enabled"
-                    {{ "checked" if positionstate }} disabled>
+                    <label for="{{ achievementid }}_position_enabled">Position Displayed</label>
+                    <input type="checkbox" name="{{ achievementid }}_position_enabled" id="{{ achievementid }}_position_enabled"
+                           {{ "checked" if positionstate }} data-position-state="{{ positionstate }}" disabled>
                 </td>
             </tr>
             <tr>
@@ -36,7 +54,7 @@
                 <td>
                     <label for="{{ achievementid }}_longdesc">Achievement Long Description</label>
                     <br>
-                    <input type="text" name="{{ positionid }}_longdesc" id="{{ achievementid }}_longdesc"
+                    <input type="text" name="{{ achievementid }}_longdesc" id="{{ achievementid }}_longdesc"
                            value="{{ longdesc if longdesc is defined else "" }}">
                     <br>
                     <label for="{{ achievementid }}_longdesc_enabled">Displayed</label>
