@@ -3,12 +3,21 @@
 
 <div class="ai-helper-footer">
     <div class="ai-helper-toggle">
-        <div>
-            <i class="bi bi-cpu ai-icon"></i>
-            <span>AI Resume Helper</span>
-        </div>
-        <div class="arrow">
-            <i class="bi bi-chevron-up"></i>
+        <div class="d-flex justify-content-between align-items-center w-100">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-cpu ai-icon"></i>
+                <span>AI Resume Helper</span>
+                <span id="ai-status-indicator" class="status-indicator"></span>
+            </div>
+            <div class="d-flex align-items-center">
+                <button id="ai-settings-btn" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-gear-fill"></i>
+                </button>
+                <span class="copyright-text">Created by Celes Hillyerd</span>
+                <div class="arrow ms-2">
+                    <i class="bi bi-chevron-up"></i>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -38,6 +47,74 @@
     </div>
 </div>
 
+<!-- Ollama Settings Modal (Updated) -->
+<div class="modal fade" id="ollamaSettingsModal" tabindex="-1" aria-labelledby="ollamaSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ollamaSettingsModalLabel">AI Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="ai-enabled-switch">
+                        <label class="form-check-label" for="ai-enabled-switch">Enable AI Features</label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="ollama-host" class="form-label">Ollama Server URL</label>
+                    <input type="text" class="form-control" id="ollama-host" placeholder="http://localhost:11434">
+                    <div class="form-text">The URL where your Ollama server is running</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="ollama-model" class="form-label">Ollama Model</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="ollama-model" placeholder="llama3.2:1b">
+                        <button class="btn btn-outline-secondary" type="button" id="check-model-btn" title="Check if model is available">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">The model to use for AI improvements</div>
+                </div>
+
+                <div id="model-status-container" class="mb-3" style="display: none;">
+                    <div class="alert" id="model-status-alert">
+                        <div id="model-status-message"></div>
+                        <div id="model-download-progress" style="display: none;">
+                            <div class="progress mt-2">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar" style="width: 100%"></div>
+                            </div>
+                            <small class="text-muted">This may take a while depending on your internet connection and the model size.</small>
+                        </div>
+                        <button id="download-model-btn" class="btn btn-success mt-2" style="display: none;">
+                            <i class="bi bi-cloud-download"></i> Download Model
+                        </button>
+                    </div>
+                </div>
+
+                <div id="available-models-container" class="mb-3" style="display: none;">
+                    <label class="form-label">Available Models</label>
+                    <div class="list-group" id="available-models-list">
+                        <!-- Available models will be listed here -->
+                    </div>
+                </div>
+
+                <div id="ollama-connection-status" class="alert alert-info">
+                    Checking connection...
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-ollama-settings">Save Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Toggle the AI helper footer
@@ -48,8 +125,316 @@
         const aiSubmitBtn = document.getElementById('ai-submit');
         const aiResultDiv = document.querySelector('.ai-helper-result');
         const aiLoadingDiv = document.querySelector('.ai-helper-loading');
+        const aiStatusIndicator = document.getElementById('ai-status-indicator');
+        const aiSettingsBtn = document.getElementById('ai-settings-btn');
+
+        // Modal elements
+        const ollamaSettingsModal = new bootstrap.Modal(document.getElementById('ollamaSettingsModal'));
+        const ollamaHostInput = document.getElementById('ollama-host');
+        const ollamaModelInput = document.getElementById('ollama-model');
+        const aiEnabledSwitch = document.getElementById('ai-enabled-switch');
+        const saveOllamaSettingsBtn = document.getElementById('save-ollama-settings');
+        const ollamaConnectionStatus = document.getElementById('ollama-connection-status');
 
         let selectedImprovement = null;
+        let aiConfig = {
+            base_url: '',
+            model: '',
+            enabled: true
+        };
+
+        // Load saved configuration from localStorage if available
+        function loadSavedConfig() {
+            const savedConfig = localStorage.getItem('ollamaConfig');
+            if (savedConfig) {
+                try {
+                    const parsedConfig = JSON.parse(savedConfig);
+                    ollamaHostInput.value = parsedConfig.base_url || '';
+                    ollamaModelInput.value = parsedConfig.model || '';
+                    aiEnabledSwitch.checked = parsedConfig.enabled !== false;
+                } catch (e) {
+                    console.error('Error parsing saved config:', e);
+                }
+            }
+        }
+
+        // Check AI status and update the indicator
+        function updateAiStatus() {
+            fetch('/api/ai-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        aiStatusIndicator.className = 'status-indicator status-online';
+                        aiStatusIndicator.title = 'AI service online';
+                    } else if (data.status === 'disabled') {
+                        aiStatusIndicator.className = 'status-indicator status-disabled';
+                        aiStatusIndicator.title = 'AI service disabled';
+                    } else {
+                        aiStatusIndicator.className = 'status-indicator status-error';
+                        aiStatusIndicator.title = `AI service error: ${data.message}`;
+                    }
+                })
+                .catch(error => {
+                    aiStatusIndicator.className = 'status-indicator status-error';
+                    aiStatusIndicator.title = 'Could not connect to AI service';
+                    console.error('Error fetching AI status:', error);
+                });
+        }
+
+        // Get current Ollama configuration
+        function getOllamaConfig() {
+            fetch('/api/ollama-config')
+                .then(response => response.json())
+                .then(data => {
+                    aiConfig = data;
+                    ollamaHostInput.value = data.base_url;
+                    ollamaModelInput.value = data.model;
+                    aiEnabledSwitch.checked = data.enabled;
+
+                    // Save to localStorage
+                    localStorage.setItem('ollamaConfig', JSON.stringify(data));
+                })
+                .catch(error => {
+                    console.error('Error fetching Ollama config:', error);
+                });
+        }
+
+        // Check Ollama connection
+        function checkOllamaConnection() {
+            ollamaConnectionStatus.className = 'alert alert-info';
+            ollamaConnectionStatus.textContent = 'Checking connection...';
+
+            fetch('/api/ai-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        ollamaConnectionStatus.className = 'alert alert-success';
+                        ollamaConnectionStatus.innerHTML = '<i class="bi bi-check-circle"></i> Connected to Ollama server<br>Available models: ' +
+                            (data.models ? data.models.join(', ') : 'Unknown');
+                    } else if (data.status === 'disabled') {
+                        ollamaConnectionStatus.className = 'alert alert-warning';
+                        ollamaConnectionStatus.innerHTML = '<i class="bi bi-exclamation-triangle"></i> AI service is disabled';
+                    } else {
+                        ollamaConnectionStatus.className = 'alert alert-danger';
+                        ollamaConnectionStatus.innerHTML = '<i class="bi bi-x-circle"></i> Error connecting to Ollama: ' + data.message;
+                    }
+                })
+                .catch(error => {
+                    ollamaConnectionStatus.className = 'alert alert-danger';
+                    ollamaConnectionStatus.innerHTML = '<i class="bi bi-x-circle"></i> Error checking connection: ' + error.message;
+                });
+        }
+
+        // Check model status
+        function checkModelStatus(modelName) {
+            const statusContainer = document.getElementById('model-status-container');
+            const statusAlert = document.getElementById('model-status-alert');
+            const statusMessage = document.getElementById('model-status-message');
+            const downloadBtn = document.getElementById('download-model-btn');
+            const progressContainer = document.getElementById('model-download-progress');
+
+            // Reset display
+            statusContainer.style.display = 'block';
+            statusAlert.className = 'alert alert-info';
+            statusMessage.innerHTML = 'Checking model status...';
+            downloadBtn.style.display = 'none';
+            progressContainer.style.display = 'none';
+
+            fetch(`/api/model-status?model=${encodeURIComponent(modelName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'available') {
+                        statusAlert.className = 'alert alert-success';
+                        statusMessage.innerHTML = `<i class="bi bi-check-circle"></i> Model <strong>${modelName}</strong> is available and ready to use.`;
+                        downloadBtn.style.display = 'none';
+                    } else if (data.status === 'downloading') {
+                        statusAlert.className = 'alert alert-warning';
+                        statusMessage.innerHTML = `<i class="bi bi-cloud-download"></i> Model <strong>${modelName}</strong> is currently downloading.`;
+                        progressContainer.style.display = 'block';
+                        downloadBtn.style.display = 'none';
+
+                        // Poll status periodically
+                        setTimeout(() => checkModelStatus(modelName), 5000);
+                    } else if (data.status === 'not_available') {
+                        statusAlert.className = 'alert alert-warning';
+                        statusMessage.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Model <strong>${modelName}</strong> is not available.`;
+                        downloadBtn.style.display = 'block';
+                    } else {
+                        statusAlert.className = 'alert alert-danger';
+                        statusMessage.innerHTML = `<i class="bi bi-x-circle"></i> Error checking model status: ${data.error || 'Unknown error'}`;
+                        downloadBtn.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    statusAlert.className = 'alert alert-danger';
+                    statusMessage.innerHTML = `<i class="bi bi-x-circle"></i> Error: ${error.message}`;
+                    downloadBtn.style.display = 'none';
+                });
+        }
+
+        // Download a model
+        function downloadModel(modelName) {
+            const statusContainer = document.getElementById('model-status-container');
+            const statusAlert = document.getElementById('model-status-alert');
+            const statusMessage = document.getElementById('model-status-message');
+            const downloadBtn = document.getElementById('download-model-btn');
+            const progressContainer = document.getElementById('model-download-progress');
+
+            // Update display
+            statusAlert.className = 'alert alert-info';
+            statusMessage.innerHTML = `<i class="bi bi-cloud-download"></i> Initiating download for model <strong>${modelName}</strong>...`;
+            downloadBtn.style.display = 'none';
+            progressContainer.style.display = 'block';
+
+            fetch('/api/download-model', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ model: modelName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    statusAlert.className = 'alert alert-danger';
+                    statusMessage.innerHTML = `<i class="bi bi-x-circle"></i> Error: ${data.error}`;
+                    downloadBtn.style.display = 'block';
+                    progressContainer.style.display = 'none';
+                } else {
+                    statusAlert.className = 'alert alert-warning';
+                    statusMessage.innerHTML = `<i class="bi bi-cloud-download"></i> ${data.message}`;
+                    downloadBtn.style.display = 'none';
+                    progressContainer.style.display = 'block';
+
+                    // Poll status periodically
+                    setTimeout(() => checkModelStatus(modelName), 5000);
+                }
+            })
+            .catch(error => {
+                statusAlert.className = 'alert alert-danger';
+                statusMessage.innerHTML = `<i class="bi bi-x-circle"></i> Error initiating download: ${error.message}`;
+                downloadBtn.style.display = 'block';
+                progressContainer.style.display = 'none';
+            });
+        }
+
+        // Load available models
+        function loadAvailableModels() {
+            const modelsContainer = document.getElementById('available-models-container');
+            const modelsList = document.getElementById('available-models-list');
+
+            fetch('/api/ai-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok' && data.models && data.models.length > 0) {
+                        modelsContainer.style.display = 'block';
+                        modelsList.innerHTML = '';
+
+                        data.models.forEach(model => {
+                            const modelName = model.name || model;
+                            const listItem = document.createElement('button');
+                            listItem.className = 'list-group-item list-group-item-action';
+                            listItem.textContent = modelName;
+                            listItem.addEventListener('click', () => {
+                                document.getElementById('ollama-model').value = modelName;
+                                checkModelStatus(modelName);
+                            });
+                            modelsList.appendChild(listItem);
+                        });
+                    } else {
+                        modelsContainer.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    modelsContainer.style.display = 'none';
+                    console.error('Error loading available models:', error);
+                });
+        }
+
+        // Save Ollama configuration
+        function saveOllamaSettings() {
+            const config = {
+                base_url: ollamaHostInput.value.trim(),
+                model: ollamaModelInput.value.trim(),
+                enabled: aiEnabledSwitch.checked
+            };
+
+            console.log("Sending config:", config);
+
+            fetch('/api/ollama-config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            })
+            .then(response => {
+                console.log("Response status:", response.status);
+                if (!response.ok) {
+                    throw new Error('Server returned status: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Response data:", data);
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    aiConfig = data;
+                    localStorage.setItem('ollamaConfig', JSON.stringify(config));
+                    checkOllamaConnection();
+                    updateAiStatus();
+                    setTimeout(() => {
+                        ollamaSettingsModal.hide();
+                    }, 1000);
+                }
+            })
+            .catch(error => {
+                console.error("Fetch error:", error);
+                alert('Error saving settings: ' + error.message);
+            });
+        }
+
+        // Initialize
+        loadSavedConfig();
+        getOllamaConfig();
+        updateAiStatus();
+
+        // Settings button click
+        aiSettingsBtn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent toggling the AI helper
+            checkOllamaConnection();
+            loadAvailableModels();
+            ollamaSettingsModal.show();
+        });
+
+        // Check model button click
+        document.getElementById('check-model-btn').addEventListener('click', function() {
+            const modelName = document.getElementById('ollama-model').value.trim();
+            if (modelName) {
+                checkModelStatus(modelName);
+            } else {
+                alert('Please enter a model name');
+            }
+        });
+
+        // Download model button click
+        document.getElementById('download-model-btn').addEventListener('click', function() {
+            const modelName = document.getElementById('ollama-model').value.trim();
+            if (modelName) {
+                downloadModel(modelName);
+            } else {
+                alert('Please enter a model name');
+            }
+        });
+
+        // Model input change
+        document.getElementById('ollama-model').addEventListener('change', function() {
+            document.getElementById('model-status-container').style.display = 'none';
+        });
+
+        // Save settings button click
+        saveOllamaSettingsBtn.addEventListener('click', saveOllamaSettings);
 
         aiToggle.addEventListener('click', function() {
             aiHelper.classList.toggle('expanded');
@@ -117,6 +502,12 @@
 
                 if (data.error) {
                     aiResultDiv.textContent = `Error: ${data.error}`;
+                } else if (data.ai_disabled) {
+                    aiResultDiv.innerHTML = `<div class="ai-disabled-message">${data.response}<br><button id="open-ai-settings" class="btn btn-sm btn-primary mt-2">Configure AI</button></div>`;
+                    document.getElementById('open-ai-settings').addEventListener('click', function() {
+                        checkOllamaConnection();
+                        ollamaSettingsModal.show();
+                    });
                 } else {
                     aiResultDiv.textContent = data.response;
                 }
@@ -136,7 +527,12 @@
         });
 
         // Add a click-to-copy feature for the result
-        aiResultDiv.addEventListener('click', function() {
+        aiResultDiv.addEventListener('click', function(e) {
+            // Don't handle clicks on buttons inside the result div
+            if (e.target.tagName === 'BUTTON') {
+                return;
+            }
+
             const text = this.textContent;
             if (text.startsWith('Error:')) {
                 return; // Don't copy error messages
@@ -154,5 +550,8 @@
                     console.error('Could not copy text: ', err);
                 });
         });
+
+        // Check AI status periodically
+        setInterval(updateAiStatus, 30000);
     });
 </script>

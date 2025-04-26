@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Optional Ollama service - can be commented out if not needed
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -24,17 +25,18 @@ services:
       dockerfile: Dockerfile
     container_name: resume-service
     ports:
-      - "8080:5000"
+      - "5000:5000"
     environment:
       - FLASK_APP=app.py
+      - ENABLE_AI=${ENABLE_AI:-true}
       - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=llama3.2:1b
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
+      - DOWNLOAD_MODEL=${DOWNLOAD_MODEL:-true}
     volumes:
       - ./data:/app/data
       - ./resources:/app/resources
     depends_on:
-      ollama:
-        condition: service_healthy
+      - ollama
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/ || exit 1"]
       interval: 30s
@@ -43,18 +45,6 @@ services:
     restart: unless-stopped
     networks:
       - resume-network
-    command: >
-      sh -c "
-        echo 'Waiting for Ollama to be ready...' &&
-        until curl -s http://ollama:11434/api/health > /dev/null 2>&1; do
-          echo 'Waiting for Ollama...'
-          sleep 5
-        done &&
-        echo 'Downloading model...' &&
-        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"llama3.2:1b\"}' &&
-        echo 'Starting application...' &&
-        python app.py
-      "
 
 volumes:
   ollama-data:

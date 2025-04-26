@@ -26,98 +26,200 @@ class Worker:
         self.update = Updates()
         self.delete = Deletes()
 
-    def dropdowns(self, template: str) -> list[dict[str, int]]:
+    def dropdowns(self, target):
         """
-        Takes list of column names and returns a list of dictionaries with column values.
-        :param str template: Target template.
-        :return list[str]: list of dictionaries with column values.
+        Return dropdown data for the target section.
+        Enhanced to handle separate employer and school data for achievements.
+
+        :param target: Target section name (e.g., "achievements", "skills", "education", "employment")
+        :return: Dictionary with dropdown data
         """
+        if target == "achievements":
+            try:
+                # Debug what's happening
+                print(f"Generating dropdowns for: {target}")
 
-        match template:
-            case "education":
-                return self.query.get_options(["school", "focus"], ["name", "name"])
-            case "employment":
-                return self.query.get_options(["employer", "position"], ["employer", "position"])
-            case "achievements":
-                # Get employer and school options
-                employer_options = self.query.get_options(["employer"], ["employer"])["employer"]
-                school_options = self.query.get_options(["school"], ["name"])["school"]
+                # Get employer data
+                employers = self.cursor.execute(
+                    "SELECT id, employer, state FROM employer ORDER BY employer"
+                ).fetchall()
 
-                # Get position options with employer ID
-                self.cursor.execute("""
-                                    SELECT p.id, p.position, p.employer
-                                    FROM position p
-                                    ORDER BY p.position
-                                    """)
-                position_options = [
-                    {"id": int(item[0]), "name": item[1], "employer": item[2], "type": "position"}
-                    for item in self.cursor.fetchall()
-                ]
+                # Convert to list of dictionaries with proper keys for template compatibility
+                employer_list = []
+                for employer_id, employer_name, state in employers:
+                    employer_list.append({
+                        "id": employer_id,
+                        "name": employer_name,  # Template expects 'name' key
+                        "employer": employer_name,  # Some code might expect 'employer' key
+                        "state": state,
+                        "type": "employer"
+                    })
 
-                # Get focus options with school ID
-                self.cursor.execute("""
-                                    SELECT f.id, f.name, f.school
-                                    FROM focus f
-                                    ORDER BY f.name
-                                    """)
-                focus_options = [
-                    {"id": int(item[0]), "name": item[1], "employer": item[2], "type": "focus"}
-                    for item in self.cursor.fetchall()
-                ]
+                # Get school data
+                schools = self.cursor.execute(
+                    "SELECT id, name, state FROM school ORDER BY name"
+                ).fetchall()
 
-                # Combine employers and schools into one list
-                combined_orgs = []
-                for employer in employer_options:
-                    employer["type"] = "employer"
-                    combined_orgs.append(employer)
+                # Convert to list of dictionaries with proper keys
+                school_list = []
+                for school_id, school_name, state in schools:
+                    school_list.append({
+                        "id": school_id,
+                        "name": school_name,
+                        "state": state,
+                        "type": "school"
+                    })
 
-                for school in school_options:
-                    school["type"] = "school"
-                    combined_orgs.append(school)
+                # Get position data (for regular employment)
+                positions = self.cursor.execute(
+                    "SELECT p.id, p.position, p.state, p.employer, e.employer as employer_name " +
+                    "FROM position p " +
+                    "LEFT JOIN employer e ON p.employer = e.id " +
+                    "ORDER BY p.position"
+                ).fetchall()
 
-                # Combine positions and focuses
-                combined_roles = position_options + focus_options
+                # Convert to list of dictionaries
+                position_list = []
+                for pos_id, pos_name, pos_state, employer_id, employer_name in positions:
+                    position_list.append({
+                        "id": pos_id,
+                        "name": pos_name,
+                        "position": pos_name,  # For backward compatibility
+                        "state": pos_state,
+                        "employer": employer_id,  # Keep employer id for filtering
+                        "employer_name": employer_name,
+                        "type": "position"
+                    })
 
-                # Create mappings between organizations and roles
-                org_roles_map = {}
+                # Get focus data (for school studies)
+                focuses = self.cursor.execute(
+                    "SELECT f.id, f.name, f.state, f.school, s.name as school_name " +
+                    "FROM focus f " +
+                    "LEFT JOIN school s ON f.school = s.id " +
+                    "ORDER BY f.name"
+                ).fetchall()
 
-                # Map employers to positions
-                for position in position_options:
-                    employer_id = str(position["employer"])
-                    if employer_id not in org_roles_map:
-                        org_roles_map[employer_id] = []
-                    org_roles_map[employer_id].append(position["id"])
+                # Convert to list of dictionaries
+                focus_list = []
+                for focus_id, focus_name, focus_state, school_id, school_name in focuses:
+                    focus_list.append({
+                        "id": focus_id,
+                        "name": focus_name,
+                        "state": focus_state,
+                        "school_id": school_id,
+                        "school_name": school_name,
+                        "type": "focus"
+                    })
 
-                # Map schools to focuses
-                for focus in focus_options:
-                    school_id = str(focus["employer"])
-                    if school_id not in org_roles_map:
-                        org_roles_map[school_id] = []
-                    org_roles_map[school_id].append(focus["id"])
+                # Build a mapping of employer IDs to position IDs for client-side filtering
+                employer_positions_map = {}
 
-                # Build the result
-                options = {
-                    "employer": combined_orgs,  # Will contain both employers and schools
-                    "position": combined_roles,  # Will contain both positions and focuses
-                    "employer_positions": org_roles_map  # Maps org IDs to role IDs
+                # Add employer -> position mappings
+                for position in position_list:
+                    employer_id = position.get("employer")
+                    if employer_id:
+                        if str(employer_id) not in employer_positions_map:
+                            employer_positions_map[str(employer_id)] = []
+                        employer_positions_map[str(employer_id)].append({
+                            "id": position["id"],
+                            "name": position["name"],
+                            "type": "position"
+                        })
+
+                # Add school -> focus mappings
+                for focus in focus_list:
+                    school_id = focus.get("school_id")
+                    if school_id:
+                        if str(school_id) not in employer_positions_map:
+                            employer_positions_map[str(school_id)] = []
+                        employer_positions_map[str(school_id)].append({
+                            "id": focus["id"],
+                            "name": focus["name"],
+                            "type": "focus"
+                        })
+
+                # Debug the final data
+                dropdown_data = {
+                    "employers": employer_list,
+                    "schools": school_list,
+                    "positions": position_list,
+                    "focuses": focus_list,
+                    "employer_positions": employer_positions_map  # Map for JS filtering
                 }
 
-                return options
-            case "skills":
-                # Get options with employer-position mapping
-                options = self.query.get_options(["skill", "skill", "employer", "position"],
-                                                 ["category", "subcategory", "employer", "position"])
+                print(f"Generated dropdowns with {len(employer_list)} employers, {len(school_list)} schools")
+                print(f"Positions: {len(position_list)}, Focuses: {len(focus_list)}")
 
-                # Add employer-position map for client-side filtering
-                employer_positions = {}
-                self.cursor.execute("SELECT id, employer FROM position")
-                for position_id, employer_id in self.cursor.fetchall():
-                    if str(employer_id) not in employer_positions:
-                        employer_positions[str(employer_id)] = []
-                    employer_positions[str(employer_id)].append(position_id)
+                return dropdown_data
 
-                options["employer_positions"] = employer_positions
-                return options
+            except Exception as e:
+                print(f"Error in dropdowns for achievements: {e}")
+                import traceback
+                print(traceback.format_exc())
+                return {
+                    "employers": [],
+                    "schools": [],
+                    "positions": [],
+                    "focuses": [],
+                    "employer_positions": {}
+                }
+
+        elif target == "skills":
+            try:
+                category_query = self.cursor.execute(
+                    "SELECT id, category FROM skill ORDER BY state, category"
+                ).fetchall()
+
+                subcategory_query = self.cursor.execute(
+                    "SELECT id, subcategory, category FROM skill ORDER BY subcategory"
+                ).fetchall()
+
+                return {
+                    "category": category_query,
+                    "subcategory": subcategory_query
+                }
+            except Exception as e:
+                print(f"Error in dropdowns for skills: {e}")
+                return {"category": [], "subcategory": []}
+
+        elif target == "education":
+            try:
+                degree_query = self.cursor.execute(
+                    "SELECT id, name FROM focus ORDER BY state DESC, name"
+                ).fetchall()
+
+                school_query = self.cursor.execute(
+                    "SELECT id, name FROM school ORDER BY state DESC, name"
+                ).fetchall()
+
+                return {
+                    "degree": degree_query,
+                    "school": school_query
+                }
+            except Exception as e:
+                print(f"Error in dropdowns for education: {e}")
+                return {"degree": [], "school": []}
+
+        elif target == "employment":
+            try:
+                employer_query = self.cursor.execute(
+                    "SELECT id, employer FROM employer ORDER BY state DESC, employer"
+                ).fetchall()
+
+                position_query = self.cursor.execute(
+                    "SELECT id, position, employer FROM position ORDER BY position"
+                ).fetchall()
+
+                return {
+                    "employer": employer_query,
+                    "position": position_query
+                }
+            except Exception as e:
+                print(f"Error in dropdowns for employment: {e}")
+                return {"employer": [], "position": []}
+
+        # Default return for unrecognized targets
+        return {}
 
     def identification(self, form_data: ImmutableMultiDict) -> None:
         """
@@ -965,69 +1067,277 @@ class Worker:
 
     def update_achievements(self, form):
         """
-        Updates the achievement, employer, and position tables based on form data.
+        Updates the achievement table with separate employer and school columns.
+
         :param form: Form data from request.
         """
+        import traceback
+
+        # Debug the form data
+        print("Form keys:", list(form.keys()))
+
         # Create a list of all achievement IDs
         achievement_ids = []
 
         # Process each form field to identify achievement IDs
         for key in form:
-            if key.endswith("_rowid"):
+            if key.endswith("_rowid") or key.endswith("_shortdesc"):
                 achievement_id = key.split("_")[0]
-                achievement_ids.append(achievement_id)
+                if achievement_id not in achievement_ids:
+                    achievement_ids.append(achievement_id)
+
+        print(f"Found {len(achievement_ids)} achievements to process")
 
         # Process each achievement
         for achievement_id in achievement_ids:
+            print(f"\nProcessing achievement ID: {achievement_id}")
+
             # Check if we need to delete this achievement
             if f"{achievement_id}_delete" in form:
+                print(f"Deleting achievement {achievement_id}")
                 self.delete(f"DELETE FROM achievement WHERE id = {achievement_id}")
                 continue
 
-            # Get the employer/school ID and type
-            employer_id = form.get(f"{achievement_id}_rowid")
+            # Get values from form
+            employer_dropdown = form.get(f"{achievement_id}_employer_dropdown", "")
+            position_dropdown = form.get(f"{achievement_id}_position_dropdown", "")
+
+            # Get IDs directly from hidden fields
+            employer_id = form.get(f"{achievement_id}_employer_id", "")
+            position_id = form.get(f"{achievement_id}_position_id", "")
+
+            # Parse the type prefixes from dropdown values if needed
+            if employer_dropdown and employer_dropdown not in ["EDIT", "ADD", "new"]:
+                if '_' in employer_dropdown:
+                    employer_type, employer_dropdown_id = employer_dropdown.split('_', 1)
+                    # Only update the type and ID if they're different from what's in the hidden fields
+                    if employer_type in ["employer", "school"] and employer_dropdown_id.isdigit():
+                        employer_id = employer_dropdown_id
+                        form[f"{achievement_id}_employer_type"] = employer_type
+                        form[f"{achievement_id}_employer_id"] = employer_dropdown_id
+
+            if position_dropdown and position_dropdown not in ["EDIT", "ADD", "new"]:
+                if '_' in position_dropdown:
+                    position_type, position_dropdown_id = position_dropdown.split('_', 1)
+                    # Only update the type and ID if they're different from what's in the hidden fields
+                    if position_type in ["position", "focus"] and position_dropdown_id.isdigit():
+                        position_id = position_dropdown_id
+                        form[f"{achievement_id}_position_type"] = "focus" if position_type == "focus" else "position"
+                        form[f"{achievement_id}_position_id"] = position_dropdown_id
+
+            # Read values from form - updated if dropdown values were processed above
             employer_type = form.get(f"{achievement_id}_employer_type", "employer")
-
-            # Get the position/focus ID and type
-            position_value = form.get(f"{achievement_id}_position")
+            employer_name = form.get(f"{achievement_id}_employer", "")
             position_type = form.get(f"{achievement_id}_position_type", "position")
+            position_name = form.get(f"{achievement_id}_position", "")
 
-            # Get the achievement descriptions
+            # Get achievement content
             shortdesc = form.get(f"{achievement_id}_shortdesc", "")
             longdesc = form.get(f"{achievement_id}_longdesc", "")
 
-            # Get the enabled state
-            longdesc_enabled = f"{achievement_id}_longdesc_enabled" in form
+            # Get enabled state (check various field names that might be used)
+            longdesc_enabled = (
+                    form.get(f"{achievement_id}_longdesc_enabled") == "on" or
+                    form.get(f"{achievement_id}_achievement_enabled") == "on"
+            )
 
-            # Check if this is a new achievement
-            if achievement_id.startswith("new"):
-                # Handle new achievement creation based on the types
-                if employer_type == "employer" and position_type == "position":
-                    # This is a regular employer/position achievement
-                    position_id = self.query.query_id(position_value, "position")
-                    employer_id = self.query.query_id(form.get(f"{achievement_id}_employer"), "employer")
+            # Debug info
+            print(f"Achievement: {achievement_id}")
+            print(f"Employer ID: {employer_id}, Type: {employer_type}, Name: {employer_name}")
+            print(f"Position ID: {position_id}, Type: {position_type}, Name: {position_name}")
+            print(f"Enabled: {longdesc_enabled}")
 
-                    self.insert(
-                        "INSERT INTO achievement (employer, position, shortdesc, longdesc, state) VALUES (?, ?, ?, ?, ?)",
-                        (employer_id, position_id, shortdesc, longdesc, longdesc_enabled)
+            # Initialize employer and school IDs to NULL
+            final_employer_id = "NULL"
+            final_school_id = "NULL"
+
+            # Process based on employer type
+            if employer_type == "school":
+                # This is a school, so set school_id and leave employer_id as NULL
+                if employer_id and employer_id not in ["EDIT", "ADD", "new"]:
+                    try:
+                        # Verify the school ID exists
+                        result = self.cursor.execute(
+                            "SELECT id FROM school WHERE id = ?",
+                            (employer_id,)
+                        ).fetchone()
+
+                        if result:
+                            final_school_id = employer_id
+                            print(f"Using school ID: {final_school_id}")
+                    except Exception as e:
+                        print(f"Error verifying school ID: {e}")
+
+                # If ID lookup failed, try by name
+                if final_school_id == "NULL":
+                    try:
+                        # Clean the name (replace + with spaces)
+                        clean_name = employer_name.replace("+", " ").strip()
+                        if "(College)" in clean_name:
+                            clean_name = clean_name.replace(" (College)", "")
+
+                        # Look up school by name
+                        result = self.cursor.execute(
+                            "SELECT id FROM school WHERE name = ?",
+                            (clean_name,)
+                        ).fetchone()
+
+                        if result:
+                            final_school_id = result[0]
+                            print(f"Found school by name '{clean_name}', ID: {final_school_id}")
+                    except Exception as e:
+                        print(f"Error looking up school by name: {e}")
+            else:  # employer_type is "employer"
+                # This is an employer, so set employer_id and leave school_id as NULL
+                if employer_id and employer_id not in ["EDIT", "ADD", "new"]:
+                    try:
+                        # Verify the employer ID exists
+                        result = self.cursor.execute(
+                            "SELECT id FROM employer WHERE id = ?",
+                            (employer_id,)
+                        ).fetchone()
+
+                        if result:
+                            final_employer_id = employer_id
+                            print(f"Using employer ID: {final_employer_id}")
+                    except Exception as e:
+                        print(f"Error verifying employer ID: {e}")
+
+                # If ID lookup failed, try by name
+                if final_employer_id == "NULL":
+                    try:
+                        # Clean the name (replace + with spaces)
+                        clean_name = employer_name.replace("+", " ").strip()
+
+                        # Look up employer by name
+                        result = self.cursor.execute(
+                            "SELECT id FROM employer WHERE employer = ?",
+                            (clean_name,)
+                        ).fetchone()
+
+                        if result:
+                            final_employer_id = result[0]
+                            print(f"Found employer by name '{clean_name}', ID: {final_employer_id}")
+                    except Exception as e:
+                        print(f"Error looking up employer by name: {e}")
+
+            # Validate position ID
+            final_position_id = None
+
+            if position_id and position_id not in ["EDIT", "ADD", "new"]:
+                try:
+                    if position_type == "focus":
+                        # Verify focus ID
+                        result = self.cursor.execute(
+                            "SELECT id FROM focus WHERE id = ?",
+                            (position_id,)
+                        ).fetchone()
+
+                        if result:
+                            final_position_id = position_id
+                            print(f"Using focus ID: {final_position_id}")
+                    else:  # position type
+                        # Verify position ID
+                        result = self.cursor.execute(
+                            "SELECT id FROM position WHERE id = ?",
+                            (position_id,)
+                        ).fetchone()
+
+                        if result:
+                            final_position_id = position_id
+                            print(f"Using position ID: {final_position_id}")
+                except Exception as e:
+                    print(f"Error verifying position ID: {e}")
+
+            # If ID lookup failed, try by name
+            if not final_position_id:
+                try:
+                    # Clean the name
+                    clean_name = position_name.replace("+", " ").strip()
+                    if "(Focus)" in clean_name:
+                        clean_name = clean_name.replace(" (Focus)", "")
+
+                    if position_type == "focus":
+                        # Look up focus by name
+                        result = self.cursor.execute(
+                            "SELECT id FROM focus WHERE name = ?",
+                            (clean_name,)
+                        ).fetchone()
+                        if result:
+                            final_position_id = result[0]
+                            print(f"Found focus by name '{clean_name}', ID: {final_position_id}")
+                    else:
+                        # Look up position by name
+                        result = self.cursor.execute(
+                            "SELECT id FROM position WHERE position = ?",
+                            (clean_name,)
+                        ).fetchone()
+                        if result:
+                            final_position_id = result[0]
+                            print(f"Found position by name '{clean_name}', ID: {final_position_id}")
+                except Exception as e:
+                    print(f"Error looking up position by name: {e}")
+
+            # Still no position ID? This is a problem
+            if not final_position_id:
+                print(f"WARNING: Could not determine valid position ID for '{position_name}'")
+                final_position_id = "NULL"
+
+            # Final verification
+            print(
+                f"FINAL: Employer ID: {final_employer_id}, School ID: {final_school_id}, Position ID: {final_position_id}")
+
+            # Update or insert the achievement
+            try:
+                if achievement_id.startswith("new"):
+                    # Create new achievement using the new schema with school and employer
+                    self.cursor.execute(
+                        """
+                        INSERT INTO achievement
+                            (employer, school, position, shortdesc, longdesc, state)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            None if final_employer_id == "NULL" else final_employer_id,
+                            None if final_school_id == "NULL" else final_school_id,
+                            None if final_position_id == "NULL" else final_position_id,
+                            shortdesc,
+                            longdesc,
+                            int(longdesc_enabled)
+                        )
                     )
-                elif employer_type == "school" and position_type == "focus":
-                    # This is a school/focus achievement
-                    school_id = self.query.query_id(form.get(f"{achievement_id}_employer").replace(" (College)", ""),
-                                                    "school")
-                    focus_id = self.query.query_id(position_value.replace(" (Focus)", ""), "focus")
-
-                    # For school achievements, we use the school ID as employer and focus ID as position
-                    self.insert(
-                        "INSERT INTO achievement (employer, position, shortdesc, longdesc, state) VALUES (?, ?, ?, ?, ?)",
-                        (school_id, focus_id, shortdesc, longdesc, longdesc_enabled)
+                    self.conn.commit()
+                    print(
+                        f"Inserted new achievement with employer={final_employer_id}, school={final_school_id}, position={final_position_id}")
+                else:
+                    # Update existing achievement with the new schema
+                    self.cursor.execute(
+                        """
+                        UPDATE achievement
+                        SET employer  = ?,
+                            school    = ?,
+                            position  = ?,
+                            shortdesc = ?,
+                            longdesc  = ?,
+                            state     = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            None if final_employer_id == "NULL" else final_employer_id,
+                            None if final_school_id == "NULL" else final_school_id,
+                            None if final_position_id == "NULL" else final_position_id,
+                            shortdesc,
+                            longdesc,
+                            int(longdesc_enabled),
+                            achievement_id
+                        )
                     )
-            else:
-                # Update existing achievement
-                self.update(
-                    "UPDATE achievement SET shortdesc = ?, longdesc = ?, state = ? WHERE id = ?",
-                    (shortdesc, longdesc, longdesc_enabled, achievement_id)
-                )
+                    self.conn.commit()
+                    print(
+                        f"Updated achievement {achievement_id} with employer={final_employer_id}, school={final_school_id}, position={final_position_id}")
+            except Exception as e:
+                print(f"Error updating achievement: {e}")
+                print(traceback.format_exc())
 
     def update_target_table(self, item: dict[str, str | bool], table: str):
         """

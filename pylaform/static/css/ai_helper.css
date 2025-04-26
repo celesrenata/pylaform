@@ -1,17 +1,18 @@
-/* pylaform/static/css/ai_helper.css */
+/* Full-width AI helper styles */
 .ai-helper-footer {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    background-color: #f8f9fa;
-    border-top: 1px solid #dee2e6;
-    padding: 0.5rem;
+    width: 100%;
+    background-color: #212529;
+    color: white;
     z-index: 1000;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    border-top: 1px solid #343a40;
     transition: height 0.3s ease;
     height: 50px;
     overflow: hidden;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
 }
 
 .ai-helper-footer.expanded {
@@ -20,74 +21,213 @@
 }
 
 .ai-helper-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     cursor: pointer;
-    padding: 0.5rem;
+    padding: 10px 15px;
+    border-bottom: 1px solid #343a40;
 }
 
-.ai-helper-toggle:hover {
-    background-color: #e9ecef;
+.ai-icon {
+    color: #0d6efd;
+    margin-right: 8px;
 }
 
-.ai-helper-toggle .arrow {
-    transition: transform 0.3s ease;
+.status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-left: 8px;
 }
 
-.ai-helper-footer.expanded .ai-helper-toggle .arrow {
-    transform: rotate(180deg);
+.status-online {
+    background-color: #28a745;
+}
+
+.status-error {
+    background-color: #dc3545;
+}
+
+.status-disabled {
+    background-color: #6c757d;
 }
 
 .ai-helper-content {
-    padding: 1rem;
-    display: none;
-}
-
-.ai-helper-footer.expanded .ai-helper-content {
-    display: block;
+    padding: 15px;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
 .ai-helper-options {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    gap: 10px;
+    margin-bottom: 15px;
 }
 
 .ai-helper-option {
-    padding: 0.5rem 1rem;
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
+    background-color: #343a40;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s;
+    font-size: 14px;
 }
 
-.ai-helper-option:hover,
+.ai-helper-option:hover {
+    background-color: #0d6efd;
+}
+
 .ai-helper-option.active {
-    background-color: #007bff;
-    color: white;
+    background-color: #0d6efd;
 }
 
 .ai-helper-input {
-    margin-bottom: 1rem;
-}
-
-.ai-helper-result {
-    padding: 1rem;
-    background-color: #e9ecef;
-    border-radius: 0.25rem;
-    margin-top: 1rem;
-    white-space: pre-line;
+    margin-bottom: 15px;
 }
 
 .ai-helper-loading {
     display: none;
     text-align: center;
-    padding: 1rem;
+    margin: 20px 0;
+    color: #6c757d;
 }
 
-.ai-icon {
-    color: #007bff;
-    margin-right: 0.5rem;
+.ai-helper-result {
+    background-color: #343a40;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.ai-helper-result:hover {
+    background-color: #495057;
+}
+
+.ai-disabled-message {
+    color: #ffc107;
+}
+
+/* Arrow animation */
+.arrow {
+    width: 20px;
+    text-align: center;
+    transition: transform 0.3s;
+}
+
+.ai-helper-footer.expanded .arrow i {
+    transform: rotate(180deg);
+}
+
+/* Button styles */
+#ai-settings-btn {
+    padding: 4px 6px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+#ai-submit {
+    width: 100%;
+}
+
+/* Copyright styles */
+.copyright-text {
+    font-size: 12px;
+    color: #adb5bd;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
+/* Add bottom padding to content to prevent footer overlap */
+body {
+    padding-bottom: 60px;
+}
+
+/* Media queries for responsive design */
+@media (max-width: 768px) {
+    .ai-helper-content {
+        padding: 10px;
+    }
+
+    .ai-helper-option {
+        font-size: 12px;
+        padding: 6px 8px;
+    }
+}
+
+@media (max-width: 576px) {
+    .copyright-text {
+        display: none;
+    }
+
+    .ai-helper-footer.expanded {
+        height: 500px;
+    }
+}
+
+/* Modal styles for better bootstrap integration */
+#ollamaSettingsModal .modal-content {
+    background-color: #343a40;
+    color: white;
+}
+
+#ollamaSettingsModal .modal-header {
+    border-bottom-color: #495057;
+}
+
+#ollamaSettingsModal .modal-footer {
+    border-top-color: #495057;
+}
+
+#ollamaSettingsModal .form-control,
+#ollamaSettingsModal .input-group-text {
+    background-color: #495057;
+    color: white;
+    border-color: #6c757d;
+}
+
+#ollamaSettingsModal .form-control::placeholder {
+    color: #adb5bd;
+}
+
+#ollamaSettingsModal .form-text {
+    color: #adb5bd;
+}
+
+/* Icons in general */
+.bi {
+    display: inline-block;
+    vertical-align: -0.125em;
+}
+
+/* Download button - ensure cloud icon is visible */
+#download-model-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+#download-model-btn i {
+    font-size: 16px;
+}
+
+/* Fix for missing or incorrectly rendered icons */
+.bi-cpu,
+.bi-gear-fill,
+.bi-chevron-up,
+.bi-cloud-download,
+.bi-search,
+.bi-exclamation-triangle,
+.bi-check-circle,
+.bi-x-circle,
+.bi-hourglass-split {
+    font-weight: normal;
+    line-height: 1;
+}
+
+/* Fix HTML layout */
+.ai-helper-footer > .ai-helper-content {
+    margin-top: 0;
 }

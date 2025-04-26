@@ -652,55 +652,102 @@ class Queries:
     def get_achievements(self) -> list[dict[str, str | int | bool]]:
         """
         Return achievements NESTED list objects from database by achievement.
+        Updated to handle the new schema with separate employer and school columns.
         :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
 
         if len(self.result_achievements) == 0:
+            # Modified query to handle both employer and school relationships
             result: Cursor = self.query(
                 """
-                SELECT e.id    as employer_id,
-                       e.employer,
-                       e.state as employer_state,
-                       p.id    as position_id,
-                       p.position,
-                       p.state as position_state,
-                       a.id    as achievement_id,
+                SELECT e.id       AS employer_id,
+                       e.employer AS employer_name,
+                       e.state    AS employer_state,
+                       s.id       AS school_id,
+                       s.name     AS school_name,
+                       s.state    AS school_state,
+                       p.id       AS position_id,
+                       p.position AS position_name,
+                       p.state    AS position_state,
+                       a.id       AS achievement_id,
                        a.shortdesc,
                        a.longdesc,
-                       a.state as achievement_state
+                       a.state    AS achievement_state
                 FROM `achievement` a
                          LEFT JOIN `position` p ON a.position = p.id
-                         LEFT JOIN `employer` e ON a.employer = e.id;
+                         LEFT JOIN `employer` e ON a.employer = e.id
+                         LEFT JOIN `school` s ON a.school = s.id;
                 """)
 
             # Create raw NESTED list based on 'id/attr/value/state.'
-            for (employer_id, employername, employer_state,
-                 position_id, positionname, position_state,
+            for (employer_id, employer_name, employer_state,
+                 school_id, school_name, school_state,
+                 position_id, position_name, position_state,
                  achievement_id, shortdesc, longdesc, achievement_state) in result:
+
+                # Determine which type of organization we're dealing with
+                org_id = school_id if school_id is not None else employer_id
+                org_name = school_name if school_id is not None else employer_name
+                org_state = school_state if school_id is not None else employer_state
+                org_type = "school" if school_id is not None else "employer"
+
+                # Add display suffix for schools to differentiate in the UI
+                if org_type == "school":
+                    org_name = f"{org_name} (College)"
+
+                # Determine position type
+                pos_type = "focus" if school_id is not None else "position"
+
+                # If using a focus with a school, add (Focus) to the name
+                pos_display_name = position_name
+                if pos_type == "focus":
+                    pos_display_name = f"{position_name} (Focus)"
+
+                # Employer data
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "employer",
-                    "value": str(employer_id),
-                    "state": employer_state,
+                    "value": str(org_id) if org_id is not None else "",
+                    "state": org_state,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "employername",
-                    "value": employername,
-                    "state": employer_state,
+                    "value": org_name if org_name is not None else "",
+                    "state": org_state,
                 })
+
+                # Add employer type field
+                self.result_achievements.append({
+                    "id": str(achievement_id),
+                    "attr": "employertype",
+                    "value": org_type,
+                    "state": org_state,
+                })
+
+                # Position data
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "position",
-                    "value": str(position_id),
+                    "value": str(position_id) if position_id is not None else "",
                     "state": position_state,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "positionname",
-                    "value": positionname,
+                    "value": pos_display_name if pos_display_name is not None else "",
                     "state": position_state,
                 })
+
+                # Add position type field
+                self.result_achievements.append({
+                    "id": str(achievement_id),
+                    "attr": "positiontype",
+                    "value": pos_type,
+                    "state": position_state,
+                })
+
+                # Achievement data
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "achievement",
@@ -719,11 +766,13 @@ class Queries:
                     "value": longdesc,
                     "state": achievement_state,
                 })
+
+                # State information
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "employerstate",
-                    "value": employer_state,
-                    "state": employer_state,
+                    "value": org_state,
+                    "state": org_state,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),

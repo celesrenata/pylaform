@@ -79,3 +79,35 @@ class Generator:
         
         self.doc.generate_pdf("data/one-page", clean_tex=True)
         self.doc.generate_tex("data/one-page")
+
+    def add_achievements(self):
+        """Add achievements section"""
+        if not self.achievements:
+            return
+
+        with self.doc.create(Section('Achievements')):
+            for achievement in self.achievements:
+                # Get the organization name (either school or employer)
+                org_name = achievement.get('school_name') if achievement.get('school_id') else achievement.get(
+                    'employer_name')
+
+                # Get the role name (either focus or position)
+                role_name = achievement.get('position_name')
+
+                # Create the achievement entry
+                if org_name and role_name:
+                    self.doc.append(Bold(f"{org_name}, {role_name}: "))
+                elif org_name:
+                    self.doc.append(Bold(f"{org_name}: "))
+                elif role_name:
+                    self.doc.append(Bold(f"{role_name}: "))
+
+                self.doc.append(f"{achievement.get('shortdesc')}")
+
+                # Add long description if available and enabled
+                if achievement.get('longdesc') and achievement.get('state'):
+                    self.doc.append(LineBreak())
+                    self.doc.append(Italic(f"{achievement.get('longdesc')}"))
+
+                self.doc.append(LineBreak())
+                self.doc.append(LineBreak())

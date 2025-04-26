@@ -1,146 +1,537 @@
 {% extends "base.html" %}
-{% from "achievements_iter.html" import form_group with context %}
+
 {% block content %}
-    <div class="lead d-flex align-items-bottom justify-content-center">
-        <h3>Achievements</h3>
-        <form method="post">
-            <!-- Iterate payload -->
-        {% for i in payload %}
-            {{ form_group(i["employer"], i["employername"], i["employerstate"], i["position"], i["positionname"], i["positionstate"], i["achievement"], i["shortdesc"], i["longdesc"], i["achievementstate"]) }}
-        {% endfor %}
-        <div id="newinput"></div>
-        <button id="rowAdder" type="button" class="btn btn-dark">
-                        <span class="bi bi-plus-square-dotted">
-                        </span> ADD
-                    </button>
-        <button type="submit" class="btn btn-success">
-                        <span class="bi bi-plus-square-dotted">
-                        </span> SUBMIT
-                    </button>
-        </form>
+{% from "achievements_iter.html" import form_group with context %}
+
+<div class="container">
+    <h1>Achievements</h1>
+    <form action="/achievements" method="post">
+        <div class="row mb-3">
+            <div class="col">
+                <a href="/generate/one-page" class="btn btn-primary">Generate One Page</a>
+                <a href="/generate/hybrid" class="btn btn-primary">Generate Hybrid</a>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+
+        <div id="achievements-container">
+            {% for item in payload %}
+                {{ form_group(
+                    item.get("employer", ""),
+                    item.get("employername", ""),
+                    item.get("employerstate", false),
+                    item.get("position", ""),
+                    item.get("positionname", ""),
+                    item.get("positionstate", false),
+                    item.get("id", ""),
+                    item.get("shortdesc", ""),
+                    item.get("longdesc", ""),
+                    item.get("state", false),
+                    item.get("employertype", "employer"),
+                    ddpayload
+                ) }}
+            {% endfor %}
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <button id="newRowButton" type="button" class="btn btn-secondary mb-3">Add New Achievement</button>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Organization Modal -->
+<div id="employerModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add/Edit Organization</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label for="orgType">Organization Type:</label>
+                    <select class="form-control" id="orgType">
+                        <option value="employer">Employer</option>
+                        <option value="school">School/College</option>
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="employerName">Name:</label>
+                    <input type="text" class="form-control" id="employerName">
+                </div>
+                <div class="form-group mb-3" id="employerFieldsContainer">
+                    <!-- Additional employer fields go here -->
+                </div>
+                <div class="form-group mb-3" id="schoolFieldsContainer" style="display: none;">
+                    <!-- Additional school fields go here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveEmployerBtn">Save</button>
+            </div>
+        </div>
     </div>
+</div>
+
+<!-- Position Modal -->
+<div id="positionModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add/Edit Role</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label for="roleType">Role Type:</label>
+                    <select class="form-control" id="roleType">
+                        <option value="position">Position</option>
+                        <option value="focus">Study Focus</option>
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="positionName">Title:</label>
+                    <input type="text" class="form-control" id="positionName">
+                </div>
+                <div class="form-group mb-3" id="positionEmployerContainer">
+                    <label for="positionEmployer">Employer:</label>
+                    <select class="form-control" id="positionEmployer">
+                        <optgroup label="Employers">
+                            {% for item in ddpayload.get("employers", []) %}
+                            <option value="{{ item.id }}">{{ item.name }}</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="form-group mb-3" id="focusSchoolContainer" style="display: none;">
+                    <label for="focusSchool">School:</label>
+                    <select class="form-control" id="focusSchool">
+                        <optgroup label="Schools">
+                            {% for item in ddpayload.get("schools", []) %}
+                            <option value="{{ item.id }}">{{ item.name }}</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="savePositionBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
+
 {% block scripts %}
-    <script type="text/javascript">
-        // Create a map of employer IDs to position IDs for client-side filtering
-        const employerPositionsMap = {{ ddpayload.get("employer_positions", {})|tojson|safe }};
+<script>
+// Store employer/position mapping for filtering
+const employerPositionsMap = {
+    {% for employer in ddpayload.get("employers", []) %}
+    "employer_{{ employer.id }}": [
+        {% for position in ddpayload.get("positions", []) %}
+            {% if position.employer|string == employer.id|string %}
+                {"id": "{{ position.id }}", "name": "{{ position.name }}"},
+            {% endif %}
+        {% endfor %}
+    ],
+    {% endfor %}
+    {% for school in ddpayload.get("schools", []) %}
+    "school_{{ school.id }}": [
+        {% for focus in ddpayload.get("focuses", []) %}
+            {% if focus.school_id|string == school.id|string %}
+                {"id": "{{ focus.id }}", "name": "{{ focus.name }}"},
+            {% endif %}
+        {% endfor %}
+    ],
+    {% endfor %}
+};
 
-        // Track the number of added rows
-        clicks = 0;
+$(document).ready(function() {
+    console.log("Employer-positions map:", employerPositionsMap);
 
-        // Add a new row when the ADD button is clicked
-        $("#rowAdder").click(function () {
-            clicks += 1;
-            $("#newinput").append("<hr>");
-            newRowAdd = `{{ form_group("new", "", true, "", "", true, "", "", "", true) }}`;
-            $("#newinput").append(newRowAdd);
+    // Debug logging for what data we're working with on initial load
+    console.log("Achievement rows on page load:");
+    $(".employer-dropdown").each(function() {
+        const rowId = this.id.split('_')[0];
+        const employerId = $(`#${rowId}_employer_id`).val();
+        const orgType = $(`#${rowId}_employer_type`).val();
 
-            // Initialize dropdowns for the new row
-            const newRowEmployerDropdown = $("#newinput").find("[id$='_employer_dropdown']").last();
-            if (newRowEmployerDropdown.length) {
-                newRowEmployerDropdown.trigger("change");
-            }
-        });
+        console.log(`Row ${rowId}: Initializing with employer ID=${employerId}, Type=${orgType}`);
+    });
 
-        // Handle employer dropdown changes to filter position options
-        $("body").on("change", "[id$='_employer_dropdown']", function() {
-            const employerId = $(this).val();
-            const rowId = this.id.split('_')[0];
-            const positionDropdown = $(`#${rowId}_position_dropdown`);
+    // Handle change events on employer dropdowns
+    $(".employer-dropdown").change(function() {
+        const rowId = this.id.split('_')[0];
+        const selectedValue = $(this).val();
 
-            // Get the organization type (employer or school)
-            const orgType = $(this).find("option:selected").data("org-type") || "employer";
+        console.log(`Employer dropdown changed in row ${rowId} to value: ${selectedValue}`);
 
-            // Store the selected employer in the hidden field
-            $(`#${rowId}_employer`).val($(this).find("option:selected").text().replace(" (College)", ""));
+        // Handle special values
+        if (selectedValue === "EDIT" || selectedValue === "ADD") {
+            // These are handled by the modal dialogs
+            return;
+        }
+
+        // Parse the type and ID from the value (format: type_id)
+        let orgType, orgId;
+
+        if (selectedValue.includes('_')) {
+            const parts = selectedValue.split('_');
+            orgType = parts[0];  // "employer" or "school"
+            orgId = parts[1];    // The numeric ID
+
+            console.log(`Parsed organization: Type=${orgType}, ID=${orgId}`);
+
+            // Update the hidden fields
+            $(`#${rowId}_employer_id`).val(orgId);
             $(`#${rowId}_employer_type`).val(orgType);
 
-            // For debugging
-            console.log(`Selected employer ID: ${employerId}, type: ${orgType}`);
-            console.log(`Valid role IDs: ${JSON.stringify(employerPositionsMap[employerId] || [])}`);
+            // Also update the employer name from the selected option text
+            const orgName = $(this).find("option:selected").text().trim();
+            $(`#${rowId}_employer`).val(orgName);
 
-            // Filter positions based on the employer-position mapping
-            positionDropdown.find("option").each(function() {
-                const roleId = parseInt($(this).val());
-                const roleType = $(this).data("role-type") || "position";
-                const roleEmployerId = $(this).data("employer-id");
+            console.log(`Updated hidden fields: ID=${orgId}, Type=${orgType}, Name=${orgName}`);
 
-                // For debugging
-                console.log(`Option: ${$(this).text()}, ID: ${roleId}, type: ${roleType}, employerId: ${roleEmployerId}`);
+            // Update the position dropdown options based on the selected employer
+            updatePositionOptions(rowId, `${orgType}_${orgId}`);
+        }
+    });
 
-                // Show roles that match the org type and belong to the selected employer
-                const matchingTypes = (orgType === "employer" && roleType === "position") ||
-                                     (orgType === "school" && roleType === "focus");
-                const belongsToEmployer = employerPositionsMap[employerId] &&
-                                         employerPositionsMap[employerId].includes(roleId);
+    // Handle change events on position/focus dropdowns
+    $(".position-dropdown").change(function() {
+        const rowId = this.id.split('_')[0];
+        const selectedValue = $(this).val();
 
-                if (matchingTypes && belongsToEmployer) {
+        console.log(`Position dropdown changed in row ${rowId} to value: ${selectedValue}`);
+
+        // Handle special values
+        if (selectedValue === "EDIT" || selectedValue === "ADD") {
+            // These are handled by the modal dialogs
+            return;
+        }
+
+        // Parse the type and ID from the value (format: type_id)
+        let roleType, roleId;
+
+        if (selectedValue.includes('_')) {
+            const parts = selectedValue.split('_');
+            roleType = parts[0];  // "position" or "focus"
+            roleId = parts[1];    // The numeric ID
+
+            console.log(`Parsed role: Type=${roleType}, ID=${roleId}`);
+
+            // Update the hidden fields
+            $(`#${rowId}_position_id`).val(roleId);
+            $(`#${rowId}_position_type`).val(roleType === "focus" ? "focus" : "position");
+
+            // Also update the position name from the selected option text
+            const roleName = $(this).find("option:selected").text().trim();
+            $(`#${rowId}_position`).val(roleName);
+
+            console.log(`Updated hidden fields: ID=${roleId}, Type=${roleType}, Name=${roleName}`);
+        }
+    });
+
+    // Function to update position options based on selected employer
+    function updatePositionOptions(rowId, employerKey) {
+        const positionDropdown = $(`#${rowId}_position_dropdown`);
+        const orgType = employerKey.split('_')[0]; // "employer" or "school"
+
+        // Hide all position options first
+        positionDropdown.find('option[data-role-type]').hide();
+
+        // Show positions for this employer
+        if (orgType === "employer") {
+            // Show positions (hide focuses)
+            positionDropdown.find('option[data-role-type="position"]').each(function() {
+                const employerId = $(this).data('employer-id');
+                if (employerId === employerKey) {
                     $(this).show();
-                } else {
-                    $(this).hide();
                 }
             });
-
-            // If current selection is not valid for this employer, reset it
-            const currentRoleId = parseInt(positionDropdown.val());
-            const validRoleIds = employerPositionsMap[employerId] || [];
-            const currentRoleType = positionDropdown.find(`option[value='${positionDropdown.val()}']`).data("role-type");
-
-            if (currentRoleId &&
-                (!validRoleIds.includes(currentRoleId) ||
-                 (orgType === "employer" && currentRoleType !== "position") ||
-                 (orgType === "school" && currentRoleType !== "focus"))) {
-
-                // Find the first visible option and select it
-                const firstVisibleOption = positionDropdown.find("option:visible:first");
-                if (firstVisibleOption.length) {
-                    positionDropdown.val(firstVisibleOption.val());
-                } else {
-                    positionDropdown.val("");
+        } else if (orgType === "school") {
+            // Show focuses (hide positions)
+            positionDropdown.find('option[data-role-type="focus"]').each(function() {
+                const schoolId = $(this).data('school-id');
+                if (schoolId === employerKey) {
+                    $(this).show();
                 }
-                // Trigger change to update hidden fields
-                positionDropdown.trigger("change");
+            });
+        }
+
+        // Always show the special options
+        positionDropdown.find('option[value="EDIT"], option[value="ADD"]').show();
+
+        // Reset selection if current selection is now hidden
+        if (positionDropdown.find('option:selected').is(':hidden')) {
+            positionDropdown.val('');
+        }
+    }
+
+    // Enhanced dropdown initialization function for orgs (schools/employers)
+    function initializeOrgDropdown(dropdown) {
+        const rowId = dropdown.id.split('_')[0];
+        const employerId = $(`#${rowId}_employer_id`).val();
+        const orgType = $(`#${rowId}_employer_type`).val() || "employer";
+
+        if (employerId && employerId !== "new" && employerId !== "edit" && employerId !== "EDIT") {
+            // Create the prefixed value to look for
+            const prefixedValue = `${orgType}_${employerId}`;
+
+            console.log(`Looking for organization with prefixed value: ${prefixedValue}`);
+
+            // Find the option with this value
+            const matchingOption = $(dropdown).find(`option[value="${prefixedValue}"]`);
+
+            if (matchingOption.length) {
+                // Found the match - use it
+                $(dropdown).val(prefixedValue);
+                console.log(`Row ${rowId}: Found match for organization: ${matchingOption.text()}`);
+
+                // Also update position options
+                updatePositionOptions(rowId, prefixedValue);
+            } else {
+                console.log(`Row ${rowId}: Warning - No match for prefixed value ${prefixedValue}`);
+                $(dropdown).val('');
+            }
+        }
+    }
+
+    // Enhanced dropdown initialization function for roles (positions/focuses)
+    function initializeRoleDropdown(dropdown) {
+        const rowId = dropdown.id.split('_')[0];
+        const positionId = $(`#${rowId}_position_id`).val();
+        const orgType = $(`#${rowId}_employer_type`).val() || "employer";
+        const posType = $(`#${rowId}_position_type`).val() || (orgType === "school" ? "focus" : "position");
+
+        if (positionId && positionId !== "new" && positionId !== "edit" && positionId !== "EDIT") {
+            // Create the prefixed value to look for
+            const prefixedValue = `${posType}_${positionId}`;
+
+            console.log(`Looking for role with prefixed value: ${prefixedValue}`);
+
+            // Find the option with this value
+            const matchingOption = $(dropdown).find(`option[value="${prefixedValue}"]`);
+
+            if (matchingOption.length) {
+                // Found the match - use it
+                $(dropdown).val(prefixedValue);
+                console.log(`Row ${rowId}: Found match for role: ${matchingOption.text()}`);
+            } else {
+                console.log(`Row ${rowId}: Warning - No match for prefixed value ${prefixedValue}`);
+                $(dropdown).val('');
+            }
+        }
+    }
+
+    // Initialize all employer dropdowns first
+    $(".employer-dropdown").each(function() {
+        initializeOrgDropdown(this);
+    });
+
+    // Then initialize all position dropdowns
+    $(".position-dropdown").each(function() {
+        initializeRoleDropdown(this);
+    });
+
+    // Add new achievement row
+    $("#newRowButton").click(function() {
+        const newId = "new" + Date.now();
+        // Create a new row with a form structure that matches our form_group macro
+        const newRow = `
+            <div id="${newId}_row">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="${newId}_employer_dropdown">Organization:</label>
+                            <select class="form-control employer-dropdown" id="${newId}_employer_dropdown" name="${newId}_employer_dropdown">
+                                <!-- Group for schools/colleges -->
+                                <optgroup label="Schools/Colleges">
+                                    {% for item in ddpayload.get("schools", []) %}
+                                    <option value="school_{{ item.id }}" data-org-type="school">
+                                        {{ item.name }} (College)
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+
+                                <!-- Group for employers -->
+                                <optgroup label="Employers">
+                                    {% for item in ddpayload.get("employers", []) %}
+                                    <option value="employer_{{ item.id }}" data-org-type="employer">
+                                        {{ item.name }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+
+                                <!-- Special options -->
+                                <option value="EDIT">Edit...</option>
+                                <option value="ADD">Add New...</option>
+                            </select>
+
+                            <!-- Hidden fields for employer data -->
+                            <input type="hidden" id="${newId}_rowid" name="${newId}_rowid" value="${newId}">
+                            <input type="hidden" id="${newId}_employer_id" name="${newId}_employer_id" value="new">
+                            <input type="hidden" id="${newId}_employer" name="${newId}_employer" value="">
+                            <input type="hidden" id="${newId}_employer_type" name="${newId}_employer_type" value="employer">
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="${newId}_position_dropdown">Role:</label>
+                            <select class="form-control position-dropdown" id="${newId}_position_dropdown" name="${newId}_position_dropdown">
+                                <!-- Group for positions -->
+                                <optgroup label="Positions">
+                                    {% for item in ddpayload.get("positions", []) %}
+                                    <option value="position_{{ item.id }}"
+                                            data-role-type="position"
+                                            data-employer-id="employer_{{ item.employer }}">
+                                        {{ item.name }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+
+                                <!-- Group for focuses -->
+                                <optgroup label="Study Focus Areas">
+                                    {% for item in ddpayload.get("focuses", []) %}
+                                    <option value="focus_{{ item.id }}"
+                                            data-role-type="focus"
+                                            data-school-id="school_{{ item.school_id }}">
+                                        {{ item.name }} (Focus)
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+
+                                <!-- Special options -->
+                                <option value="EDIT">Edit...</option>
+                                <option value="ADD">Add New...</option>
+                            </select>
+
+                            <!-- Hidden fields for position data -->
+                            <input type="hidden" id="${newId}_position_id" name="${newId}_position_id" value="new">
+                            <input type="hidden" id="${newId}_position" name="${newId}_position" value="">
+                            <input type="hidden" id="${newId}_position_type" name="${newId}_position_type" value="position">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Debug info -->
+                <div class="row debug-info" style="font-size: 0.8em; color: #999; margin-bottom: 10px;">
+                    <div class="col-md-3">ID: ${newId}</div>
+                    <div class="col-md-3">Org ID: new</div>
+                    <div class="col-md-3">Type: employer</div>
+                    <div class="col-md-3">Pos ID: new</div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label for="${newId}_shortdesc">Short Description:</label>
+                            <input type="text" class="form-control" id="${newId}_shortdesc" name="${newId}_shortdesc" value="">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label for="${newId}_longdesc">
+                                <input type="checkbox" id="${newId}_longdesc_enabled" name="${newId}_longdesc_enabled">
+                                Long Description:
+                            </label>
+                            <textarea class="form-control" id="${newId}_longdesc" name="${newId}_longdesc"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12 text-right">
+                        <button id="deleteRow" type="button" class="btn btn-danger">Remove</button>
+                    </div>
+                </div>
+
+                <hr>
+            </div>
+        `;
+
+        $("#achievements-container").append(newRow);
+
+        // Initialize the new dropdowns
+        initializeOrgDropdown($(`#${newId}_employer_dropdown`)[0]);
+        initializeRoleDropdown($(`#${newId}_position_dropdown`)[0]);
+
+        // Attach event handlers to the new dropdowns
+        $(`#${newId}_employer_dropdown`).change(function() {
+            const rowId = this.id.split('_')[0];
+            const selectedValue = $(this).val();
+
+            // Handle special values
+            if (selectedValue === "EDIT" || selectedValue === "ADD") {
+                return;
+            }
+
+            if (selectedValue.includes('_')) {
+                const parts = selectedValue.split('_');
+                const orgType = parts[0];
+                const orgId = parts[1];
+
+                // Update hidden fields
+                $(`#${rowId}_employer_id`).val(orgId);
+                $(`#${rowId}_employer_type`).val(orgType);
+                $(`#${rowId}_employer`).val($(this).find("option:selected").text().trim());
+
+                // Update position options
+                updatePositionOptions(rowId, `${orgType}_${orgId}`);
             }
         });
 
-        // Handle position dropdown changes
-        $("body").on("change", "[id$='_position_dropdown']", function() {
+        $(`#${newId}_position_dropdown`).change(function() {
             const rowId = this.id.split('_')[0];
-            const selectedOption = $(this).find("option:selected");
+            const selectedValue = $(this).val();
 
-            // For debugging
-            console.log(`Selected position: ${selectedOption.text()}, role type: ${selectedOption.data("role-type")}`);
+            // Handle special values
+            if (selectedValue === "EDIT" || selectedValue === "ADD") {
+                return;
+            }
 
-            // Store the selected position in the hidden field
-            $(`#${rowId}_position`).val(selectedOption.text().replace(" (Focus)", ""));
+            if (selectedValue.includes('_')) {
+                const parts = selectedValue.split('_');
+                const roleType = parts[0];
+                const roleId = parts[1];
 
-            // Store the role type
-            $(`#${rowId}_position_type`).val(selectedOption.data("role-type") || "position");
+                // Update hidden fields
+                $(`#${rowId}_position_id`).val(roleId);
+                $(`#${rowId}_position_type`).val(roleType === "focus" ? "focus" : "position");
+                $(`#${rowId}_position`).val($(this).find("option:selected").text().trim());
+            }
         });
+    });
 
-        // Handle deletions
-        $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest("div").attr("id");
-            $("#" + div_id).remove();
-            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-        });
+    // Handle delete row
+    $(document).on("click", "#deleteRow", function() {
+        const rowDiv = $(this).closest("[id$='_row']");
+        const rowId = rowDiv.attr("id").split("_")[0];
 
-        // Initialize all employer dropdowns when the page loads
-        $(document).ready(function() {
-            console.log("Employer-positions map:", employerPositionsMap);
+        // Add a hidden field to mark this row for deletion
+        $("<input>").attr({
+            type: "hidden",
+            name: `${rowId}_delete`,
+            value: "true"
+        }).appendTo("form");
 
-            // First initialize the employer-position relationships
-            $("[id$='_employer_dropdown']").each(function() {
-                $(this).trigger("change");
-            });
-
-            // Update position types immediately
-            $("[id$='_position_dropdown']").each(function() {
-                const rowId = this.id.split('_')[0];
-                const selectedOption = $(this).find("option:selected");
-                $(`#${rowId}_position_type`).val(selectedOption.data("role-type") || "position");
-            });
-        });
-    </script>
-    {% include "_scripts.html" %}
+        // Hide the row
+        rowDiv.hide();
+    });
+});
+</script>
 {% endblock %}

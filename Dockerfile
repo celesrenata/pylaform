@@ -14,11 +14,12 @@ RUN apt-get update && apt-get install -y \
 # Create necessary directories
 RUN mkdir -p data resources
 
-# Copy application code (excluding requirements.txt for now)
+# Copy application code
 COPY . .
 
 # Install dependencies directly (avoiding pylatex installation issues)
-RUN pip install --no-cache-dir flask==2.3.3 requests==2.31.0 tenacity==8.2.3 Jinja2==3.1.2 Werkzeug==2.3.7 click==8.1.7
+# Added flask-cors to the pip install command
+RUN pip install --no-cache-dir flask==2.3.3 requests==2.31.0 tenacity==8.2.3 Jinja2==3.1.2 Werkzeug==2.3.7 click==8.1.7 flask-cors==4.0.0
 
 # Fix PyLaTeX installation - patch and install from source
 RUN cd /tmp && \
@@ -31,13 +32,25 @@ RUN cd /tmp && \
     cd /app && \
     rm -rf /tmp/PyLaTeX-1.4.1 /tmp/pylatex.tar.gz
 
-# Update Ollama URL in the service file
-RUN sed -i 's/base_url="http:\/\/localhost:11434"/base_url=os.environ.get("OLLAMA_BASE_URL", "http:\/\/localhost:11434")/g' pylaform/services/ai_service.py && \
-    sed -i 's/import json/import json\nimport os/g' pylaform/services/ai_service.py && \
-    sed -i 's/self.model = "llama3.2:1b"/self.model = os.environ.get("OLLAMA_MODEL", "llama3.2:1b")/g' pylaform/services/ai_service.py
+# Use pre-created modified files to avoid shell quoting issues
+COPY ./pylaform/resources/modified_ai_service.py /tmp/
+COPY ./pylaform/resources/modified_app.py /tmp/
+COPY ./pylaform/resources/start.sh /tmp/
+
+# Now install them with simple copy commands
+RUN cp /tmp/modified_ai_service.py /app/pylaform/services/ai_service.py && \
+    cp /tmp/modified_app.py /app/app.py && \
+    cp /tmp/start.sh /app/start.sh && \
+    chmod +x /app/start.sh
 
 # Expose Flask port
 EXPOSE 5000
 
-# Default command (will be overridden by docker-compose)
-CMD ["python", "app.py"]
+# Set default environment variables
+ENV ENABLE_AI=true \
+    OLLAMA_BASE_URL=http://ollama:11434 \
+    OLLAMA_MODEL=llama3.2:1b \
+    DOWNLOAD_MODEL=true
+
+# Default command
+ENTRYPOINT ["/app/start.sh"]

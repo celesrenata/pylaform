@@ -1,89 +1,125 @@
-{% from "_dropdown.html" import drop_down with context %}
-{% macro form_group(employerid, employer, employerstate, positionid, position, positionstate, achievementid, shortdesc, longdesc, achievementstate) %}
-    <!-- Test if new template element -->
-    {% if employerid == "new" %}
-        {% set employerid = "new` + clicks + `"|safe %}
-        {% set positionid = "new` + clicks + `"|safe %}
-        {% set achievementid = "new` + clicks + `"|safe %}
-    {% endif %}
-    <div id="{{ achievementid }}" class="lead d-flex align-items-bottom justify-content-center">
-        <input type="hidden" name="{{ achievementid }}_rowid" value="{{ employerid }}">
-        <table>
-            <tr>
-                <td>
-                    <label for="{{ achievementid }}_employer_dropdown">Employer/College:</label>
-                    <br>
-                    <select class="dropdown" name="{{ achievementid }}_employer_dropdown" id="{{ achievementid }}_employer_dropdown">
-                    {% for i in ddpayload["employer"] %}
-                        <option
-                                {% if (employerid is not none and i["id"]|string == employerid|string) %}
-                                    selected
-                                {% endif %}
-                                value="{{ i["id"] }}" data-org-type="{{ i.get('type', 'employer') }}">
-                                {{ i["name"] }}
-                                {% if i.get('type') == 'school' %}(College){% endif %}
+
+{% macro form_group(employer, employername, employerstate, position, positionname, positionstate, achievement, shortdesc, longdesc, achievementstate, employertype="employer", ddpayload=None) %}
+<div id="{{ achievement }}_row">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="{{ achievement }}_employer_dropdown">Organization:</label>
+                <select class="form-control employer-dropdown" id="{{ achievement }}_employer_dropdown" name="{{ achievement }}_employer_dropdown">
+                    <!-- Group for schools/colleges -->
+                    <optgroup label="Schools/Colleges">
+                        {% for item in ddpayload.get("schools", []) %}
+                        <option value="school_{{ item.id }}"
+                                data-org-type="school"
+                                {% if employer|string == item.id|string and employertype == "school" %}selected{% endif %}>
+                                {{ item.name }} (College)
                         </option>
-                    {% endfor %}
-                    </select>
-                    <input type="hidden" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
-                           value="{{ employer if employer is defined else "" }}">
-                    <input type="hidden" name="{{ achievementid }}_employer_type" id="{{ achievementid }}_employer_type"
-                           value="">
-                </td>
-                <td>
-                    <label for="{{ achievementid }}_position_dropdown">Position/Focus:</label>
-                    <br>
-                   <select class="dropdown" name="{{ achievementid }}_position_dropdown" id="{{ achievementid }}_position_dropdown">
-                    {% for i in ddpayload["position"] %}
-                        <option
-                            {% if (positionid is not none and i["id"]|string == positionid|string) %}
-                                selected
-                            {% endif %}
-                            value="{{ i["id"] }}"
-                            data-employer-id="{{ i['employer'] }}"
-                            data-role-type="{{ i['type'] }}">
-                            {{ i["name"] }}
-                            {% if i['type'] == 'focus' %}(Focus){% endif %}
+                        {% endfor %}
+                    </optgroup>
+
+                    <!-- Group for employers -->
+                    <optgroup label="Employers">
+                        {% for item in ddpayload.get("employers", []) %}
+                        <option value="employer_{{ item.id }}"
+                                data-org-type="employer"
+                                {% if employer|string == item.id|string and employertype == "employer" %}selected{% endif %}>
+                                {{ item.name }}
                         </option>
-                    {% endfor %}
-                    </select>
-                    <input type="hidden" name="{{ achievementid }}_position" id="{{ achievementid }}_position"
-                           value="{{ position if position is defined else "" }}">
-                    <input type="hidden" name="{{ achievementid }}_position_type" id="{{ achievementid }}_position_type"
-                           value="">
-                </td>
-                <td>
-                    <label for="{{ achievementid }}_position_enabled">Position/Focus Displayed</label>
-                    <input type="checkbox" name="{{ achievementid }}_position_enabled" id="{{ achievementid }}_position_enabled"
-                           {{ "checked" if positionstate }} data-position-state="{{ positionstate }}" disabled>
-                </td>
-            </tr>
-            <tr>
-                <td class="align-items-center">
-                    <label for="{{ achievementid }}_shortdesc">Achievement Short Description</label>
-                    <br>
-                    <input type="text" name="{{ achievementid }}_shortdesc" id="{{ achievementid }}_shortdesc"
-                           value="{{ shortdesc if shortdesc is defined else "" }}">
-                </td>
-                <td>
-                    <label for="{{ achievementid }}_longdesc">Achievement Long Description</label>
-                    <br>
-                    <input type="text" name="{{ achievementid }}_longdesc" id="{{ achievementid }}_longdesc"
-                           value="{{ longdesc if longdesc is defined else "" }}">
-                    <br>
-                    <label for="{{ achievementid }}_longdesc_enabled">Displayed</label>
-                    <input type="checkbox" name="{{ achievementid }}_longdesc_enabled"
-                            {{ "checked" if achievementstate }}>
-                </td>
-                <td>
-                    <button class="btn btn-danger"
-                                    id="deleteRow"
-                                    type="button">
-                                <i class="bi bi-trash"></i>
-                                Delete
-                    </button>
-                </td>
-            </tr>
-        </table>
+                        {% endfor %}
+                    </optgroup>
+
+                    <!-- Special options -->
+                    <option value="EDIT" {% if employer|string == "new" or employer|string == "edit" %}selected{% endif %}>Edit...</option>
+                    <option value="ADD">Add New...</option>
+                </select>
+
+                <!-- Hidden fields for employer data -->
+                <input type="hidden" id="{{ achievement }}_rowid" name="{{ achievement }}_rowid" value="{{ achievement }}">
+                <input type="hidden" id="{{ achievement }}_employer_id" name="{{ achievement }}_employer_id" value="{{ employer }}">
+                <input type="hidden" id="{{ achievement }}_employer" name="{{ achievement }}_employer" value="{{ employername }}">
+                <input type="hidden" id="{{ achievement }}_employer_type" name="{{ achievement }}_employer_type"
+                       value="{{ employertype }}">
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="{{ achievement }}_position_dropdown">Role:</label>
+                <select class="form-control position-dropdown" id="{{ achievement }}_position_dropdown" name="{{ achievement }}_position_dropdown">
+                    <!-- Group for positions -->
+                    <optgroup label="Positions">
+                        {% for item in ddpayload.get("positions", []) %}
+                        <option value="position_{{ item.id }}"
+                                data-role-type="position"
+                                data-employer-id="employer_{{ item.employer }}"
+                                {% if position|string == item.id|string and employertype == "employer" %}selected{% endif %}>
+                                {{ item.name }}
+                        </option>
+                        {% endfor %}
+                    </optgroup>
+
+                    <!-- Group for focuses -->
+                    <optgroup label="Study Focus Areas">
+                        {% for item in ddpayload.get("focuses", []) %}
+                        <option value="focus_{{ item.id }}"
+                                data-role-type="focus"
+                                data-school-id="school_{{ item.school_id }}"
+                                {% if position|string == item.id|string and employertype == "school" %}selected{% endif %}>
+                                {{ item.name }} (Focus)
+                        </option>
+                        {% endfor %}
+                    </optgroup>
+
+                    <!-- Special options -->
+                    <option value="EDIT" {% if position|string == "new" or position|string == "edit" %}selected{% endif %}>Edit...</option>
+                    <option value="ADD">Add New...</option>
+                </select>
+
+                <!-- Hidden fields for position data -->
+                <input type="hidden" id="{{ achievement }}_position_id" name="{{ achievement }}_position_id" value="{{ position }}">
+                <input type="hidden" id="{{ achievement }}_position" name="{{ achievement }}_position" value="{{ positionname }}">
+                <input type="hidden" id="{{ achievement }}_position_type" name="{{ achievement }}_position_type"
+                       value="{{ 'focus' if employertype == 'school' else 'position' }}">
+            </div>
+        </div>
     </div>
-{%- endmacro %}
+
+    <!-- Debug info -->
+    <div class="row debug-info" style="font-size: 0.8em; color: #999; margin-bottom: 10px;">
+        <div class="col-md-3">ID: {{ achievement }}</div>
+        <div class="col-md-3">Org ID: {{ employer }}</div>
+        <div class="col-md-3">Type: {{ employertype }}</div>
+        <div class="col-md-3">Pos ID: {{ position }}</div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="form-group">
+                <label for="{{ achievement }}_shortdesc">Short Description:</label>
+                <input type="text" class="form-control" id="{{ achievement }}_shortdesc" name="{{ achievement }}_shortdesc" value="{{ shortdesc }}">
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="form-group">
+                <label for="{{ achievement }}_longdesc">
+                    <input type="checkbox" id="{{ achievement }}_longdesc_enabled" name="{{ achievement }}_longdesc_enabled"
+                           {% if achievementstate %}checked{% endif %}>
+                    Long Description:
+                </label>
+                <textarea class="form-control" id="{{ achievement }}_longdesc" name="{{ achievement }}_longdesc">{{ longdesc }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-12 text-right">
+            <button id="deleteRow" type="button" class="btn btn-danger">Remove</button>
+        </div>
+    </div>
+
+    <hr>
+</div>
+{% endmacro %}
