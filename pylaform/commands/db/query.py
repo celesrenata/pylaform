@@ -463,18 +463,55 @@ class Queries:
         """
 
         if len(self.result_positions) == 0:
+            # Let's add some logging to see what's coming from the database
+            import logging
+            logger = logging.getLogger('query')
+
             result: Cursor = self.query(
                 """
-                SELECT e.id, e.employer, e.location, e.state,
-                       p.id, p.position, p.startdate, p.enddate, p.state
+                SELECT e.id,
+                       e.employer,
+                       e.location,
+                       e.state,
+                       p.id,
+                       p.position,
+                       p.startdate,
+                       p.enddate,
+                       p.state,
+                       p.selected_position
                 FROM `employer` AS e
-                LEFT JOIN `position` AS p on e.id = p.employer
+                         LEFT JOIN `position` AS p on e.id = p.employer
+                ORDER BY p.startdate DESC
+                """)
+
+            # Log the raw query results for debugging
+            raw_results = result.fetchall()
+            logger.debug(f"Raw query results: {raw_results}")
+
+            # Reset the cursor
+            result: Cursor = self.query(
+                """
+                SELECT e.id,
+                       e.employer,
+                       e.location,
+                       e.state,
+                       p.id,
+                       p.position,
+                       p.startdate,
+                       p.enddate,
+                       p.state,
+                       p.selected_position
+                FROM `employer` AS e
+                         LEFT JOIN `position` AS p on e.id = p.employer
                 ORDER BY p.startdate DESC
                 """)
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
             for (employer_id, employer, location, employer_state,
-                 position_id, positionname, start_date, end_date, position_state) in result:
+                 position_id, positionname, start_date, end_date, position_state, selected_position) in result:
+                # Log each position and its selected_position
+                logger.debug(f"Processing position {position_id} with selected_position: {selected_position}")
+
                 self.result_positions.append({
                     "id": "employer_" + str(employer_id),
                     "attr": "employername",
@@ -498,6 +535,13 @@ class Queries:
                     "id": "position_" + str(position_id),
                     "attr": "enddate",
                     "value": end_date})
+                self.result_positions.append({
+                    "id": "position_" + str(position_id),
+                    "attr": "selected_position",
+                    "value": selected_position if selected_position else position_id})
+
+            # Log the final structured results
+            logger.debug(f"Final structured results: {self.result_positions}")
 
         return self.result_positions
 

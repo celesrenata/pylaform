@@ -123,146 +123,305 @@ class Worker:
 
         logger.debug("Start update_positions - Form data received: %s", dict(form_data))
 
-        # Direct DB updates based on form data structure
-        regular_employer_ids = set()
-        regular_position_ids = set()
-        new_entries = set()
+        # Create a mapping to handle position ID mismatches
+        id_mapping = {}  # Maps position_id -> actual DB position id
+        reverse_id_mapping = {}  # Maps actual DB position id -> array of form position_ids
 
-        # Process field names to identify regular and new entries
-        for key in form_data.keys():
-            parts = key.split('_')
-            if len(parts) >= 2:
-                id_val = parts[0]
-                if id_val == 'new':
-                    new_entries.add('new')
-                elif id_val.isdigit():  # Regular ID
-                    if 'employer' in key or 'location' in key:
-                        regular_employer_ids.add(id_val)
-                    if 'position' in key or 'startdate' in key or 'enddate' in key:
-                        regular_position_ids.add(id_val)
+        # Find position IDs and their corresponding DB IDs (from rowid fields)
+        for key, value in form_data.items():
+            if key.endswith('_rowid'):
+                form_position_id = key.split('_')[0]
+                db_position_id = value
+                id_mapping[form_position_id] = db_position_id
 
-        logger.debug(f"Found regular employer IDs: {regular_employer_ids}")
-        logger.debug(f"Found regular position IDs: {regular_position_ids}")
-        logger.debug(f"Found new entries: {new_entries}")
+                if db_position_id not in reverse_id_mapping:
+                    reverse_id_mapping[db_position_id] = []
+                reverse_id_mapping[db_position_id].append(form_position_id)
 
-        # Process existing record updates first
-        for employer_id in regular_employer_ids:
-            # Update existing employer
-            employer_name = form_data.get(f"{employer_id}_employer", "")
-            employer_location = form_data.get(f"{employer_id}_location", "")
-            employer_state = 1 if form_data.get(f"{employer_id}_employer_enabled") else 0
+        logger.debug(f"ID mapping: {id_mapping}")
+        logger.debug(f"Reverse ID mapping: {reverse_id_mapping}")
 
-            logger.debug(f"Updating employer ID {employer_id}: {employer_name}, {employer_location}, {employer_state}")
+        # Extract and organize form data
+        position_rowids = {}  # Store position_id -> employer_id mappings
+        position_dropdowns = {}  # Store position_id -> selected position from dropdown
 
-            if employer_name:  # Only update if name is not empty
+        # First, extract all row_ids and position dropdown selections
+        for key, value in form_data.items():
+            if key.endswith('_rowid'):
+                position_id = key.split('_')[0]
+                position_rowids[position_id] = value
+                logger.debug(f"Position {position_id} is linked to employer {value}")
+            elif key.endswith('_position_dropdown'):
+                position_id = key.split('_')[0]
+                position_dropdowns[position_id] = value
+                logger.debug(f"Position {position_id} has position dropdown selection: {value}")
+
+        # Process updates in separate passes to avoid cross-contamination
+
+        # 1. Handle employer updates first
+        for position_id, employer_id in position_rowids.items():
+            if employer_id != 'new' and employer_id.isdigit():
+                # Update existing employer
+                employer_name = form_data.get(f"{position_id}_employer", "")
+                employer_location = form_data.get(f"{position_id}_location", "")
+
+                # If this position doesn't have employer info, check other positions with same DB ID
+                if not employer_name and position_id in id_mapping:
+                    db_id = id_mapping[position_id]
+                    for alt_position_id in reverse_id_mapping.get(db_id, []):
+                        if alt_position_id != position_id:
+                            alt_employer_name = form_data.get(f"{alt_position_id}_employer", "")
+                            if alt_employer_name:
+                                employer_name = alt_employer_name
+                                employer_location = form_data.get(f"{alt_position_id}_location", "")
+                                logger.debug(
+                                    f"Using employer data from form position {alt_position_id} for position {position_id}")
+                                break
+
+                # Check for employer_enabled across all related form fields
+                employer_state = 0
+                for pid in reverse_id_mapping.get(employer_id, []):
+                    if form_data.get(f"{pid}_employer_enabled"):
+                        employer_state = 1
+                        break
+
+                # Also check the position's own employer_enabled field
+                if form_data.get(f"{position_id}_employer_enabled"):
+                    employer_state = 1
+
+                # Only update if we have data
+                if employer_name:
+                    logger.debug(
+                        f"Updating employer ID {employer_id}: {employer_name}, {employer_location}, state={employer_state}")
+                    self.cursor.execute(
+                        "UPDATE employer SET employer = ?, location = ?, state = ? WHERE id = ?",
+                        (employer_name, employer_location, employer_state, employer_id)
+                    )
+
+        # 2. Handle new employers
+        new_employer_ids = {}  # Map position_id -> new_employer_id
+        for position_id, employer_id in position_rowids.items():
+            if employer_id == 'new':
+                # Create new employer
+                employer_name = form_data.get(f"{position_id}_employer", "")
+                employer_location = form_data.get(f"{position_id}_location", "")
+                employer_state = 1 if form_data.get(f"{position_id}_employer_enabled") else 0
+
+                if employer_name:
+                    logger.debug(f"Creating new employer: {employer_name}, {employer_location}, state={employer_state}")
+                    self.cursor.execute(
+                        "INSERT INTO employer (employer, location, state) VALUES (?, ?, ?)",
+                        (employer_name, employer_location, employer_state)
+                    )
+                    # Get the new employer ID
+                    self.cursor.execute("SELECT last_insert_rowid()")
+                    new_employer_id = self.cursor.fetchone()[0]
+                    new_employer_ids[position_id] = new_employer_id
+                    logger.debug(f"Created new employer with ID {new_employer_id}")
+
+        # 3. Handle position updates for existing positions
+        for position_id, employer_id in position_rowids.items():
+            # Skip new positions for now
+            if position_id == 'new':
+                continue
+
+            # Check if this position should be updated or if we're using a dropdown selection
+            position_dropdown = position_dropdowns.get(position_id)
+
+            # Find employer dropdown for this position
+            employer_dropdown = form_data.get(f"{position_id}_employer_dropdown")
+
+            # If not found, check if there are other form fields with same DB ID
+            if not employer_dropdown and position_id in id_mapping:
+                db_id = id_mapping[position_id]
+                for alt_position_id in reverse_id_mapping.get(db_id, []):
+                    if alt_position_id != position_id:
+                        alt_employer_dropdown = form_data.get(f"{alt_position_id}_employer_dropdown")
+                        if alt_employer_dropdown:
+                            employer_dropdown = alt_employer_dropdown
+                            logger.debug(
+                                f"Using employer dropdown from form position {alt_position_id} for position {position_id}")
+                            break
+
+            # Handle position dropdown selection - this is the key change!
+
+            # Inside the if statement where we handle position dropdown selection
+            if position_dropdown and position_dropdown not in ['EDIT',
+                                                               'ADD'] and position_dropdown.isdigit() and position_dropdown != position_id:
+                # We're selecting a different position from dropdown
+                logger.debug(f"Position {position_id} selected different position {position_dropdown} from dropdown")
+
+                # Get the selected position data
                 self.cursor.execute(
-                    "UPDATE employer SET employer = ?, location = ?, state = ? WHERE id = ?",
-                    (employer_name, employer_location, employer_state, employer_id)
+                    "SELECT position, startdate, enddate, state, employer FROM position WHERE id = ?",
+                    (position_dropdown,)
                 )
+                selected_position = self.cursor.fetchone()
 
-        for position_id in regular_position_ids:
-            # Update existing position
+                if selected_position:
+                    # Use the position data from the selected position instead of form data
+                    position_name = form_data.get(f"{position_id}_position", "") or selected_position[0]
+                    start_date = form_data.get(f"{position_id}_startdate", "") or selected_position[1]
+                    end_date = form_data.get(f"{position_id}_enddate", "") or selected_position[2]
+                    position_state = 1 if form_data.get(f"{position_id}_position_enabled") else selected_position[3]
+
+                    # For the employer, prioritize dropdown, then form value, then selected position's employer
+                    if employer_dropdown and employer_dropdown not in ['EDIT', 'ADD'] and employer_dropdown.isdigit():
+                        actual_employer_id = employer_dropdown
+                    else:
+                        actual_employer_id = employer_id
+
+                    if start_date:
+                        start_date = date_adapter(start_date)
+                    if end_date:
+                        end_date = date_adapter(end_date)
+
+                    logger.debug(f"Using position data from selected position {position_dropdown}")
+                    logger.debug(
+                        f"Updating position {position_id} with name={position_name}, dates={start_date}-{end_date}, state={position_state}, employer={actual_employer_id}")
+
+                    # Update existing position - use the actual DB ID from the mapping if available
+                    actual_position_id = id_mapping.get(position_id, position_id)
+                    if actual_position_id.isdigit() and position_name:
+                        logger.debug(
+                            f"Updating position ID {actual_position_id}: {position_name}, dates: {start_date}-{end_date}, state={position_state}, employer={actual_employer_id}")
+
+                        # Here, we need to check for existing selected_position or set to position's own ID
+                        self.cursor.execute("SELECT selected_position FROM position WHERE id = ?",
+                                            (actual_position_id,))
+                        result = self.cursor.fetchone()
+                        existing_selected_pos = result[0] if result and result[0] is not None else actual_position_id
+
+                        self.cursor.execute(
+                            "UPDATE position SET position = ?, startdate = ?, enddate = ?, state = ?, employer = ?, selected_position = ? WHERE id = ?",
+                            (position_name, start_date, end_date, position_state, actual_employer_id,
+                             existing_selected_pos, actual_position_id)
+                        )
+
+                    logger.debug(
+                        f"Updated position {actual_position_id} with data from position {position_dropdown}")
+                    continue  # Skip the normal update since we've handled this position
+
+            # Get position details - checking all form fields that might have the data
             position_name = form_data.get(f"{position_id}_position", "")
             position_state = 1 if form_data.get(f"{position_id}_position_enabled") else 0
             start_date = form_data.get(f"{position_id}_startdate", "")
             end_date = form_data.get(f"{position_id}_enddate", "")
+
+            # If data is missing and we have a DB ID mapping, check other form fields with same DB ID
+            if position_id in id_mapping:
+                db_id = id_mapping[position_id]
+                if not position_name or not start_date or not end_date:
+                    for alt_position_id in reverse_id_mapping.get(db_id, []):
+                        if alt_position_id != position_id:
+                            if not position_name:
+                                alt_name = form_data.get(f"{alt_position_id}_position", "")
+                                if alt_name:
+                                    position_name = alt_name
+                                    logger.debug(
+                                        f"Using position name from form position {alt_position_id} for position {position_id}")
+
+                            if not position_state and form_data.get(f"{alt_position_id}_position_enabled"):
+                                position_state = 1
+
+                            if not start_date:
+                                alt_start = form_data.get(f"{alt_position_id}_startdate", "")
+                                if alt_start:
+                                    start_date = alt_start
+                                    logger.debug(
+                                        f"Using start date from form position {alt_position_id} for position {position_id}")
+
+                            if not end_date:
+                                alt_end = form_data.get(f"{alt_position_id}_enddate", "")
+                                if alt_end:
+                                    end_date = alt_end
+                                    logger.debug(
+                                        f"Using end date from form position {alt_position_id} for position {position_id}")
+
+            # Determine which employer ID to use
+            actual_employer_id = employer_id
+            if employer_dropdown and employer_dropdown not in ['EDIT', 'ADD'] and employer_dropdown.isdigit():
+                actual_employer_id = employer_dropdown
+                logger.debug(f"Using employer ID {actual_employer_id} from dropdown for position {position_id}")
+            elif position_id in new_employer_ids:
+                actual_employer_id = new_employer_ids[position_id]
+                logger.debug(f"Using newly created employer ID {actual_employer_id} for position {position_id}")
 
             if start_date:
                 start_date = date_adapter(start_date)
             if end_date:
                 end_date = date_adapter(end_date)
 
-            # Use employer_dropdown if provided, otherwise keep existing relationship
-            employer_dropdown = form_data.get(f"{position_id}_employer_dropdown")
-
-            if employer_dropdown and employer_dropdown not in ["EDIT", "ADD"] and employer_dropdown.isdigit():
-                employer_id = employer_dropdown
-                logger.debug(f"Using employer ID from dropdown: {employer_id}")
-            else:
-                # Get current employer from DB
-                self.cursor.execute("SELECT employer FROM position WHERE id = ?", (position_id,))
-                result = self.cursor.fetchone()
-                employer_id = result[0] if result else None
-                logger.debug(f"Using existing employer ID: {employer_id}")
-
-            logger.debug(
-                f"Updating position ID {position_id}: {position_name}, {start_date}, {end_date}, state={position_state}, employer={employer_id}")
-
-            if position_name and employer_id:  # Only update if name and employer are not empty
+            # Update existing position - use the actual DB ID from the mapping if available
+            actual_position_id = id_mapping.get(position_id, position_id)
+            if actual_position_id.isdigit() and position_name:
+                logger.debug(
+                    f"Updating position ID {actual_position_id}: {position_name}, dates: {start_date}-{end_date}, state={position_state}, employer={actual_employer_id}")
                 self.cursor.execute(
                     "UPDATE position SET position = ?, startdate = ?, enddate = ?, state = ?, employer = ? WHERE id = ?",
-                    (position_name, start_date, end_date, position_state, employer_id, position_id)
+                    (position_name, start_date, end_date, position_state, actual_employer_id, actual_position_id)
                 )
 
-        # Process new entries
-        if 'new' in new_entries:
-            # Handle new employer
-            new_employer_name = form_data.get("new_employer", "")
-            new_employer_location = form_data.get("new_location", "")
-            new_employer_state = 1 if form_data.get("new_employer_enabled") else 0
+        # 4. Handle new positions
+        if 'new' in position_rowids:
+            # Create new position
+            position_name = form_data.get(f"new_position", "")
+            position_state = 1 if form_data.get(f"new_position_enabled") else 0
+            start_date = form_data.get(f"new_startdate", "")
+            end_date = form_data.get(f"new_enddate", "")
 
-            # Handle employer dropdown for new positions
-            new_employer_dropdown = form_data.get("new_employer_dropdown")
-            logger.debug(f"New entry employer dropdown: {new_employer_dropdown}")
+            # Determine employer for new position
+            employer_dropdown = form_data.get(f"new_employer_dropdown")
 
-            employer_id = None
+            # Use dropdown value if provided and valid
+            if employer_dropdown and employer_dropdown not in ['EDIT', 'ADD'] and employer_dropdown.isdigit():
+                new_employer_id = employer_dropdown
+                logger.debug(f"Using existing employer ID {new_employer_id} from dropdown for new position")
+            else:
+                # Otherwise use the newly created employer (if any)
+                new_employer_id = new_employer_ids.get('new')
 
-            # Check if we need to create a new employer or use an existing one from dropdown
-            if new_employer_dropdown and new_employer_dropdown not in ["EDIT",
-                                                                       "ADD"] and new_employer_dropdown.isdigit():
-                # Use existing employer from dropdown
-                employer_id = int(new_employer_dropdown)
-                logger.debug(f"Using existing employer ID from dropdown for new position: {employer_id}")
-            elif new_employer_name:
-                # Create new employer
+            if start_date:
+                start_date = date_adapter(start_date)
+            if end_date:
+                end_date = date_adapter(end_date)
+
+            # Create position if we have all required data
+            if position_name and new_employer_id:
                 logger.debug(
-                    f"Inserting new employer: {new_employer_name}, {new_employer_location}, {new_employer_state}")
+                    f"Creating new position: {position_name}, dates: {start_date}-{end_date}, state={position_state}, employer={new_employer_id}")
                 self.cursor.execute(
-                    "INSERT INTO employer (employer, location, state) VALUES (?, ?, ?)",
-                    (new_employer_name, new_employer_location, new_employer_state)
+                    "INSERT INTO position (position, startdate, enddate, state, employer) VALUES (?, ?, ?, ?, ?)",
+                    (position_name, start_date, end_date, position_state, new_employer_id)
                 )
-                # Get the newly inserted ID
-                self.cursor.execute("SELECT last_insert_rowid()")
-                employer_id = self.cursor.fetchone()[0]
-                logger.debug(f"Inserted new employer with ID: {employer_id}")
 
-            # Handle new position if employer was created or selected
-            if employer_id:
-                new_position_name = form_data.get("new_position", "")
-                new_position_state = 1 if form_data.get("new_position_enabled") else 0
-                new_start_date = form_data.get("new_startdate", "")
-                new_end_date = form_data.get("new_enddate", "")
-
-                if new_start_date:
-                    new_start_date = date_adapter(new_start_date)
-                if new_end_date:
-                    new_end_date = date_adapter(new_end_date)
-
-                if new_position_name:  # Only insert if there's a position name
-                    logger.debug(
-                        f"Inserting new position: {new_position_name}, {new_start_date}, {new_end_date}, state={new_position_state}, employer={employer_id}")
-                    self.cursor.execute(
-                        "INSERT INTO position (position, startdate, enddate, state, employer) VALUES (?, ?, ?, ?, ?)",
-                        (new_position_name, new_start_date, new_end_date, new_position_state, employer_id)
-                    )
-                    logger.debug("Inserted new position")
-
-        # Handle deletions - look for _delete in form keys
+        # 5. Handle deletions
         for key in form_data.keys():
             if "_delete" in key:
                 id_to_delete = key.split("_")[0]
+                # If it's in our mapping, get the actual DB ID
+                if id_to_delete in id_mapping:
+                    id_to_delete = id_mapping[id_to_delete]
+
                 if id_to_delete.isdigit():
                     logger.debug(f"Deleting position ID {id_to_delete}")
-                    self.cursor.execute("DELETE FROM position WHERE id = ?", (id_to_delete,))
-                    # Also check if this employer is used by other positions before deleting
+
+                    # Get employer ID before deleting the position
                     self.cursor.execute("SELECT employer FROM position WHERE id = ?", (id_to_delete,))
-                    employer_id = self.cursor.fetchone()
-                    if employer_id:
-                        self.cursor.execute("SELECT COUNT(*) FROM position WHERE employer = ?", (employer_id[0],))
-                        position_count = self.cursor.fetchone()[0]
-                        if position_count == 0:
-                            logger.debug(f"Deleting unused employer ID {employer_id[0]}")
-                            self.cursor.execute("DELETE FROM employer WHERE id = ?", (employer_id[0],))
+                    employer_id_result = self.cursor.fetchone()
+
+                    # Delete the position
+                    self.cursor.execute("DELETE FROM position WHERE id = ?", (id_to_delete,))
+
+                    # Check if we should also delete the employer
+                    if employer_id_result:
+                        employer_id = employer_id_result[0]
+                        self.cursor.execute("SELECT COUNT(*) FROM position WHERE employer = ?", (employer_id,))
+                        remaining_positions = self.cursor.fetchone()[0]
+
+                        if remaining_positions == 0:
+                            logger.debug(f"Deleting unused employer ID {employer_id}")
+                            self.cursor.execute("DELETE FROM employer WHERE id = ?", (employer_id,))
 
         self.conn.commit()
         logger.debug("Finished update_positions - committed all changes")

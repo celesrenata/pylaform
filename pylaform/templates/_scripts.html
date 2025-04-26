@@ -101,5 +101,32 @@
             $(this).trigger("change");
         });
     });
+
+// Position dropdown change handler
+document.addEventListener('DOMContentLoaded', function() {
+    // Find all position dropdowns
+    const positionDropdowns = document.querySelectorAll('[id$="_position_dropdown"]');
+    
+    // Add change event listener to each dropdown
+    positionDropdowns.forEach(dropdown => {
+        dropdown.addEventListener('change', function() {
+            const selectedId = this.value;
+            const currentRowId = this.id.split('_')[0]; // Get the current row ID
+            
+            // Only proceed if a position was selected (not EDIT or ADD)
+            if (selectedId !== 'EDIT' && selectedId !== 'ADD' && selectedId !== currentRowId) {
+                // Find the position data from the selected position
+                const selectedPosition = document.getElementById(selectedId + '_position');
+                if (selectedPosition) {
+                    // Update current position name with the selected position's name
+                    const currentPosition = document.getElementById(currentRowId + '_position');
+                    if (currentPosition) {
+                        currentPosition.value = selectedPosition.value;
+                    }
+                }
+            }
+        });
+    });
+});
 </script>
 {% endblock %}

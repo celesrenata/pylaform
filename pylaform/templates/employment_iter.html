@@ -1,5 +1,5 @@
 {% from "_dropdown.html" import drop_down with context %}
-{% macro form_group(payload, ddpayload, employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, hidden=True, employer_dropdown_value=None, position_dropdown_value=None) %}
+{% macro form_group(payload, ddpayload, employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, selected_position=None, hidden=True) %}
     {# Ensure unique IDs for new rows #}
     {% if employerid == "new" %}
         {% set employerid = "new" %}
@@ -17,7 +17,7 @@
                         ddpayload,
                         "employer",
                         primarybyname=True,
-                        selected_value=employer_dropdown_value if employer_dropdown_value is not none else employerid
+                        selected_value=employerid
                     ) }}
                     <br>
                     <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}"
@@ -41,6 +41,7 @@
                             {{ "checked" if employerstate }} data-employer-state="{{ employerstate }}">
                 </td>
                 <td class="align-items-center">
+                    {% set dropdown_selected_value = selected_position if selected_position is defined and selected_position is not none else positionid %}
                     {{ drop_down(
                         positionid,
                         payload,
@@ -49,7 +50,7 @@
                         secondary="position",
                         secondaryid=positionid,
                         secondarybyname=True,
-                        selected_value=position_dropdown_value if position_dropdown_value is not none else positionid
+                        selected_value=dropdown_selected_value
                     ) }}
                     <br>
                     <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ positionid }}_position_div">
