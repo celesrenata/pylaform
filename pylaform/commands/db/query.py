@@ -203,33 +203,68 @@ class Queries:
 
         return result
 
+    def debug_certifications(self):
+        """Debug the certifications data flow through fatten and listify"""
+
+        # Get raw certifications data
+        raw_certs = self.get_certifications()
+
+        # Print raw data
+        print("\n--- Raw Certifications Data ---")
+        for cert in raw_certs:
+            print(cert)
+
+        # Check the attrs calculated by listify
+        from ..utilities.commands import unique
+        attrs = unique([sub["attr"] for sub in raw_certs])
+        print(f"\n--- Unique Attributes: {attrs} ---")
+
+        # Check the attrs_per_id calculation
+        for cert_id in unique([sub["id"] for sub in raw_certs]):
+            attrs_per_id = len(unique([sub["attr"] if sub["id"] == cert_id else "" for sub in raw_certs]))
+            print(f"ID {cert_id}: {attrs_per_id} attributes per ID")
+
+        # Return the raw data for further processing
+        return raw_certs
+
     def get_certifications(self) -> list[dict[str, str | int | bool]]:
         """
         Return certification list from database.
-        :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
+        :return list[dict[str, str | int | bool]]: Properly formatted certification data
         """
 
+        # Clear cache if needed
         if len(self.result_certifications) == 0:
             result = self.query(
                 """
                 SELECT `id`, name, `year`, `state`
                 FROM `certification`
+                ORDER BY `id`
                 """)
 
-            # Create raw list based on id/attr/value/state
+            # Create a list to hold the transformed data
+            certifications = []
+
+            # Process each row into the format expected by fatten() function
             for certification_id, certification, year, state in result:
-                self.result_certifications.append({
+                # Create one entry for certification
+                certifications.append({
                     "id": certification_id,
                     "attr": "certification",
                     "value": certification,
-                    "state": state,
+                    "state": bool(state)
                 })
-                self.result_certifications.append({
+
+                # Create another entry for year
+                certifications.append({
                     "id": certification_id,
                     "attr": "year",
                     "value": year,
-                    "state": state,
+                    "state": bool(state)
                 })
+
+            # Store the result
+            self.result_certifications = certifications
 
         return self.result_certifications
 

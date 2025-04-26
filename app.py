@@ -46,13 +46,39 @@ def education():
     return render_template("education_index.html", ddpayload=worker.dropdowns("education"), **fatten(query.get_education()))
 
 
+# @app.route("/certifications", methods=["GET", "POST"])
+# def certifications():
+#     if request.method == 'POST':
+#         worker.certifications(request.form)
+#         query.purge_cache("certifications")
+#     return render_template("certifications_index.html", **fatten(query.get_certifications()))
 @app.route("/certifications", methods=["GET", "POST"])
 def certifications():
     if request.method == 'POST':
         worker.certifications(request.form)
         query.purge_cache("certifications")
-    return render_template("certifications_index.html", **fatten(query.get_certifications()))
 
+    # Custom handling for certifications
+    # Get raw data
+    raw_certs = query.get_certifications()
+
+    # Group certifications by ID
+    cert_groups = {}
+    for cert in raw_certs:
+        cert_id = cert["id"]
+        if cert_id not in cert_groups:
+            cert_groups[cert_id] = {"id": cert_id, "state": cert["state"]}
+
+        # Add the attribute (certification or year)
+        cert_groups[cert_id][cert["attr"]] = cert["value"]
+
+    # Convert grouped data to list for template
+    processed_certs = list(cert_groups.values())
+
+    # Create payload with correct structure
+    payload = {"payload": processed_certs, "attrs": ["certification", "year"]}
+
+    return render_template("certifications_index.html", **payload)
 
 @app.route("/skills", methods=["GET", "POST"])
 def skills():

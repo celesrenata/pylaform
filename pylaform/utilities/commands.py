@@ -124,7 +124,8 @@ def listify(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str 
                 working_result = {}
 
         # REGULAR Update result
-        if len(item_split) == 1 and len(working_result) == attrs_per_id + 2:
+        if len(item_split) == 1 and len(working_result) >= attrs_per_id + 2:
+            # All required attributes are present
             result.append(working_result)
             working_result = {}
 
