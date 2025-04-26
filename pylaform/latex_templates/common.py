@@ -115,114 +115,109 @@ class Common:
         :param Document doc: PyLatex document handler.
         :return None: None
         """
+        try:
+            # Start writing
+            with doc.create(Section("Skills", False)):
+                # Get the skills data with error handling
+                skills_data = self.resume_data.get_skills()
+                if not skills_data:
+                    # Handle empty skills gracefully
+                    doc.append("No skills data available.")
+                    return
 
-        # Remove all items designated to be hidden
-        unique_categories: list[dict[str, str, str, int, str, int, str, str]] = unique(
-            [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
-             for sub in self.resume_data.get_skills()])
-        skills: list[dict[str, str | bool]] = slim(self.resume_data.get_skills())
+                categories = slim(skills_data)
+                skills = listify(skills_data)
 
-        category_item_count = []
-        skill_item_count = []
-        for item in unique_categories:
-            category_item_count.append(item["attr"])
-        for item in skills:
-            skill_item_count.append(item["subcategory"])
-        unique_list = unique(skill_item_count)
-        counts_dict = {}
-        for item in unique_list:
-            counts_dict.update({item: Common.count_instances(skill_item_count, item)})
+                # Get unique subcategories
+                subcategory_list = unique([skill["subcategory"] for skill in skills])
+                current_subcategory = ""
 
-        # Start writing.
-        with ((doc.create(Section("Skills", False)))):
-            categories = slim(self.resume_data.get_skills())
-            current_subcategory = ""
-            sub_category = []
-            for i, category in enumerate(categories, 1):
-                if category["subcategory"] != current_subcategory and category["subcategory"] not in sub_category:
-                    current_subcategory = category["subcategory"]
-                    sub_category.append(category["subcategory"])
-                    # if i % last_run == 0:
-                    with doc.create(Subsection(category["subcategory"], False)) as skill_sub:
-                        skill_sub.append(NoEscape(r"\begin{itemize*}"))
-                        skill_counter = 1
-                        for skill in skills:
-                            if (skill["category"] == category["category"]
-                                    and skill["subcategory"] == category["subcategory"]):
-                                skill_sub.append(NoEscape(r"\item")
-                                                 + self.cmd.textbox(skill["shortdesc"], skill["longdesc"]))
-                                if skill_counter == counts_dict[category["subcategory"]]:
-                                    skill_sub.append(NoEscape(r"\end{itemize*}"))
-                                    break
-                                else:
-                                    skill_counter = skill_counter + 1
+                for subcategory in subcategory_list:
+                    relevant_skills = [skill for skill in skills if skill["subcategory"] == subcategory]
+
+                    if relevant_skills:
+                        category = relevant_skills[0]["category"]  # Get category from first skill in subcategory
+
+                        with doc.create(Subsection(subcategory, False)) as skill_sub:
+                            skill_sub.append(NoEscape(r"\begin{itemize*}"))
+
+                            for skill in relevant_skills:
+                                # Make sure shortdesc and longdesc exist before trying to use them
+                                shortdesc = skill.get("shortdesc", "")
+                                longdesc = skill.get("longdesc", "")
+
+                                if shortdesc and longdesc:
+                                    skill_sub.append(NoEscape(r"\item") +
+                                                     self.cmd.textbox(shortdesc, longdesc))
+
+                            skill_sub.append(NoEscape(r"\end{itemize*}"))
+        except Exception as e:
+            # Log the error and provide a graceful fallback
+            print(f"Error in modern_skills: {e}")
+            doc.append("Error loading skills data.")
 
     def retro_skills(self, doc: Document) -> None:
         """
-        Print detailed retro professional_experience.se
+        Print detailed retro professional_experience.
         :param Document doc: PyLatex document handler.
         :return None: None
         """
+        try:
+            doc.append(NoEscape(r"\section{\sc Experience}"))
 
-        doc.append(NoEscape(r"\section{\sc Experience}"))
+            # Get the skills data with error handling
+            skills_data = self.resume_data.get_skills()
+            if not skills_data:
+                # Handle empty skills gracefully
+                doc.append("No experience data available.")
+                return
 
-        categories = unique([sub["category"] for sub in slim(self.resume_data.get_skills())])
-        subcategories = unique([{"subcategory": sub["subcategory"], "category": sub["category"]}
-                                for sub in listify(self.resume_data.get_skills())])
-        for category in categories:
-            doc.append(bold(category))
-            doc.append(NewLine())
-            for subcategory in subcategories:
+            skills = listify(skills_data)
 
-                # Start writing.
-                if category == subcategory["category"]:
-                    doc.append(NoEscape(r"{\textit {" + subcategory["subcategory"] + r"}}"))
+            # Safely extract categories - handle potential missing keys with .get()
+            categories = []
+            subcategories = []
+
+            for skill in skills:
+                if "category" in skill and skill.get("category") not in categories:
+                    categories.append(skill.get("category"))
+
+                if "category" in skill and "subcategory" in skill:
+                    sub_entry = {
+                        "category": skill.get("category"),
+                        "subcategory": skill.get("subcategory")
+                    }
+                    if sub_entry not in subcategories:
+                        subcategories.append(sub_entry)
+
+            # Process each category
+            for category in categories:
+                doc.append(bold(category))
+                doc.append(NewLine())
+
+                # Get subcategories for this category
+                category_subcategories = [sub for sub in subcategories if sub.get("category") == category]
+
+                for subcategory in category_subcategories:
+                    doc.append(NoEscape(r"{\textit {" + subcategory.get("subcategory", "") + r"}}"))
                     doc.append(NoEscape(r"\begin{list2}"))
-                    for skill in listify(self.resume_data.get_skills()):
-                        if subcategory["subcategory"] == skill["subcategory"]:
-                            doc.append(NoEscape(
-                                r"\item " + self.cmd.glossary_inject(skill["longdesc"], "retro")))
+
+                    # Get skills for this subcategory
+                    for skill in skills:
+                        if (skill.get("category") == category and
+                                skill.get("subcategory") == subcategory.get("subcategory")):
+                            # Make sure longdesc exists before trying to use it
+                            longdesc = skill.get("longdesc", "")
+                            if longdesc:
+                                doc.append(NoEscape(
+                                    r"\item " + self.cmd.glossary_inject(longdesc, "retro")))
+
                     doc.append(NoEscape(r"\end{list2}"))
 
-    def modern_work_history(self, doc: Document) -> None:
-        """
-        Print standard detail work history.
-        :param Document doc: PyLatex document handler.
-        :return None: None
-        """
-
-        # Start writing.
-        with ((doc.create(Section("Employment", False)))):
-            companies = slim(self.resume_data.get_achievements())
-            current_subcategory = ""
-            sub_category = []
-            for employer in companies:
-                if employer["employername"] != current_subcategory and employer["employername"] not in sub_category:
-                    current_subcategory = employer["employername"]
-                    sub_category.append(employer["employername"])
-                    employer_name = self.resume_data.query_name(employer["employername"], "employer")
-                    with doc.create(Subsection(employer_name, False)):
-                        for position in unique(listify(self.resume_data.get_positions())):
-                            if employer["employername"] == position["employer"]:
-                                position_name = self.resume_data.query_name(position["positionname"], "position")
-                                with doc.create(Subsection(position_name, False)) as position_sub:
-                                    position_sub.append(self.cmd.vspace("-0.25"))
-                                    end_date = "Present" if self.cmd.format_date(
-                                        position["enddate"]) == "" else self.cmd.format_date(position["enddate"])
-                                    position_sub.append(NoEscape(
-                                        r"\hfill{\textbf{"
-                                        + f"{self.cmd.format_date(position['startdate'])} "
-                                        + r"{--} "
-                                        + end_date
-                                        + r"}}"))
-                                    position_sub.append(NewLine())
-                                    for achievement in unique(listify(self.resume_data.get_achievements())):
-                                        if position["employer"] == achievement["employer"] and (
-                                                position["positionname"] == achievement["position"]):
-                                            with doc.create(Itemize()) as itemize:
-                                                itemize.add_item(NoEscape(
-                                                    self.cmd.glossary_inject(
-                                                        achievement["shortdesc"], "modern")))
+        except Exception as e:
+            # Log the error and provide a graceful fallback
+            print(f"Error in retro_skills: {e}")
+            doc.append("Error loading experience data.")
 
     def retro_work_history(self, doc: Document) -> None:
         """
@@ -230,36 +225,137 @@ class Common:
         :param Document doc: PyLatex document handler.
         :return None: None
         """
+        try:
+            # Start writing
+            doc.append(NoEscape(r"\section{\sc Employment}"))
 
-        # Start writing.
-        doc.append(NoEscape(r"\section{\sc Employment}"))
-        companies = unique([sub["employer"] for sub in listify(self.resume_data.get_achievements())])
-        positions = listify(self.resume_data.get_positions())
-        achievements = listify(self.resume_data.get_achievements())
-        for employer in companies:
-            employer_name = self.resume_data.query_name(employer, "employer")
-            doc.append(bold(employer_name))
-            doc.append(NewLine())
-            for position in positions:
-                if employer == position["employer"]:
-                    position_name = self.resume_data.query_name(position["position"], "position")
+            # Get data
+            achievements_data = self.resume_data.get_achievements()
+            positions_data = self.resume_data.get_positions()
+
+            if not achievements_data or not positions_data:
+                # Handle empty data gracefully
+                doc.append("No employment history available.")
+                return
+
+            achievements = listify(achievements_data)
+            positions = listify(positions_data)
+
+            # Get unique employers safely - handle potential missing keys
+            employers = []
+            for ach in achievements:
+                if "employer" in ach and ach.get("employer") not in employers and ach.get("employer"):
+                    employers.append(ach.get("employer"))
+
+            for employer in employers:
+                employer_name = self.resume_data.query_name(employer, "employer")
+                doc.append(bold(employer_name))
+                doc.append(NewLine())
+
+                # Get positions for this employer
+                employer_positions = [pos for pos in positions
+                                      if pos.get("employer") == employer]
+
+                for position in employer_positions:
+                    position_name = self.resume_data.query_name(position.get("position", ""), "position")
+
+                    # Format dates safely
+                    start_date = self.cmd.format_date(position.get("startdate", ""))
                     end_date = "Present" if self.cmd.format_date(
-                        position["enddate"]) == "" else self.cmd.format_date(position["enddate"])
+                        position.get("enddate", "")) == "" else self.cmd.format_date(position.get("enddate", ""))
+
                     doc.append(NoEscape(
                         r"{\em "
                         + position_name
                         + r"} \hfill {"
                         + r"\textbf {"
-                        + self.cmd.format_date(position["startdate"])
+                        + start_date
                         + r" {--} "
-                        + f"{end_date}"
+                        + end_date
                         + r"}}"))
                     doc.append(NoEscape(r"\begin{list2}"))
-                    for achievement in achievements:
-                        if employer == achievement["employer"] and position["position"] == achievement["position"]:
+
+                    # Get achievements for this position
+                    position_achievements = [ach for ach in achievements
+                                             if ach.get("employer") == employer
+                                             and ach.get("position") == position.get("position")]
+
+                    for achievement in position_achievements:
+                        longdesc = achievement.get("longdesc", "")
+                        if longdesc:
                             doc.append(NoEscape(
-                                r"\item " + self.cmd.glossary_inject(achievement["longdesc"], "retro")))
+                                r"\item " + self.cmd.glossary_inject(longdesc, "retro")))
+
                     doc.append(NoEscape(r"\end{list2}"))
+        except Exception as e:
+            # Log the error and provide a graceful fallback
+            print(f"Error in retro_work_history: {e}")
+            doc.append("Error loading employment history.")
+
+    def modern_work_history(self, doc: Document) -> None:
+        """
+        Print standard detail work history.
+        :param Document doc: PyLatex document handler.
+        :return None: None
+        """
+        try:
+            # Start writing.
+            with doc.create(Section("Employment", False)):
+                # Get achievements and positions data
+                achievements_data = self.resume_data.get_achievements()
+                if not achievements_data:
+                    # Handle empty achievements gracefully
+                    doc.append("No employment data available.")
+                    return
+
+                # Process achievements to get a list of employers
+                achievements = listify(achievements_data)
+
+                # Get unique employers from achievements
+                employers = unique([ach.get("employer", "") for ach in achievements if "employer" in ach])
+
+                for employer in employers:
+                    if employer:  # Skip empty employer entries
+                        employer_name = self.resume_data.query_name(employer, "employer")
+                        with doc.create(Subsection(employer_name, False)):
+                            # Get positions for this employer
+                            positions = [pos for pos in listify(self.resume_data.get_positions())
+                                         if pos.get("employer") == employer]
+
+                            for position in positions:
+                                position_name = self.resume_data.query_name(position.get("position", ""), "position")
+                                with doc.create(Subsection(position_name, False)) as position_sub:
+                                    position_sub.append(self.cmd.vspace("-0.25"))
+
+                                    # Format dates
+                                    end_date = "Present" if self.cmd.format_date(
+                                        position.get("enddate", "")) == "" else self.cmd.format_date(
+                                        position.get("enddate", ""))
+                                    start_date = self.cmd.format_date(position.get("startdate", ""))
+
+                                    position_sub.append(NoEscape(
+                                        r"\hfill{\textbf{"
+                                        + f"{start_date} "
+                                        + r"{--} "
+                                        + end_date
+                                        + r"}}"))
+                                    position_sub.append(NewLine())
+
+                                    # Get achievements for this employer and position
+                                    position_achievements = [ach for ach in achievements
+                                                             if ach.get("employer") == employer
+                                                             and ach.get("position") == position.get("position")]
+
+                                    for achievement in position_achievements:
+                                        if "shortdesc" in achievement:
+                                            with doc.create(Itemize()) as itemize:
+                                                itemize.add_item(NoEscape(
+                                                    self.cmd.glossary_inject(
+                                                        achievement["shortdesc"], "modern")))
+        except Exception as e:
+            # Log the error and provide a graceful fallback
+            print(f"Error in modern_work_history: {e}")
+            doc.append("Error loading employment data.")
 
     @staticmethod
     def count_instances(instance_list: list[str | bool], x: any) -> int:
