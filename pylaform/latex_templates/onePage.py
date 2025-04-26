@@ -61,6 +61,9 @@ class Generator:
         # Work History
         self.common.modern_work_history(self.doc)
 
+        # Education
+        self.common.modern_education(self.doc)
+
         # End page
         self.doc.append(NoEscape(r"\end{document}"))
 

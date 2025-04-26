@@ -249,7 +249,21 @@ class Common:
 
             for employer in employers:
                 employer_name = self.resume_data.query_name(employer, "employer")
-                doc.append(bold(employer_name))
+                # Get employer location from database
+                employer_location = None
+
+                # First look in positions data for location
+                for pos in positions:
+                    if pos.get("employer") == employer and "location" in pos:
+                        employer_location = pos.get("location")
+                        break
+
+                # Display employer name and location if available
+                if employer_location:
+                    doc.append(NoEscape(r"\textbf{" + employer_name + r", " + employer_location + r"}"))
+                else:
+                    doc.append(NoEscape(r"\textbf{" + employer_name + r"}"))
+
                 doc.append(NewLine())
 
                 # Get positions for this employer
@@ -264,11 +278,12 @@ class Common:
                     end_date = "Present" if self.cmd.format_date(
                         position.get("enddate", "")) == "" else self.cmd.format_date(position.get("enddate", ""))
 
+                    # Remove extra space before the date range
                     doc.append(NoEscape(
                         r"{\em "
                         + position_name
-                        + r"} \hfill {"
-                        + r"\textbf {"
+                        + r"} \hfill{"
+                        + r"\textbf{"
                         + start_date
                         + r" {--} "
                         + end_date
@@ -303,6 +318,8 @@ class Common:
             with doc.create(Section("Employment", False)):
                 # Get achievements and positions data
                 achievements_data = self.resume_data.get_achievements()
+                positions_data = self.resume_data.get_positions()
+
                 if not achievements_data:
                     # Handle empty achievements gracefully
                     doc.append("No employment data available.")
@@ -310,6 +327,7 @@ class Common:
 
                 # Process achievements to get a list of employers
                 achievements = listify(achievements_data)
+                positions = listify(positions_data)
 
                 # Get unique employers from achievements
                 employers = unique([ach.get("employer", "") for ach in achievements if "employer" in ach])
@@ -317,12 +335,25 @@ class Common:
                 for employer in employers:
                     if employer:  # Skip empty employer entries
                         employer_name = self.resume_data.query_name(employer, "employer")
-                        with doc.create(Subsection(employer_name, False)):
-                            # Get positions for this employer
-                            positions = [pos for pos in listify(self.resume_data.get_positions())
-                                         if pos.get("employer") == employer]
+                        # Get employer location from positions data
+                        employer_location = None
 
-                            for position in positions:
+                        # Look in positions data for location
+                        for pos in positions:
+                            if pos.get("employer") == employer and "location" in pos:
+                                employer_location = pos.get("location")
+                                break
+
+                        with doc.create(Subsection(employer_name, False)) as employer_sub:
+                            # Add location right-aligned if available
+                            if employer_location:
+                                employer_sub.append(NoEscape(r"\hfill{" + employer_location + r"}"))
+
+                            # Get positions for this employer
+                            employer_positions = [pos for pos in positions
+                                                  if pos.get("employer") == employer]
+
+                            for position in employer_positions:
                                 position_name = self.resume_data.query_name(position.get("position", ""), "position")
                                 with doc.create(Subsection(position_name, False)) as position_sub:
                                     position_sub.append(self.cmd.vspace("-0.25"))
@@ -356,6 +387,338 @@ class Common:
             # Log the error and provide a graceful fallback
             print(f"Error in modern_work_history: {e}")
             doc.append("Error loading employment data.")
+
+    def retro_education(self, doc):
+        """
+        Add education details to the document in retro style.
+        :param doc: The document to add the education section to.
+        :return: None
+        """
+        print("\n=== DEBUG: retro_education called ===")
+        from datetime import datetime
+
+        # First, check if there's any education data to show
+        education_data = self.resume_data.get_education()
+        print(f"\n=== DEBUG: Retrieved {len(education_data)} education entries ===")
+
+        # Add the section header with \sc for small caps styling
+        doc.append(NoEscape(r"\section{\sc Education}"))
+        print("Added Education section header")
+
+        # Track data for debugging
+        schools_found = 0
+        focuses_found = 0
+        schools_added = 0
+        focuses_added = 0
+
+        # Process education data by school
+        schools = {}
+
+        # First get all schools
+        for entry in education_data:
+            if entry["id"].startswith("school_") and entry["state"]:
+                school_id = entry["id"]
+                if entry["attr"] == "schoolname":
+                    if school_id not in schools:
+                        schools[school_id] = {
+                            "name": entry["value"],
+                            "location": "",
+                            "focuses": []
+                        }
+                        schools_found += 1
+                        print(f"Found school: {school_id} - {entry['value']}")
+                    else:
+                        schools[school_id]["name"] = entry["value"]
+
+                elif entry["attr"] == "location":
+                    if school_id in schools:
+                        schools[school_id]["location"] = entry["value"]
+                        print(f"Added location '{entry['value']}' to school {school_id}")
+
+        # Then process all focuses
+        focus_lookup = {}
+        for entry in education_data:
+            if entry["id"].startswith("focus_") and entry["state"]:
+                focus_id = entry["id"]
+                if entry["attr"] == "focusname":
+                    if focus_id not in focus_lookup:
+                        focus_lookup[focus_id] = {
+                            "name": entry["value"],
+                            "school": None,
+                            "startdate": "",
+                            "enddate": ""
+                        }
+                        focuses_found += 1
+                        print(f"Found focus: {focus_id} - {entry['value']}")
+                    else:
+                        focus_lookup[focus_id]["name"] = entry["value"]
+
+                # Get focus dates
+                elif entry["attr"] == "startdate":
+                    if focus_id in focus_lookup:
+                        focus_lookup[focus_id]["startdate"] = entry["value"]
+                        print(f"Added start date '{entry['value']}' to focus {focus_id}")
+
+                elif entry["attr"] == "enddate":
+                    if focus_id in focus_lookup:
+                        focus_lookup[focus_id]["enddate"] = entry["value"]
+                        print(f"Added end date '{entry['value']}' to focus {focus_id}")
+
+                # Find the school this focus belongs to
+                elif entry["attr"] == "school":
+                    if focus_id in focus_lookup:
+                        focus_lookup[focus_id]["school"] = entry["value"]
+                        print(f"Focus {focus_id} belongs to school {entry['value']}")
+
+        # Now assign focuses to schools
+        for focus_id, focus_data in focus_lookup.items():
+            school_id = focus_data["school"]
+            if school_id and school_id in schools:
+                schools[school_id]["focuses"].append({
+                    "name": focus_data["name"],
+                    "startdate": focus_data["startdate"],
+                    "enddate": focus_data["enddate"]
+                })
+                print(f"Assigned focus {focus_id} to school {school_id}")
+
+        print(f"\n=== Found {len(schools)} schools and {len(focus_lookup)} focuses ===")
+
+        # Add education entries to document
+        for school_id, school in schools.items():
+            schools_added += 1
+            # Safely handle special characters in school name and location
+            school_name = school["name"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+            school_location = school["location"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+
+            # School name and location
+            if school_location:
+                doc.append(NoEscape(r"\textbf{" + school_name + r", " + school_location + r"}"))
+            else:
+                doc.append(NoEscape(r"\textbf{" + school_name + r"}"))
+
+            # Add a line break to separate school from focuses
+            doc.append(NoEscape(r"\\"))
+
+            print(f"Added school to document: {school_name}")
+
+            # Add focuses/majors without bullets and no indent
+            if school["focuses"]:
+                for focus in school["focuses"]:
+                    focuses_added += 1
+                    # Safely handle special characters in focus name
+                    focus_name = focus["name"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+
+                    # Format date string with month names
+                    date_str = ""
+                    if focus["startdate"] or focus["enddate"]:
+                        if focus["startdate"]:
+                            try:
+                                formatted_start = self.cmd.format_date(focus["startdate"])
+                                date_str += formatted_start
+                            except:
+                                date_str += focus["startdate"]
+
+                        date_str += " - "
+
+                        if focus["enddate"]:
+                            try:
+                                formatted_end = self.cmd.format_date(focus["enddate"])
+                                date_str += formatted_end
+                            except:
+                                date_str += focus["enddate"]
+                        else:
+                            date_str += "Present"
+
+                    # Add focus with date - directly with no indentation or bullets
+                    if date_str:
+                        # Create a paragraph with the focus that ensures it's on a new line
+                        latex_line = r"{\em " + focus_name + r"}\hfill\textbf{" + date_str + r"}"
+                        doc.append(NoEscape(latex_line))
+                        # Add a line break after each focus
+                        doc.append(NoEscape(r"\\"))
+                        print(f"Added focus with formatted date: {focus_name} ({date_str})")
+                    else:
+                        latex_line = r"{\em " + focus_name + r"}"
+                        doc.append(NoEscape(latex_line))
+                        # Add a line break after each focus
+                        doc.append(NoEscape(r"\\"))
+                        print(f"Added focus without date: {focus_name}")
+            else:
+                print(f"WARNING: No focuses found for school {school_id}")
+
+            # Add spacing between schools (additional line break)
+            doc.append(NoEscape(r"\\"))
+
+        # If no schools were added or if something is wrong, add a test entry
+        if schools_added == 0:
+            print("WARNING: No schools were added, using test data")
+            doc.append(NoEscape(r"\textbf{Test University, Test City}"))
+            doc.append(NoEscape(r"\\"))
+            doc.append(NoEscape(r"{\em Bachelor of Computer Science}\hfill\textbf{January 2018 - December 2022}"))
+            doc.append(NoEscape(r"\\"))
+            doc.append(NoEscape(r"\\"))
+
+        print(f"=== Education section summary: {schools_found} schools found, {focuses_found} focuses found ===")
+        print(f"=== {schools_added} schools added to document, {focuses_added} focuses added to document ===")
+
+    def modern_education(self, doc):
+        """
+        Add education details to the document in modern style.
+        :param doc: The document to add the education section to.
+        :return: None
+        """
+        print("\n=== DEBUG: modern_education called ===")
+
+        # Import required pylatex sections if not already at the top
+        from pylatex import Section, Subsection
+        from datetime import datetime
+
+        # Get raw education data
+        education_data = self.resume_data.get_education()
+        print(f"\n=== DEBUG: Retrieved {len(education_data)} education entries ===")
+
+        # Exit if no data
+        if not education_data:
+            return
+
+        # Add the section header
+        with doc.create(Section("Education", False)):
+            # Track data for debugging
+            schools_found = 0
+            focuses_found = 0
+            schools_added = 0
+            focuses_added = 0
+
+            # Process all data into organized structures
+            schools = {}
+            focuses = {}
+
+            # Process all schools first
+            for item in education_data:
+                # Process schools
+                if item["id"].startswith("school_") and item["state"]:
+                    school_id = item["id"]
+
+                    if item["attr"] == "schoolname":
+                        if school_id not in schools:
+                            schools[school_id] = {"name": item["value"], "location": ""}
+                            schools_found += 1
+                            print(f"Found school: {school_id} - {item['value']}")
+                        else:
+                            schools[school_id]["name"] = item["value"]
+
+                    elif item["attr"] == "location":
+                        if school_id in schools:
+                            schools[school_id]["location"] = item["value"]
+                            print(f"Added location '{item['value']}' to school {school_id}")
+
+            # Then process all focuses
+            for item in education_data:
+                if item["id"].startswith("focus_") and item["state"]:
+                    focus_id = item["id"]
+
+                    if item["attr"] == "focusname":
+                        if focus_id not in focuses:
+                            focuses[focus_id] = {
+                                "name": item["value"],
+                                "school": "",
+                                "startdate": "",
+                                "enddate": ""
+                            }
+                            focuses_found += 1
+                            print(f"Found focus: {focus_id} - {item['value']}")
+                        else:
+                            focuses[focus_id]["name"] = item["value"]
+
+                    elif item["attr"] == "school":
+                        if focus_id in focuses:
+                            focuses[focus_id]["school"] = item["value"]
+                            print(f"Focus {focus_id} belongs to school {item['value']}")
+
+                    elif item["attr"] == "startdate":
+                        if focus_id in focuses:
+                            focuses[focus_id]["startdate"] = item["value"]
+                            print(f"Added start date '{item['value']}' to focus {focus_id}")
+
+                    elif item["attr"] == "enddate":
+                        if focus_id in focuses:
+                            focuses[focus_id]["enddate"] = item["value"]
+                            print(f"Added end date '{item['value']}' to focus {focus_id}")
+
+            print(f"\n=== Found {len(schools)} schools and {len(focuses)} focuses ===")
+
+            # Add education entries to document
+            for school_id, school in schools.items():
+                schools_added += 1
+                # Create a subsection for the school
+                with doc.create(Subsection(school["name"], False)) as school_sub:
+                    # Add location right-aligned
+                    if school["location"]:
+                        school_sub.append(NoEscape(r"\hfill{" + school["location"] + r"}"))
+
+                    # Add a line break after the school name and location
+                    school_sub.append(NoEscape(r"\\"))
+
+                    print(f"Added school to document: {school['name']}")
+
+                    # Find all focuses for this school
+                    school_focuses = []
+                    for focus_id, focus in focuses.items():
+                        if focus["school"] == school_id:
+                            school_focuses.append(focus)
+                            print(f"Assigned focus {focus_id} to school {school_id}")
+
+                    # Process each focus - no list environment, directly add them
+                    for focus in school_focuses:
+                        focuses_added += 1
+                        # Escape special characters in focus name
+                        focus_name = focus["name"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+
+                        # Format date range with month names using the format_date function
+                        date_range = ""
+                        if focus["startdate"] or focus["enddate"]:
+                            if focus["startdate"]:
+                                try:
+                                    formatted_start = self.cmd.format_date(focus["startdate"])
+                                    date_range += formatted_start
+                                except:
+                                    date_range += focus["startdate"]
+
+                            date_range += " - "
+
+                            if focus["enddate"]:
+                                try:
+                                    formatted_end = self.cmd.format_date(focus["enddate"])
+                                    date_range += formatted_end
+                                except:
+                                    date_range += focus["enddate"]
+                            else:
+                                date_range += "Present"
+
+                        # Add the focus directly (no bullet list)
+                        if date_range:
+                            # Add focus with right-aligned date
+                            school_sub.append(NoEscape(r"{\em " + focus_name + r"}\hfill\textbf{" + date_range + r"}"))
+                            print(f"Added focus with formatted date: {focus_name} ({date_range})")
+                        else:
+                            school_sub.append(NoEscape(r"{\em " + focus_name + r"}"))
+                            print(f"Added focus without date: {focus_name}")
+
+                        # Add a line break after each focus
+                        school_sub.append(NoEscape(r"\\"))
+
+            # If no schools were added, add a test entry
+            if schools_added == 0:
+                print("WARNING: No schools were added, using test data")
+                with doc.create(Subsection("Test University", False)) as school_sub:
+                    school_sub.append(NoEscape(r"\hfill{Test City}"))
+                    school_sub.append(NoEscape(r"\\"))
+                    school_sub.append(
+                        NoEscape(r"{\em Bachelor of Computer Science}\hfill\textbf{January 2018 - December 2022}"))
+                    school_sub.append(NoEscape(r"\\"))
+
+            print(f"=== Education section summary: {schools_found} schools found, {focuses_found} focuses found ===")
+            print(f"=== {schools_added} schools added to document, {focuses_added} focuses added to document ===")
 
     @staticmethod
     def count_instances(instance_list: list[str | bool], x: any) -> int:

@@ -116,6 +116,9 @@ class Generator:
         # Work History
         self.common.retro_work_history(self.doc)
 
+        # Education
+        self.common.retro_education(self.doc)
+
         # End Page
         self.doc.append(NoEscape(r"\end{resume}"))
         self.generate()

@@ -301,25 +301,51 @@ class Queries:
 
         return self.result_certifications
 
+    # In your Query class, replace the current get_education method with this:
     def get_education(self) -> list[dict[str, str | int | bool]]:
         """
         Return education NESTED list objects from database by school.
         :return list[dict[str, str | int | bool]]: Raw return grouped by 'id/attr/value/state.'
         """
+        print("\n--- DEBUG: Fetching education data ---")
 
         if len(self.result_education) == 0:
-            result: Cursor = self.query(
+            # Clear the result array just to be sure
+            self.result_education = []
+
+            # Execute the query and fetch all results
+            result = self.query(
                 """
-                SELECT f.id, f.name, f.startdate, f.enddate, f.state,
-                       s.id, s.name, s.location, s.state
+                SELECT f.id,
+                       f.name,
+                       f.startdate,
+                       f.enddate,
+                       f.state,
+                       s.id,
+                       s.name,
+                       s.location,
+                       s.state
                 FROM `school` AS s
-                LEFT JOIN `focus` AS f on s.id = f.school
+                         LEFT JOIN `focus` AS f on s.id = f.school
                 ORDER BY f.startdate DESC
                 """)
 
+            # Store all rows in a list since we can't seek in SQLite cursor
+            rows = list(result)
+
+            # Debug: print raw query results
+            print("\n--- DEBUG: Raw education query results ---")
+            for row in rows:
+                print(row)
+
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
             for (focusid, focusname, startdate, enddate, focusstate,
-                 schoolid, schoolname, location, schoolstate) in result:
+                 schoolid, schoolname, location, schoolstate) in rows:
+                print(f"\n--- Processing school {schoolid}: {schoolname} (state: {schoolstate}) ---")
+                print(f"    Focus {focusid}: {focusname} (state: {focusstate})")
+                print(f"    Dates: {startdate} - {enddate}")
+
+                # Add school data
                 self.result_education.append({
                     "id": "school_" + str(schoolid),
                     "attr": "schoolname",
@@ -332,30 +358,40 @@ class Queries:
                     "value": location,
                     "state": schoolstate,
                 })
-                self.result_education.append({
-                    "id": "focus_" + str(focusid),
-                    "attr": "focusname",
-                    "value": focusname,
-                    "state": focusstate,
-                })
-                self.result_education.append({
-                    "id": "focus_" + str(focusid),
-                    "attr": "startdate",
-                    "value": startdate,
-                    "state": focusstate,
-                })
-                self.result_education.append({
-                    "id": "focus_" + str(focusid),
-                    "attr": "enddate",
-                    "value": enddate,
-                    "state": focusstate,
-                })
-                self.result_education.append({
-                    "id": "focus_" + str(focusid),
-                    "attr": "enddate",
-                    "value": enddate,
-                    "state": focusstate,
-                })
+
+                # Add focus data - only if focus is not None
+                if focusid is not None:
+                    self.result_education.append({
+                        "id": "focus_" + str(focusid),
+                        "attr": "focusname",
+                        "value": focusname,
+                        "state": focusstate,
+                    })
+                    self.result_education.append({
+                        "id": "focus_" + str(focusid),
+                        "attr": "startdate",
+                        "value": startdate,
+                        "state": focusstate,
+                    })
+                    self.result_education.append({
+                        "id": "focus_" + str(focusid),
+                        "attr": "enddate",
+                        "value": enddate,
+                        "state": focusstate,
+                    })
+                    # Add the school ID for each focus
+                    self.result_education.append({
+                        "id": "focus_" + str(focusid),
+                        "attr": "school",
+                        "value": "school_" + str(schoolid),
+                        "state": focusstate,
+                    })
+
+            # Debug: print processed data
+            print("\n--- DEBUG: Processed education data ---")
+            print(f"Total entries: {len(self.result_education)}")
+            for entry in self.result_education:
+                print(entry)
 
         return self.result_education
 
