@@ -11,13 +11,17 @@
                     {{ drop_down(id, payload, ddpayload, "category", primarybyname=True) }}
                     <br>
                     <div class="{{ "d-none" if hidden else "" }}" id="{{ id }}_category_div">
+                        <label for="{{ id }}_category">Category:</label>
+                        <br>
                         <input type="text" name="{{ id }}_category" id="{{ id }}_category"
                                value="{{ category if category is defined else "" }}">
                     </div>
                 </td>
                 <td class="align-items-center">
-                    {{ drop_down(id, payload, ddpayload, "category", secondary="subcategory", secondarybyname=True) }}
+                    {{ drop_down(id, payload, ddpayload, "category", secondary="subcategory", secondaryid=id, secondarybyname=True) }}
+                    <br>
                     <div class="{{ "d-none" if hidden else "" }}" id="{{ id }}_subcategory_div">
+                        <label for="{{ id }}_subcategory">Subcategory:</label>
                         <br>
                         <input type="text" name="{{ id }}_subcategory" id="{{ id }}_subcategory"
                                value="{{ subcategory if subcategory is defined else "" }}">

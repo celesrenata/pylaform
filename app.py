@@ -80,12 +80,46 @@ def certifications():
 
     return render_template("certifications_index.html", **payload)
 
+
 @app.route("/skills", methods=["GET", "POST"])
 def skills():
     if request.method == 'POST':
         worker.update_skills(request.form)
         query.purge_cache("skills")
-    return render_template("skills_index.html", ddpayload=worker.dropdowns("education"), **fatten(query.get_skills()))
+
+    # Get dropdown data
+    dropdown_data = worker.dropdowns("skills")
+
+    # Get raw skills data
+    raw_skills = query.get_skills()
+
+    # Group skills by ID
+    skills_groups = {}
+    for skill in raw_skills:
+        skill_id = skill["id"]
+        if skill_id not in skills_groups:
+            skills_groups[skill_id] = {
+                "id": skill_id,
+                "state": skill.get("state", False)
+            }
+
+        # Add each attribute to the grouped object
+        attr_name = skill["attr"]
+        skills_groups[skill_id][attr_name] = skill["value"]
+
+    # Convert grouped data to list for template
+    processed_skills = list(skills_groups.values())
+
+    # Create payload with correct structure
+    payload = {
+        "payload": processed_skills,
+        "attrs": ["category", "subcategory", "employer", "employername",
+                  "position", "positionname", "shortdesc", "longdesc"]
+    }
+
+    return render_template("skills_index.html",
+                           ddpayload=dropdown_data,
+                           **payload)
 
 
 @app.route("/employment", methods=["GET", "POST"])

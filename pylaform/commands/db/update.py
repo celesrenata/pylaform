@@ -151,7 +151,12 @@ class Updates:
             try:
                 set_group = set_group + f"`{key.split('_')[-1]}` = {int(value)}, "
             except ValueError:
-                set_group = set_group + f"`{key.split('_')[-1]}` = '{value}', "
+                # Escape single quotes in string values by replacing ' with ''
+                if isinstance(value, str):
+                    escaped_value = value.replace("'", "''")
+                    set_group = set_group + f"`{key.split('_')[-1]}` = '{escaped_value}', "
+                else:
+                    set_group = set_group + f"`{key.split('_')[-1]}` = '{value}', "
 
         print(
             f"""

@@ -39,11 +39,34 @@ class Worker:
             case "employment":
                 return self.query.get_options(["employer", "position"], ["employer", "position"])
             case "achievements":
-                # Use correct table name 'achievement' for the mapping hint
-                return self.query.get_options(["employer", "position", "achievement"], ["employer", "position", ""])
+                # Get options with employer-position mapping
+                options = self.query.get_options(["employer", "position", "achievement"], ["employer", "position", ""])
+
+                # Add employer-position map for client-side filtering
+                employer_positions = {}
+                self.cursor.execute("SELECT id, employer FROM position")
+                for position_id, employer_id in self.cursor.fetchall():
+                    if str(employer_id) not in employer_positions:
+                        employer_positions[str(employer_id)] = []
+                    employer_positions[str(employer_id)].append(position_id)
+
+                options["employer_positions"] = employer_positions
+                return options
             case "skills":
-                return self.query.get_options(["skills", "skills", "employer", "position"],
-                                              ["category", "subcategory", "employer", "position"])
+                # Get options with employer-position mapping
+                options = self.query.get_options(["skill", "skill", "employer", "position"],
+                                                 ["category", "subcategory", "employer", "position"])
+
+                # Add employer-position map for client-side filtering
+                employer_positions = {}
+                self.cursor.execute("SELECT id, employer FROM position")
+                for position_id, employer_id in self.cursor.fetchall():
+                    if str(employer_id) not in employer_positions:
+                        employer_positions[str(employer_id)] = []
+                    employer_positions[str(employer_id)].append(position_id)
+
+                options["employer_positions"] = employer_positions
+                return options
 
     def identification(self, form_data: ImmutableMultiDict) -> None:
         """
@@ -333,153 +356,278 @@ class Worker:
 
     def update_skills(self, form_data: ImmutableMultiDict) -> None:
         """
-        Updates the skills table.
+        Updates the skill table.
         :param ImmutableMultiDict form_data: Form data from template.
         :return None: None
         """
+        import logging
+        import sys
+        # Configure logging
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(sys.stdout),
+                logging.FileHandler('skills_debug.log', mode='w')
+            ]
+        )
+        logger = logging.getLogger('update_skills')
+
+        logger.debug("Start update_skills - Form data received: %s", dict(form_data))
+
         # Get raw form data as dictionary with arrays
         raw_form_dict = form_data.to_dict(flat=False)
+        logger.debug(f"Raw form data dictionary: {raw_form_dict}")
 
         # Process existing skills
         existing_skills = {}
-        for key, value in raw_form_dict.items():
-            # Skip new entries
-            if key.startswith('new'):
-                continue
-
-            # Process delete entries
-            if '_delete' in key:
-                skill_id = key.split('_')[0]
-                self.delete.delete_target(skill_id, 'skill')
+        for key, values in raw_form_dict.items():
+            # Skip new entries and delete commands
+            if key.startswith('new') or key.endswith('_delete'):
                 continue
 
             # Process existing skills fields
             parts = key.split('_')
-            if len(parts) >= 2:
+            if len(parts) >= 2 and parts[0].isdigit():
                 skill_id = parts[0]
 
                 # Initialize record if it doesn't exist
                 if skill_id not in existing_skills:
                     existing_skills[skill_id] = {}
 
-                # Store the field value
+                # Store the field value (first value if multiple)
                 field_name = '_'.join(parts[1:])
-                existing_skills[skill_id][field_name] = value[0]
+                existing_skills[skill_id][field_name] = values[0]
+
+        # Process deletes
+        for key in raw_form_dict:
+            if key.endswith('_delete'):
+                skill_id = key.split('_')[0]
+                if skill_id.isdigit():
+                    logger.debug(f"Deleting skill ID {skill_id}")
+                    self.delete.delete_target(skill_id, 'skill')
+                    self.conn.commit()  # Commit after each delete
 
         # Update existing skills
         for skill_id, data in existing_skills.items():
             if skill_id.isdigit():
+                # Handle category dropdown/input selection
+                category_dropdown = data.get('category_dropdown', '')
+                category = data.get('category', '')
+
+                # Determine which category to use based on the dropdown selection
+                if category_dropdown and category_dropdown not in ['EDIT', 'ADD']:
+                    # Use the category from the dropdown
+                    category_value = self.query.query_name(int(category_dropdown), 'category')
+                else:
+                    # Use the manually entered category
+                    category_value = category
+
+                # Handle subcategory dropdown/input selection
+                subcategory_dropdown = data.get('subcategory_dropdown', '')
+                subcategory = data.get('subcategory', '')
+
+                # Determine which subcategory to use based on the dropdown selection
+                if subcategory_dropdown and subcategory_dropdown not in ['EDIT', 'ADD']:
+                    # Use the subcategory from the dropdown
+                    subcategory_value = self.query.query_name(int(subcategory_dropdown), 'subcategory')
+                else:
+                    # Use the manually entered subcategory
+                    subcategory_value = subcategory
+
                 # Handle employer and position dropdowns
                 employer_id = data.get('employer_dropdown', '')
                 position_id = data.get('position_dropdown', '')
 
-                # Ensure we're using valid IDs
-                if employer_id and employer_id not in ['EDIT', 'ADD']:
-                    employer = employer_id
-                else:
-                    # Try to get employer from the form data
-                    employer_name = data.get('employer', '')
-                    if employer_name:
-                        employer = str(self.query.query_id(employer_name, 'employer'))
-                    else:
-                        employer = ''
+                # Validate that the position belongs to the employer
+                if employer_id and position_id and employer_id != 'EDIT' and employer_id != 'ADD' and position_id != 'EDIT' and position_id != 'ADD':
+                    # Check if the position belongs to the selected employer
+                    self.cursor.execute(
+                        "SELECT employer FROM position WHERE id = ?",
+                        (position_id,)
+                    )
+                    result = self.cursor.fetchone()
+                    if result and str(result[0]) != str(employer_id):
+                        # Position doesn't belong to this employer, don't update
+                        logger.debug(
+                            f"Position {position_id} doesn't belong to employer {employer_id}, skipping update")
+                        continue
 
-                if position_id and position_id not in ['EDIT', 'ADD']:
-                    position = position_id
-                else:
-                    # Try to get position from the form data
-                    position_name = data.get('position', '')
-                    if position_name:
-                        position = str(self.query.query_id(position_name, 'position'))
-                    else:
-                        position = ''
+                # Determine state from the checkbox
+                skill_state = 1 if data.get('longdesc_enabled') == 'on' else 0
 
                 # Prepare skill update data
                 update_data = {
                     'id': int(skill_id),
-                    'category': data.get('category', ''),
-                    'subcategory': data.get('subcategory', ''),
-                    'employer': employer,
-                    'position': position,
+                    'category': category_value,
+                    'subcategory': subcategory_value,
+                    'employer': employer_id if employer_id and employer_id not in ['EDIT', 'ADD'] else None,
+                    'position': position_id if position_id and position_id not in ['EDIT', 'ADD'] else None,
                     'shortdesc': data.get('shortdesc', ''),
                     'longdesc': data.get('longdesc', ''),
-                    'state': 1 if 'longdesc_enabled' in data else 0
+                    'state': skill_state
                 }
 
-                # Optional fields - only include if present
-                if 'categoryorder' in data:
-                    update_data['categoryorder'] = data.get('categoryorder', '0')
-                if 'skillorder' in data:
-                    update_data['skillorder'] = data.get('skillorder', '0')
+                logger.debug(f"Updating skill ID {skill_id}: {update_data}")
 
-                # Update skill
-                self.update.multi_column('skill', **update_data)
+                try:
+                    # Direct SQL approach to avoid potential retry issues in multi_column
+                    set_parts = []
+                    params = []
 
-        # Process new skills entries
-        new_skills = {}
-        for key in raw_form_dict:
-            if key.startswith('new') and ('_category' in key or '_shortdesc' in key):
-                entry_id = key.split('_')[0]  # Get 'new1', 'new2', etc.
+                    for key, value in update_data.items():
+                        if key != 'id':  # Skip the ID field for the SET clause
+                            if value is None:
+                                set_parts.append(f"`{key}` = NULL")
+                            elif isinstance(value, int):
+                                set_parts.append(f"`{key}` = ?")
+                                params.append(value)
+                            elif isinstance(value, str):
+                                set_parts.append(f"`{key}` = ?")
+                                params.append(value)
 
-                if entry_id not in new_skills:
-                    new_skills[entry_id] = {}
+                    params.append(update_data['id'])  # Add ID for WHERE clause
 
-                # Store all fields for this entry
-                for field_key, field_values in raw_form_dict.items():
-                    if field_key.startswith(entry_id + '_'):
-                        field_name = '_'.join(field_key.split('_')[1:])
-                        new_skills[entry_id][field_name] = field_values[0]
+                    query = f"""
+                    UPDATE `skill`
+                    SET {", ".join(set_parts)}
+                    WHERE `id` = ?;
+                    """
+
+                    logger.debug(f"Executing query: {query} with params: {params}")
+                    self.cursor.execute(query, params)
+                    self.conn.commit()  # Commit after each update
+
+                except Exception as e:
+                    logger.error(f"Error updating skill ID {skill_id}: {e}")
+                    # Continue with next skill instead of failing completely
+
+        # Process new entries with 'new1_', 'new2_', etc. prefixes
+        new_entries = {}
+        new_entry_prefixes = set()
+
+        # Find all prefixes for new entries (like 'new1_', 'new2_')
+        for key in raw_form_dict.keys():
+            if key.startswith('new') and '_' in key:
+                prefix = key.split('_')[0] + '_'  # e.g., 'new1_'
+                new_entry_prefixes.add(prefix)
+
+        # Group form fields by their new entry prefix
+        for prefix in new_entry_prefixes:
+            entry_data = {}
+            for key, values in raw_form_dict.items():
+                if key.startswith(prefix):
+                    field_name = key[len(prefix):]  # Remove the prefix to get the field name
+                    entry_data[field_name] = values[0]
+
+            if entry_data:  # Only add if we found data for this prefix
+                new_entries[prefix] = entry_data
+
+        logger.debug(f"Processed new entries: {new_entries}")
 
         # Insert all new skills
-        for entry_id, data in new_skills.items():
-            if ('category' in data and data['category']) and ('shortdesc' in data and data['shortdesc']):
+        for prefix, data in new_entries.items():
+            try:
+                # Handle category dropdown/input selection
+                category_dropdown = data.get('category_dropdown', '')
+                category = data.get('category', '')
+
+                # Determine which category to use based on the dropdown selection
+                if category_dropdown and category_dropdown not in ['EDIT', 'ADD']:
+                    # Use the category from the dropdown
+                    category_value = self.query.query_name(int(category_dropdown), 'category')
+                else:
+                    # Use the manually entered category
+                    category_value = category
+
+                # Handle subcategory dropdown/input selection
+                subcategory_dropdown = data.get('subcategory_dropdown', '')
+                subcategory = data.get('subcategory', '')
+
+                # Determine which subcategory to use based on the dropdown selection
+                if subcategory_dropdown and subcategory_dropdown not in ['EDIT', 'ADD']:
+                    # Use the subcategory from the dropdown
+                    subcategory_value = self.query.query_name(int(subcategory_dropdown), 'subcategory')
+                else:
+                    # Use the manually entered subcategory
+                    subcategory_value = subcategory
+
                 # Handle employer and position dropdowns
                 employer_id = data.get('employer_dropdown', '')
                 position_id = data.get('position_dropdown', '')
 
-                # Ensure we're using valid IDs
-                if employer_id and employer_id not in ['EDIT', 'ADD']:
-                    employer = employer_id
-                else:
-                    # Try to get employer from the form data
-                    employer_name = data.get('employer', '')
-                    if employer_name:
-                        employer = str(self.query.query_id(employer_name, 'employer'))
-                    else:
-                        employer = ''
+                # Validate that the position belongs to the employer
+                if employer_id and position_id and employer_id != 'EDIT' and employer_id != 'ADD' and position_id != 'EDIT' and position_id != 'ADD':
+                    # Check if the position belongs to the selected employer
+                    self.cursor.execute(
+                        "SELECT employer FROM position WHERE id = ?",
+                        (position_id,)
+                    )
+                    result = self.cursor.fetchone()
+                    if result and str(result[0]) != str(employer_id):
+                        # Position doesn't belong to this employer, skip this entry
+                        logger.debug(
+                            f"Position {position_id} doesn't belong to employer {employer_id}, skipping insert")
+                        continue
 
-                if position_id and position_id not in ['EDIT', 'ADD']:
-                    position = position_id
-                else:
-                    # Try to get position from the form data
-                    position_name = data.get('position', '')
-                    if position_name:
-                        position = str(self.query.query_id(position_name, 'position'))
-                    else:
-                        position = ''
+                # Determine state from the checkbox
+                skill_state = 1 if data.get('longdesc_enabled') == 'on' else 0
 
-                # Create a new skill record
-                insert_data = {
-                    'category': data.get('category', ''),
-                    'subcategory': data.get('subcategory', ''),
-                    'employer': employer,
-                    'position': position,
-                    'shortdesc': data.get('shortdesc', ''),
-                    'longdesc': data.get('longdesc', ''),
-                    'state': 1 if 'longdesc_enabled' in data else 0
-                }
+                # Only proceed if we have the required data
+                if category_value and 'shortdesc' in data and data['shortdesc']:
+                    # First, find out what the max categoryorder and skillorder are
+                    self.cursor.execute("SELECT MAX(categoryorder) FROM skill")
+                    max_category_order = self.cursor.fetchone()[0] or 0
 
-                # Optional fields - only include if present
-                if 'categoryorder' in data:
-                    insert_data['categoryorder'] = data.get('categoryorder', '0')
-                if 'skillorder' in data:
-                    insert_data['skillorder'] = data.get('skillorder', '0')
+                    self.cursor.execute("SELECT MAX(skillorder) FROM skill")
+                    max_skill_order = self.cursor.fetchone()[0] or 0
 
-                # Insert the new skill
-                self.insert.multi_column('skill', **insert_data)
+                    # Use direct SQL to insert the new skill with order values
+                    columns = [
+                        'category', 'subcategory', 'employer', 'position',
+                        'shortdesc', 'longdesc', 'state',
+                        'categoryorder', 'skillorder'  # Add the required order columns
+                    ]
 
-        # Commit changes
-        self.conn.commit()
+                    values = [
+                        category_value,
+                        subcategory_value,
+                        employer_id if employer_id and employer_id not in ['EDIT', 'ADD'] else None,
+                        position_id if position_id and position_id not in ['EDIT', 'ADD'] else None,
+                        data.get('shortdesc', ''),
+                        data.get('longdesc', ''),
+                        skill_state,
+                        max_category_order + 1,  # Increment categoryorder
+                        max_skill_order + 1  # Increment skillorder
+                    ]
+
+                    # Filter out None values for SQL (but keep the order columns)
+                    valid_columns = []
+                    valid_values = []
+                    for i, val in enumerate(values):
+                        if val is not None or columns[i] in ('categoryorder', 'skillorder'):
+                            valid_columns.append(columns[i])
+                            valid_values.append(val if val is not None else 0)  # Use 0 as default for NULL values
+
+                    placeholders = ', '.join(['?' for _ in valid_values])
+
+                    query = f"""
+                    INSERT INTO `skill` ({', '.join([f'`{col}`' for col in valid_columns])})
+                    VALUES ({placeholders});
+                    """
+
+                    logger.debug(f"Inserting new skill: {dict(zip(valid_columns, valid_values))}")
+                    logger.debug(f"Executing query: {query} with values: {valid_values}")
+
+                    self.cursor.execute(query, valid_values)
+                    self.conn.commit()  # Commit after each insert
+
+                    logger.debug(f"Successfully inserted new skill with prefix {prefix}")
+            except Exception as e:
+                logger.error(f"Error inserting new skill with prefix {prefix}: {e}")
+                # Continue with next entry instead of failing completely
+
+        logger.debug("Finished update_skills - committed all changes")
         return
 
     def update_summary(self, form_data: ImmutableMultiDict) -> None:
