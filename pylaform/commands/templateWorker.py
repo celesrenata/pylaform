@@ -184,17 +184,35 @@ class Worker:
 
         elif target == "education":
             try:
-                degree_query = self.cursor.execute(
-                    "SELECT id, name FROM focus ORDER BY state DESC, name"
+                # Get focus data using dictionary format
+                focus_query = self.cursor.execute(
+                    "SELECT id, name, state FROM focus ORDER BY state DESC, name"
                 ).fetchall()
 
+                focus_list = []
+                for focus_id, focus_name, focus_state in focus_query:
+                    focus_list.append({
+                        "id": focus_id,
+                        "name": focus_name,
+                        "state": focus_state
+                    })
+
+                # Get school data using dictionary format
                 school_query = self.cursor.execute(
-                    "SELECT id, name FROM school ORDER BY state DESC, name"
+                    "SELECT id, name, state FROM school ORDER BY state DESC, name"
                 ).fetchall()
+
+                school_list = []
+                for school_id, school_name, school_state in school_query:
+                    school_list.append({
+                        "id": school_id,
+                        "name": school_name,
+                        "state": school_state
+                    })
 
                 return {
-                    "degree": degree_query,
-                    "school": school_query
+                    "degree": focus_list,
+                    "school": school_list
                 }
             except Exception as e:
                 print(f"Error in dropdowns for education: {e}")
@@ -344,117 +362,93 @@ class Worker:
         raw_form_dict = form_data.to_dict(flat=False)
         logger.debug(f"Raw form data dictionary: {raw_form_dict}")
 
-        # Process existing entries (not "new")
+        # Check if we're deleting a new entry (None_delete)
+        skip_new_entry = False
+        if 'None_delete' in raw_form_dict and raw_form_dict['None_delete'][0] == 'true':
+            logger.debug("Found None_delete=true, will skip creating new entry")
+            skip_new_entry = True
+
+        # Process delete requests for existing entries
+        for key, values in raw_form_dict.items():
+            if key.endswith('_delete') and key != 'None_delete' and values[0] == 'true':
+                # Extract the ID from the key, which is in the format "{id}_delete"
+                item_id = key.split('_')[0]
+
+                if item_id.isdigit():
+                    # Delete the position
+                    logger.debug(f"Deleting position with ID {item_id}")
+                    self.cursor.execute("DELETE FROM position WHERE id = ?", (item_id,))
+
+        # Extract row IDs from the form data
+        # We'll use these to track which rows we need to update
+        row_ids = {}
+        for key in raw_form_dict:
+            if key.endswith('_rowid'):
+                prefix = key.split('_')[0]
+                row_ids[prefix] = raw_form_dict[key][0]
+
+        logger.debug(f"ID mapping: {row_ids}")
+
+        # Process existing entries
         existing_entries = {}
         for key, values in raw_form_dict.items():
-            position_id = key.split('_')[0]
-            if position_id != 'new' and not key.endswith('_delete'):
-                if position_id not in existing_entries:
-                    existing_entries[position_id] = {}
-                field_name = '_'.join(key.split('_')[1:])
-                existing_entries[position_id][field_name] = values[0]  # Take first value
+            parts = key.split('_')
+            if len(parts) >= 2 and parts[0] != 'None':
+                row_id = parts[0]
+                field_name = '_'.join(parts[1:])
 
-        # Process deletes
-        for key in raw_form_dict:
-            if key.endswith('_delete'):
-                position_id = key.split('_')[0]
-                if position_id.isdigit():
-                    # Get employer ID to delete associated entries
-                    self.cursor.execute("SELECT employer FROM position WHERE id = ?", (position_id,))
-                    result = self.cursor.fetchone()
-                    if result:
-                        employer_id = result[0]
-                        # Delete the position
-                        self.cursor.execute("DELETE FROM position WHERE id = ?", (position_id,))
-                        # Check if this was the last position for this employer
-                        self.cursor.execute("SELECT COUNT(*) FROM position WHERE employer = ?", (employer_id,))
-                        count = self.cursor.fetchone()[0]
-                        if count == 0:
-                            # No positions left, delete the employer too
-                            self.cursor.execute("DELETE FROM employer WHERE id = ?", (employer_id,))
+                if row_id not in existing_entries:
+                    existing_entries[row_id] = {}
 
-        # Create a mapping for existing positions
-        id_mapping = {}  # Maps position_id -> actual DB position id
-        for position_id, data in existing_entries.items():
-            if 'rowid' in data:
-                id_mapping[position_id] = data['rowid']
+                existing_entries[row_id][field_name] = values[0]  # Take first value
 
-        logger.debug(f"ID mapping: {id_mapping}")
+        # 1. First handle employers
+        for employer_id in row_ids.values():
+            if employer_id and employer_id.isdigit():
+                # Get employer data from form
+                entries = [entry for entry in existing_entries.values() if entry.get('employer_id') == employer_id]
+                if entries:
+                    employer_data = entries[0]
+                    employer_name = employer_data.get('employer_name', '')
+                    location = employer_data.get('location', '')
+                    state = 1 if employer_data.get('employer_enabled') == 'on' else 0
 
-        # 1. Handle employer updates for existing entries
-        for position_id, data in existing_entries.items():
-            employer_id = data.get('rowid')
-            if employer_id and employer_id != 'new' and employer_id.isdigit():
-                # Update existing employer
-                employer_name = data.get('employer', '')
-                employer_location = data.get('location', '')
-                employer_state = 1 if data.get('employer_enabled') == 'on' else 0
-
-                if employer_name:
-                    logger.debug(
-                        f"Updating employer ID {employer_id}: {employer_name}, {employer_location}, state={employer_state}")
+                    logger.debug(f"Updating employer ID {employer_id}: {employer_name}, {location}, state={state}")
                     self.cursor.execute(
                         "UPDATE employer SET employer = ?, location = ?, state = ? WHERE id = ?",
-                        (employer_name, employer_location, employer_state, employer_id)
+                        (employer_name, location, state, employer_id)
                     )
 
-        # 2. Process new entries
-        # Group new entries by their index
-        new_entries = {}
+        # Process "None" entries as new entries - but only if we're not deleting them
+        if not skip_new_entry:
+            none_entries = {}
+            for key, values in raw_form_dict.items():
+                if key.startswith('None_') and key != 'None_delete':
+                    field_name = '_'.join(key.split('_')[1:])
+                    none_entries[field_name] = values[0]  # Take first value
 
-        # Collect all 'new' keys and determine how many new entries we have
-        new_keys = [k for k in raw_form_dict.keys() if k.startswith('new_')]
+            # If we have None entries with valid data, insert them as new entries
+            if none_entries and none_entries.get('employer_name') and none_entries.get('position_name'):
+                # Create or use an employer
+                employer_name = none_entries.get('employer_name', '')
+                employer_location = none_entries.get('location', '')
+                employer_state = 1 if none_entries.get('employer_enabled') == 'on' else 0
 
-        # For each new entry field, process all values
-        for key in new_keys:
-            field_name = '_'.join(key.split('_')[1:])
-            values = raw_form_dict[key]
+                # Create a new employer if needed
+                self.cursor.execute(
+                    "INSERT INTO employer (employer, location, state) VALUES (?, ?, ?)",
+                    (employer_name, employer_location, employer_state)
+                )
+                # Get the new employer ID
+                self.cursor.execute("SELECT last_insert_rowid()")
+                new_employer_id = self.cursor.fetchone()[0]
+                logger.debug(f"Created new employer with ID {new_employer_id}: {employer_name}")
 
-            # Process each value as a separate new entry
-            for index, value in enumerate(values):
-                entry_id = f"new_{index}"
-                if entry_id not in new_entries:
-                    new_entries[entry_id] = {}
-                new_entries[entry_id][field_name] = value
-
-        logger.debug(f"Processed new entries: {new_entries}")
-
-        # Create new employers and positions
-        for entry_id, data in new_entries.items():
-            # 2a. Create new employer if needed
-            employer_dropdown = data.get('employer_dropdown')
-            new_employer_id = None
-
-            if employer_dropdown == 'EDIT':
-                # Create a new employer
-                employer_name = data.get('employer', '')
-                employer_location = data.get('location', '')
-                employer_state = 1 if data.get('employer_enabled') == 'on' else 0
-
-                if employer_name:
-                    logger.debug(f"Creating new employer: {employer_name}, {employer_location}, state={employer_state}")
-                    self.cursor.execute(
-                        "INSERT INTO employer (employer, location, state) VALUES (?, ?, ?)",
-                        (employer_name, employer_location, employer_state)
-                    )
-                    # Get the new employer ID
-                    self.cursor.execute("SELECT last_insert_rowid()")
-                    new_employer_id = self.cursor.fetchone()[0]
-                    logger.debug(f"Created new employer with ID {new_employer_id}")
-            elif employer_dropdown and employer_dropdown != 'ADD' and employer_dropdown.isdigit():
-                # Use existing employer from dropdown
-                new_employer_id = employer_dropdown
-                logger.debug(f"Using existing employer ID {new_employer_id} from dropdown")
-
-            # 2b. Create new position if needed
-            position_dropdown = data.get('position_dropdown')
-
-            if position_dropdown == 'EDIT' and new_employer_id:
                 # Create a new position
-                position_name = data.get('position', '')
-                start_date = data.get('startdate', '')
-                end_date = data.get('enddate', '')
-                position_state = 1 if data.get('position_enabled') == 'on' else 0
+                position_name = none_entries.get('position_name', '')
+                start_date = none_entries.get('startdate', '')
+                end_date = none_entries.get('enddate', '')
+                position_state = 1 if none_entries.get('position_enabled') == 'on' else 0
 
                 if position_name and start_date:
                     if start_date:
@@ -468,6 +462,8 @@ class Worker:
                         "INSERT INTO position (position, startdate, enddate, state, employer) VALUES (?, ?, ?, ?, ?)",
                         (position_name, start_date, end_date, position_state, new_employer_id)
                     )
+        else:
+            logger.debug("Skipped creating new entry because None_delete=true")
 
         # 3. Update existing positions
         for position_id, data in existing_entries.items():
@@ -832,144 +828,246 @@ class Worker:
 
         return
 
-    def update_education(self, form_data: ImmutableMultiDict) -> None:
+    def update_education(self, form_data):
         """
-        Updates the education and focus tables.
-        :param ImmutableMultiDict form_data: Form data from template.
-        :return None: None
+        Updates education records (schools and focuses) from form data.
+
+        This method processes form data to update schools and focuses in the database.
+        It handles editing existing records, adding new ones, and marking records for deletion.
+
+        Args:
+            form_data (ImmutableMultiDict): The form data submitted by the user
+
+        Returns:
+            None
         """
-        # Get raw form data and analyze it
-        raw_form_dict = form_data.to_dict(flat=False)
+        from pylaform.utilities.commands import date_adapter
 
-        # Determine how many 'new' entries we have
-        new_entries_count = 0
-        if 'new_rowid' in raw_form_dict:
-            new_entries_count = len(raw_form_dict['new_rowid'])
+        print("=== DEBUG: update_education ===")
+        print(f"Form keys received: {list(form_data.keys())}")
 
-        # Process existing records first
-        existing_records = {}
-        for key, value in raw_form_dict.items():
-            # Skip new entries for now
-            if key.startswith('new_'):
+        # Create dictionaries to hold data for schools and focuses
+        schools = {}
+        focuses = {}
+
+        # First, check for delete requests
+        for key in form_data.keys():
+            if key.startswith('school_') and key.endswith('_delete'):
+                school_id = key.replace('school_', '').replace('_delete', '')
+                print(f"DEBUG: Deleting school {school_id}")
+                self.delete.delete_target(school_id, 'school')
+
+            elif key.startswith('focus_') and key.endswith('_delete'):
+                focus_id = key.replace('focus_', '').replace('_delete', '')
+                print(f"DEBUG: Deleting focus {focus_id}")
+                self.delete.delete_target(focus_id, 'focus')
+
+        # Process each form field based on its naming pattern
+        for key, value in form_data.items():
+            # Handle school fields (e.g., school_3_school_name)
+            if key.startswith('school_') and '_school_' in key:
+                parts = key.split('_school_')
+                school_id = parts[0].replace('school_', '')
+                field_name = parts[1]
+
+                if school_id not in schools:
+                    schools[school_id] = {}
+
+                # Handle enabled checkbox specially
+                if field_name == 'enabled':
+                    schools[school_id]['state'] = 1 if value == 'on' else 0
+                # Skip dropdown fields - they're just for UI
+                elif field_name == 'dropdown':
+                    continue
+                else:
+                    schools[school_id][field_name] = value
+
+            # Handle focus fields (e.g., focus_3_focus_name)
+            elif key.startswith('focus_') and '_focus_' in key:
+                parts = key.split('_focus_')
+                focus_id = parts[0].replace('focus_', '')
+                field_name = parts[1]
+
+                if focus_id not in focuses:
+                    focuses[focus_id] = {}
+
+                # Handle enabled checkbox specially
+                if field_name == 'enabled':
+                    focuses[focus_id]['state'] = 1 if value == 'on' else 0
+                # Skip dropdown fields - they're just for UI
+                elif field_name == 'dropdown':
+                    continue
+                # Handle dates through date_adapter
+                elif field_name in ['startdate', 'enddate']:
+                    adapted_date = date_adapter(value)
+                    print(f"Processing focus {field_name}: '{value}' -> '{adapted_date}'")
+                    focuses[focus_id][field_name] = adapted_date
+                else:
+                    focuses[focus_id][field_name] = value
+
+            # Handle new school fields (e.g., new_school_name)
+            elif key.startswith('new_school_'):
+                field_name = key.replace('new_school_', '')
+
+                if 'new' not in schools:
+                    schools['new'] = {}
+
+                # Handle enabled checkbox specially
+                if field_name == 'enabled':
+                    schools['new']['state'] = 1 if value == 'on' else 0
+                # Skip dropdown fields
+                elif field_name == 'dropdown':
+                    continue
+                else:
+                    schools['new'][field_name] = value
+
+            # Handle new focus fields (e.g., new_focus_name)
+            elif key.startswith('new_focus_'):
+                field_name = key.replace('new_focus_', '')
+
+                if 'new' not in focuses:
+                    focuses['new'] = {}
+
+                # Handle enabled checkbox specially
+                if field_name == 'enabled':
+                    focuses['new']['state'] = 1 if value == 'on' else 0
+                # Skip dropdown fields
+                elif field_name == 'dropdown':
+                    continue
+                # Handle dates through date_adapter
+                elif field_name in ['startdate', 'enddate']:
+                    adapted_date = date_adapter(value)
+                    print(f"Processing new {field_name}: '{value}' -> '{adapted_date}'")
+                    focuses['new'][field_name] = adapted_date
+                else:
+                    focuses['new'][field_name] = value
+
+            # Process hidden fields for rowids to handle record relations
+            elif key.endswith('_rowid'):
+                # Extract ID from name like 'school_3_rowid'
+                if key.startswith('school_'):
+                    id_part = key.replace('_rowid', '')
+                    school_id = id_part.replace('school_', '')
+                    if school_id not in schools:
+                        schools[school_id] = {}
+                    schools[school_id]['rowid'] = value
+                elif key.startswith('focus_'):
+                    id_part = key.replace('_rowid', '')
+                    focus_id = id_part.replace('focus_', '')
+                    if focus_id not in focuses:
+                        focuses[focus_id] = {}
+                    focuses[focus_id]['rowid'] = value
+
+        # Process schools first
+        for school_id, school_data in schools.items():
+            # Skip if no meaningful data or just metadata
+            if not school_data or (len(school_data) == 1 and 'rowid' in school_data):
                 continue
 
-            # Handle existing entries
-            parts = key.split('_')
-            if len(parts) >= 2:
-                record_id = parts[0]
-                field_type = parts[1]
+            # Handle new school
+            if school_id == 'new' and 'name' in school_data and school_data.get('name', '').strip():
+                # Prepare fields and values for insert
+                fields = []
+                values = []
 
-                # Initialize record if it doesn't exist
-                if record_id not in existing_records:
-                    existing_records[record_id] = {
-                        'school': {},
-                        'focus': {}
-                    }
+                for field, value in school_data.items():
+                    if field not in ['rowid', 'dropdown']:  # Skip metadata fields
+                        fields.append(f"`{field}`")
+                        values.append(value)
 
-                # Handle different field types
-                if field_type == 'school':
-                    # Extract the attribute name (everything after 'school_')
-                    attr = '_'.join(parts[2:]) if len(parts) > 2 else parts[-1]
-                    existing_records[record_id]['school'][attr] = value[0]
-                elif field_type == 'focus':
-                    # Extract the attribute name (everything after 'focus_')
-                    attr = '_'.join(parts[2:]) if len(parts) > 2 else parts[-1]
-                    existing_records[record_id]['focus'][attr] = value[0]
-                elif field_type == 'rowid':
-                    existing_records[record_id]['rowid'] = value[0]
+                # Default state to 1 if not specified
+                if 'state' not in school_data:
+                    fields.append("`state`")
+                    values.append(1)
 
-        # Process existing records
-        for record_id, data in existing_records.items():
-            school_data = data.get('school', {})
-            focus_data = data.get('focus', {})
+                # Create the SQL for insert
+                sql = f"INSERT INTO `school` ({', '.join(fields)}) VALUES ({', '.join(['?'] * len(values))})"
+                print(f"DEBUG: Executing SQL for new school: {sql} with values {values}")
 
-            # Update school if we have school data
-            if 'name' in school_data and record_id.isdigit():
-                school_id = int(record_id)
+                self.cursor.execute(sql, values)
+                # Get the ID of the new school for focus references
+                new_school_id = self.cursor.lastrowid
 
-                # Prepare school update data
-                school_update = {
-                    'id': school_id,
-                    'name': school_data.get('name', ''),
-                    'location': school_data.get('location', ''),
-                    'state': 1 if 'enabled' in school_data else 0
-                }
+                # Update any new focus to point to this school
+                if 'new' in focuses:
+                    focuses['new']['school'] = new_school_id
 
-                # Update school
-                self.update.multi_column('school', **school_update)
+            # Handle existing school update
+            elif school_id != 'new':
+                # Prepare fields and values for update
+                update_fields = []
+                update_values = []
 
-            # Update focus if we have focus data
-            if 'name' in focus_data and record_id.isdigit():
-                focus_id = int(record_id)
+                for field, value in school_data.items():
+                    if field not in ['rowid', 'dropdown']:  # Skip metadata fields
+                        update_fields.append(f"`{field}` = ?")
+                        update_values.append(value)
 
-                # Prepare focus update data
-                focus_update = {
-                    'id': focus_id,
-                    'school': int(record_id),  # Link to school ID
-                    'name': focus_data.get('name', ''),
-                    'startdate': date_adapter(focus_data.get('startdate', '')),
-                    'enddate': date_adapter(focus_data.get('enddate', '')),
-                    'state': 1 if 'enabled' in focus_data else 0
-                }
+                if update_fields:
+                    # Add the ID as last parameter
+                    update_values.append(school_id)
 
-                # Update focus
-                self.update.multi_column('focus', **focus_update)
+                    # Create the SQL for update
+                    sql = f"UPDATE `school` SET {', '.join(update_fields)} WHERE `id` = ?"
+                    print(f"DEBUG: Updating school {school_id} with {school_data}")
+                    print(f"DEBUG: Executing SQL: {sql} with values {update_values}")
 
-        # Now process new entries
-        for i in range(new_entries_count):
-            # First insert the school
-            school_name = raw_form_dict.get('new_school_name', [''])[i] if i < len(
-                raw_form_dict.get('new_school_name', [])) else ''
-            school_location = raw_form_dict.get('new_school_location', [''])[i] if i < len(
-                raw_form_dict.get('new_school_location', [])) else ''
-            school_enabled = 1 if 'new_school_enabled' in raw_form_dict and i < len(
-                raw_form_dict['new_school_enabled']) else 0
+                    self.cursor.execute(sql, update_values)
 
-            # Skip if we don't have a school name
-            if not school_name:
+        # Now process focuses (after schools to ensure proper relationships)
+        for focus_id, focus_data in focuses.items():
+            # Skip if no meaningful data or just metadata
+            if not focus_data or (len(focus_data) == 1 and 'rowid' in focus_data):
                 continue
 
-            # Insert school
-            school_insert = {
-                'name': school_name,
-                'location': school_location,
-                'state': school_enabled
-            }
+            # Handle new focus
+            if focus_id == 'new' and 'name' in focus_data and focus_data.get('name',
+                                                                             '').strip() and 'school' in focus_data:
+                # Prepare fields and values for insert
+                fields = []
+                values = []
 
-            # Insert the school first
-            self.insert.multi_column('school', **school_insert)
+                for field, value in focus_data.items():
+                    if field not in ['rowid', 'dropdown']:  # Skip metadata fields
+                        fields.append(f"`{field}`")
+                        values.append(value)
 
-            # Query the DB to get the school_id by name - more reliable than relying on a return value
-            school_id = self.query.query_id(school_name, 'school')
+                # Default state to 1 if not specified
+                if 'state' not in focus_data:
+                    fields.append("`state`")
+                    values.append(1)
 
-            # Skip focus insert if we couldn't get the school_id
-            if not school_id:
-                continue
+                # Create the SQL for insert
+                sql = f"INSERT INTO `focus` ({', '.join(fields)}) VALUES ({', '.join(['?'] * len(values))})"
+                print(f"DEBUG: Executing SQL for new focus: {sql} with values {values}")
 
-            # Now insert the focus for this school
-            focus_name = raw_form_dict.get('new_focus_name', [''])[i] if i < len(
-                raw_form_dict.get('new_focus_name', [])) else ''
-            focus_startdate = raw_form_dict.get('new_focus_startdate', [''])[i] if i < len(
-                raw_form_dict.get('new_focus_startdate', [])) else ''
-            focus_enddate = raw_form_dict.get('new_focus_enddate', [''])[i] if i < len(
-                raw_form_dict.get('new_focus_enddate', [])) else ''
-            focus_enabled = 1 if 'new_focus_enabled' in raw_form_dict and i < len(
-                raw_form_dict['new_focus_enabled']) else 0
+                self.cursor.execute(sql, values)
 
-            # Only insert focus if we have a name
-            if focus_name:
-                focus_insert = {
-                    'school': school_id,
-                    'name': focus_name,
-                    'startdate': date_adapter(focus_startdate),
-                    'enddate': date_adapter(focus_enddate),
-                    'state': focus_enabled
-                }
+            # Handle existing focus update
+            elif focus_id != 'new':
+                # Prepare fields and values for update
+                update_fields = []
+                update_values = []
 
-                # Insert the focus
-                self.insert.multi_column('focus', **focus_insert)
+                for field, value in focus_data.items():
+                    if field not in ['rowid', 'dropdown']:  # Skip metadata fields
+                        update_fields.append(f"`{field}` = ?")
+                        update_values.append(value)
 
-        return
+                if update_fields:
+                    # Add the ID as last parameter
+                    update_values.append(focus_id)
+
+                    # Create the SQL for update
+                    sql = f"UPDATE `focus` SET {', '.join(update_fields)} WHERE `id` = ?"
+                    print(f"DEBUG: Updating focus {focus_id} with {focus_data}")
+                    print(f"DEBUG: Executing SQL: {sql} with values {update_values}")
+
+                    self.cursor.execute(sql, update_values)
+
+        # Commit all changes
+        self.conn.commit()
+        return None
 
     def update_glossary(self, form_data: ImmutableMultiDict) -> None:
         """
@@ -1376,3 +1474,39 @@ class Worker:
         # Commit changes.
         self.conn.commit()
         return
+
+    def cleanup_orphaned_employers(self):
+        """
+        Remove employers that don't have any positions associated with them.
+        This prevents orphaned employer records that can cause 'None' entries
+        to appear in the UI.
+
+        Returns:
+            int: The number of orphaned records removed
+        """
+        try:
+            # Execute the query to delete orphaned employers
+            self.cursor.execute(
+                """
+                DELETE
+                FROM employer
+                WHERE id NOT IN (SELECT DISTINCT employer
+                                 FROM position
+                                 WHERE employer IS NOT NULL)
+                """
+            )
+
+            # Commit the changes
+            self.conn.commit()
+
+            # Log the number of rows deleted
+            deleted_count = self.cursor.rowcount
+            print(f"Cleaned up {deleted_count} orphaned employer records")
+
+            return deleted_count
+        except Exception as e:
+            # Log the error
+            print(f"Error cleaning up orphaned employers: {str(e)}")
+            # Rollback in case of error
+            self.conn.rollback()
+            raise

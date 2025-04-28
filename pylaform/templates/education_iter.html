@@ -69,12 +69,14 @@
                     <br>
                     <input type="text" name="{{ focusid }}_focus_startdate" id="{{ focusid }}_focus_startdate"
                            value="{{ startdate if startdate is defined else "" }}"
+                           onfocusout="commit_value('{{ focusid }}_focus_startdate');"
                            data-start-date="{{ startdate if startdate is defined else '' }}">
                     <br>
                     <label for="{{ focusid }}_enddate">End Date:</label>
                     <br>
                     <input type="text" name="{{ focusid }}_focus_enddate" id="{{ focusid }}_focus_enddate"
                            value="{{ enddate if enddate is defined else "" }}"
+                           onfocusout="commit_value('{{ focusid }}_focus_enddate');"
                            data-end-date="{{ enddate if enddate is defined else '' }}">
                 </td>
                 <td>

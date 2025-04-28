@@ -225,12 +225,36 @@ def date_adapter(value: str) -> str:
     :param str value: YYYY-MM-DD date format as string. with "Present" and "" as acceptable values.
     :return str: YYYY-MM-DD only
     """
+    # Don't process None values
+    if value is None:
+        return "9999-01-01"
 
-    # TODO: Add present checkbox to academic and employment templates.
-    result: str = value
+    # Convert to string and strip whitespace
+    value = str(value).strip()
+
+    # Handle special cases
     if value == "":
-        result = "9999-01-01"
+        return "9999-01-01"
+    if value.lower() == "present":
+        return "9999-01-01"
     if value == "hidden":
-        result = "0001-01-01"
+        return "0001-01-01"
 
-    return result
+    # Validate date format for YYYY-MM-DD
+    try:
+        # Basic format validation using string operations
+        if len(value) == 10 and value[4] == '-' and value[7] == '-':
+            year = int(value[0:4])
+            month = int(value[5:7])
+            day = int(value[8:10])
+
+            # Very basic validation of year, month, and day
+            if 1 <= year <= 9999 and 1 <= month <= 12 and 1 <= day <= 31:
+                # Return as-is if it seems like a valid date
+                return value
+    except (ValueError, IndexError):
+        pass
+
+    # If we get here, the date format was invalid - log and use default
+    print(f"WARNING: Invalid date format '{value}' - using default")
+    return "9999-01-01"

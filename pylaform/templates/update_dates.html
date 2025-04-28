@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Update Education Dates</h1>
+
+    {% if message %}
+    <div class="alert alert-{{ message_type|default('info') }}">
+        {{ message }}
+    </div>
+    {% endif %}
+
+    <form action="/update_education_dates" method="post">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Update Focus Dates</h5>
+            </div>
+            <div class="card-body">
+                <input type="hidden" name="focus_id" value="4">
+
+                <div class="mb-3">
+                    <label for="start_date" class="form-label">Start Date:</label>
+                    <input type="date" id="start_date" name="focus_startdate" class="form-control" value="2023-01-01">
+                </div>
+
+                <div class="mb-3">
+                    <label for="end_date" class="form-label">End Date:</label>
+                    <input type="date" id="end_date" name="focus_enddate" class="form-control" value="2023-12-31">
+                </div>
+
+                <button type="submit" class="btn btn-primary">Update Dates</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

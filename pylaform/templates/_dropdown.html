@@ -1,13 +1,4 @@
 {% macro drop_down(id, payload, ddpayload, primary, secondary=None, primarybyname=False, secondarybyname=False, extra=True, secondaryid=None, selected_value=None) %}
-{% if debug %}
-    <!-- Debug info -->
-    <div style="font-size:10px; color:gray;">
-        positionid: {{ positionid }}<br>
-        selected_value: {{ selected_value }}<br>
-        current position_id: {{ position_id }}<br>
-    </div>
-{% endif %}
-
     {% if secondary == None %}
         <label for="{{ id }}_{{ primary }}_dropdown">Select {{ primary.capitalize() }}:</label>
         <br>
@@ -38,7 +29,8 @@
                 %}
                     selected
                 {% endif %}
-                value="{{ i["id"] }}" data-employer-id="{{ i.get('employer', '') }}">{{ i["name"] }}</option>
+                value="{{ i["id"] }}"
+                {% if i is mapping and 'employer' in i %}data-employer-id="{{ i.employer }}"{% endif %}>{{ i["name"] }}</option>
         {% endfor %}
         {% if extra == True %}
             <option {{ "selected" if id == "new" or id == "edit" }} value="EDIT">Edit</option>

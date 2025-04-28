@@ -1,92 +1,109 @@
-{% from "_dropdown.html" import drop_down with context %}
-{% macro form_group(payload, ddpayload, employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, selected_position=None, hidden=True) %}
-    {# Ensure unique IDs for new rows #}
-    {% if employerid == "new" %}
-        {% set employerid = "new" %}
-        {% set positionid = "new" %}
-    {% endif %}
+{% macro form_group(employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, ddpayload) %}
+<div id="{{ positionid }}_row" class="mb-4">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="{{ positionid }}_employer_dropdown">Employer:</label>
+                <select class="form-control employer-dropdown" id="{{ positionid }}_employer_dropdown" name="{{ positionid }}_employer_dropdown">
+                    <optgroup label="Employers">
+                        {% for employer_id, employer_name in ddpayload.get("employer", []) %}
+                        <option value="{{ employer_id }}"
+                                {% if employerid|string == employer_id|string %}selected{% endif %}>
+                            {{ employer_name }}
+                        </option>
+                        {% endfor %}
+                    </optgroup>
+                    <option value="EDIT" {% if employerid == "new" or employerid == "edit" %}selected{% endif %}>Edit...</option>
+                    <option value="ADD">Add New...</option>
+                </select>
 
-    <div id="{{ positionid }}" class="container align-items-center form-group">
-        <input type="hidden" name="{{ positionid }}_rowid" value="{{ employerid }}">
-        <table>
-            <tr>
-                <td>
-                    {{ drop_down(
-                        employerid,
-                        payload,
-                        ddpayload,
-                        "employer",
-                        primarybyname=True,
-                        selected_value=employerid
-                    ) }}
-                    <br>
-                    <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}"
-                         id="{{ employerid }}_employer_div">
-                        <label for="{{ employerid }}_employer">Employer Name:</label>
-                        <br>
-                        <input type="text" name="{{ employerid }}_employer" id="{{ employerid }}_employer"
-                               value="{{ employername if employername is defined else "" }}"
-                               onfocusout="commit_value('{{ employerid }}_employer');"
-                               data-employer-name="{{ employername if employername is defined else '' }}">
-                        <br>
-                        <label for="{{ employerid }}_location">Employer Location:</label>
-                        <br>
-                        <input type="text" name="{{ employerid }}_location" id="{{ employerid }}_location"
-                               value="{{ location if location is defined else "" }}"
-                               onfocusout="commit_value('{{ employerid }}_location');"
-                               data-employer-location="{{ location if location is defined else '' }}">
+                <!-- Hidden employer fields -->
+                <input type="hidden" id="{{ positionid }}_rowid" name="{{ positionid }}_rowid" value="{{ positionid }}">
+                <input type="hidden" id="{{ positionid }}_employer_id" name="{{ positionid }}_employer_id" value="{{ employerid }}">
+                <input type="hidden" id="{{ positionid }}_employer" name="{{ positionid }}_employer" value="{{ employername }}">
+
+                <!-- Employer edit fields (initially hidden) -->
+                <div class="employer-edit-div d-none" id="{{ positionid }}_employer_div">
+                    <div class="form-group mt-2">
+                        <label for="{{ positionid }}_employer_name">Employer Name:</label>
+                        <input type="text" class="form-control" id="{{ positionid }}_employer_name"
+                               name="{{ positionid }}_employer_name" value="{{ employername }}">
                     </div>
-                    <label for="{{ employerid }}_employer_enabled">Displayed:</label>
-                    <input type="checkbox" name="{{ employerid }}_employer_enabled" id="{{ employerid }}_employer_enabled"
-                            {{ "checked" if employerstate }} data-employer-state="{{ employerstate }}">
-                </td>
-                <td class="align-items-center">
-                    {% set dropdown_selected_value = selected_position if selected_position is defined and selected_position is not none else positionid %}
-                    {{ drop_down(
-                        positionid,
-                        payload,
-                        ddpayload,
-                        "employer",
-                        secondary="position",
-                        secondaryid=positionid,
-                        secondarybyname=True,
-                        selected_value=dropdown_selected_value
-                    ) }}
-                    <br>
-                    <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ positionid }}_position_div">
-                        <label for="{{ positionid }}_position">Position Name:</label>
-                        <br>
-                        <input type="text" name="{{ positionid }}_position" id="{{ positionid }}_position"
-                               value="{{ positionname if positionname is defined else "" }}"
-                               onfocusout="commit_value('{{ positionid }}_position');"
-                               data-position-name="{{ positionname if positionname is defined else '' }}">
+                    <div class="form-group mt-2">
+                        <label for="{{ positionid }}_location">Location:</label>
+                        <input type="text" class="form-control" id="{{ positionid }}_location"
+                               name="{{ positionid }}_location" value="{{ location }}">
                     </div>
-                    <label for="{{ positionid }}_position_enabled">Displayed:</label>
-                    <input type="checkbox" name="{{ positionid }}_position_enabled" id="{{ positionid }}_position_enabled"
-                            {{ "checked" if positionstate }} data-position-state="{{ positionstate }}">
-                </td>
-                <td>
-                    <label for="{{ positionid }}_startdate">Start Date:</label>
-                    <br>
-                    <input type="text" name="{{ positionid }}_startdate" id="{{ positionid }}_startdate"
-                           value="{{ startdate if startdate is defined else "" }}"
-                           data-start-date="{{ startdate if startdate is defined else '' }}">
-                    <br>
-                    <label for="{{ positionid }}_enddate">End Date:</label>
-                    <br>
-                    <input type="text" name="{{ positionid }}_enddate" id="{{ positionid }}_enddate"
-                           value="{{ enddate if enddate is defined else "" }}"
-                           data-end-date="{{ enddate if enddate is defined else '' }}">
-                </td>
-                <td>
-                    <button class="btn btn-danger"
-                            id="deleteRow"
-                            type="button">
-                        <i class="bi bi-trash"></i>
-                        Delete
-                    </button>
-                </td>
-            </tr>
-        </table>
+                    <div class="form-check mt-2">
+                        <input type="checkbox" class="form-check-input" id="{{ positionid }}_employer_enabled"
+                               name="{{ positionid }}_employer_enabled" {% if employerstate %}checked{% endif %}>
+                        <label class="form-check-label" for="{{ positionid }}_employer_enabled">Display this employer</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="{{ positionid }}_position_dropdown">Position:</label>
+                <select class="form-control position-dropdown" id="{{ positionid }}_position_dropdown" name="{{ positionid }}_position_dropdown">
+                    <optgroup label="Positions">
+                        {% for position_id, position_name, employer_id in ddpayload.get("position", []) %}
+                        <option value="{{ position_id }}"
+                                data-employer-id="{{ employer_id }}"
+                                {% if positionid|string == position_id|string %}selected{% endif %}>
+                            {{ position_name }}
+                        </option>
+                        {% endfor %}
+                    </optgroup>
+                    <option value="EDIT" {% if positionid == "new" or positionid == "edit" %}selected{% endif %}>Edit...</option>
+                    <option value="ADD">Add New...</option>
+                </select>
+
+                <!-- Hidden position fields -->
+                <input type="hidden" id="{{ positionid }}_position_id" name="{{ positionid }}_position_id" value="{{ positionid }}">
+                <input type="hidden" id="{{ positionid }}_position" name="{{ positionid }}_position" value="{{ positionname }}">
+
+                <!-- Position edit fields (initially hidden) -->
+                <div class="position-edit-div d-none" id="{{ positionid }}_position_div">
+                    <div class="form-group mt-2">
+                        <label for="{{ positionid }}_position_name">Position Title:</label>
+                        <input type="text" class="form-control" id="{{ positionid }}_position_name"
+                               name="{{ positionid }}_position_name" value="{{ positionname }}">
+                    </div>
+                    <div class="form-check mt-2">
+                        <input type="checkbox" class="form-check-input" id="{{ positionid }}_position_enabled"
+                               name="{{ positionid }}_position_enabled" {% if positionstate %}checked{% endif %}>
+                        <label class="form-check-label" for="{{ positionid }}_position_enabled">Display this position</label>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-{%- endmacro %}
+
+    <div class="row mt-3">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="{{ positionid }}_startdate">Start Date:</label>
+                <input type="text" class="form-control" id="{{ positionid }}_startdate"
+                       name="{{ positionid }}_startdate" value="{{ startdate }}">
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="{{ positionid }}_enddate">End Date:</label>
+                <input type="text" class="form-control" id="{{ positionid }}_enddate"
+                       name="{{ positionid }}_enddate" value="{{ enddate }}">
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-md-12 text-end">
+            <button type="button" class="btn btn-danger deleteRow">Remove</button>
+        </div>
+    </div>
+
+    <hr>
+</div>
+{% endmacro %}

@@ -41,32 +41,24 @@ def landing():
 @app.route("/information", methods=["GET", "POST"])
 def information():
     if request.method == 'POST':
-        worker.identification(request.form)
+        form_data = request.form.to_dict(flat=False)  # Keep multi-value structure
+        worker.identification(form_data)
         query.purge_cache("identification")
     return render_template("information.html", **fatten(query.get_identification()))
-
 
 @app.route("/summary", methods=["GET", "POST"])
 def summary():
     if request.method == 'POST':
-        worker.update_summary(request.form)
+        form_data = request.form.to_dict(flat=False)  # Keep multi-value structure
+        worker.update_summary(form_data)
         query.purge_cache("summary")
     return render_template("summary_index.html", **fatten(query.get_summary()))
-
-
-@app.route("/education", methods=["GET", "POST"])
-def education():
-    if request.method == 'POST':
-        worker.update_education(request.form)
-        query.purge_cache("education")
-    return render_template("education_index.html", ddpayload=worker.dropdowns("education"),
-                           **fatten(query.get_education()))
-
 
 @app.route("/certifications", methods=["GET", "POST"])
 def certifications():
     if request.method == 'POST':
-        worker.certifications(request.form)
+        form_data = request.form.to_dict(flat=False)  # Keep multi-value structure
+        worker.certifications(form_data)
         query.purge_cache("certifications")
 
     # Custom handling for certifications
@@ -90,11 +82,85 @@ def certifications():
 
     return render_template("certifications_index.html", **payload)
 
+@app.route("/glossary", methods=["GET", "POST"])
+def glossary():
+    if request.method == 'POST':
+        form_data = request.form.to_dict(flat=False)  # Keep multi-value structure
+        worker.update_glossary(form_data)
+        query.purge_cache("glossary")
+    return render_template("glossary_index.html", **fatten(query.get_glossary()))
+
+
+@app.route("/education", methods=["GET", "POST"])
+def education():
+    if request.method == 'POST':
+        # Pass the raw request.form object directly without converting it to dict
+        worker.update_education(request.form)
+        query.purge_cache("education")
+
+    # Get raw education data
+    raw_edu_data = query.get_education()
+
+    # Group education data by school and focus
+    edu_grouped = []
+
+    # Group by school first
+    schools = {}
+    focuses = {}
+
+    # Collect all schools and focuses
+    for item in raw_edu_data:
+        if item['id'].startswith('school_'):
+            school_id = item['id']
+            if school_id not in schools:
+                schools[school_id] = {
+                    'school': school_id,
+                    'schoolstate': item['state']
+                }
+
+            # Add the attribute (schoolname or location)
+            if item['attr'] in ['schoolname', 'location']:
+                schools[school_id][item['attr']] = item['value']
+
+        elif item['id'].startswith('focus_'):
+            focus_id = item['id']
+            if focus_id not in focuses:
+                focuses[focus_id] = {
+                    'focus': focus_id,
+                    'focusstate': item['state']
+                }
+
+            # Add the attribute (focusname, startdate, enddate, school)
+            if item['attr'] in ['focusname', 'startdate', 'enddate', 'school']:
+                focuses[focus_id][item['attr']] = item['value']
+
+    # Now connect schools with their focuses
+    for focus_id, focus in focuses.items():
+        if 'school' in focus and focus['school'] in schools:
+            # Create a complete entry with both school and focus data
+            school_data = schools[focus['school']].copy()
+            # Add focus data
+            for key, value in focus.items():
+                if key != 'school':  # Skip the school reference
+                    school_data[key] = value
+
+            edu_grouped.append(school_data)
+
+    # Print final debug info
+    print(f"--- DEBUG: Sending {len(edu_grouped)} education entries to template")
+    for item in edu_grouped:
+        print(f"School: {item.get('schoolname')}, Focus: {item.get('focusname')}")
+
+    return render_template("education_index.html",
+                           payload=edu_grouped,  # Use the processed data
+                           ddpayload=worker.dropdowns("education"))
+
 
 @app.route("/skills", methods=["GET", "POST"])
 def skills():
     if request.method == 'POST':
-        worker.update_skills(request.form)
+        form_data = request.form.to_dict(flat=False)  # Keep multi-value structure
+        worker.update_skills(form_data)
         query.purge_cache("skills")
 
     # Get dropdown data
@@ -135,16 +201,28 @@ def skills():
 @app.route("/employment", methods=["GET", "POST"])
 def positions():
     if request.method == 'POST':
+        # Pass the raw request.form object directly without converting it
         worker.update_positions(request.form)
         query.purge_cache("positions")
-    return render_template("employment_index.html", ddpayload=worker.dropdowns("employment"),
-                           **fatten(query.get_positions()))
+
+    # Get dropdown data and print it for debugging
+    dropdown_data = worker.dropdowns("employment")
+    print("DEBUG: Employment dropdown data:", dropdown_data)
+
+    # Get position data and print it for debugging
+    position_data = query.get_positions()
+    print("DEBUG: Position data:", position_data)
+
+    # Return the template with the data in the expected format
+    return render_template("employment_index.html",
+                           ddpayload=dropdown_data,
+                           payload=fatten(position_data))
+
 
 @app.route("/achievements", methods=["GET", "POST"])
 def achievements():
     if request.method == 'POST':
-        # Create a mutable copy of the form data
-        form_data = request.form.to_dict(flat=True)
+        form_data = request.form.to_dict(flat=False)  # Keep multi-value structure
         worker.update_achievements(form_data)
         query.purge_cache("achievements")
 
@@ -182,15 +260,6 @@ def achievements():
     return render_template("achievements_index.html",
                            ddpayload=dropdown_data,
                            **payload)
-
-
-@app.route("/glossary", methods=["GET", "POST"])
-def glossary():
-    if request.method == 'POST':
-        worker.update_glossary(request.form)
-        query.purge_cache("glossary")
-    return render_template("glossary_index.html", **fatten(query.get_glossary()))
-
 
 @app.route("/generate/one-page", methods=["GET"])
 def one_page_doc():
@@ -370,6 +439,41 @@ def ollama_config():
                 "error": f"Server error: {str(e)}"
             }), 500
 
+@app.route("/test_date_form")
+def test_date_form():
+    """Test form for updating education dates."""
+    return render_template("update_dates.html")
+
+
+@app.route("/update_education_dates", methods=["POST"])
+def update_education_dates():
+    """Handle the education date updates."""
+    # Debug logging
+    print("Form data received:", request.form)
+
+    # Get focus ID and dates from form
+    focus_id = request.form.get("focus_id", "4")
+    start_date = request.form.get("focus_startdate", "")
+    end_date = request.form.get("focus_enddate", "")
+
+    print(f"Processing dates: start='{start_date}', end='{end_date}'")
+
+    # Create a new form-like structure that the worker can process
+    form_data = ImmutableMultiDict([
+        (f"{focus_id}_focus_startdate", start_date),
+        (f"{focus_id}_focus_enddate", end_date),
+        (f"{focus_id}_focus_name", "Test Focus"),  # Required field
+        (f"{focus_id}_focus_enabled", "on")  # Required field
+    ])
+
+    # Update the education record using the existing method
+    worker = Worker()
+    worker.update_education(form_data)
+
+    # Return to the form with a success message
+    return render_template("update_dates.html",
+                           message="Dates updated successfully!",
+                           message_type="success")
 
 @app.route("/api/enable-ai", methods=["GET"])
 def enable_ai():
@@ -382,6 +486,52 @@ def enable_ai():
         "message": "AI service enabled successfully"
     })
 
+
+@app.route("/update_focus_dates/<int:focus_id>", methods=["POST"])
+def update_focus_dates(focus_id):
+    """Direct endpoint to update focus dates."""
+    try:
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+
+        if not start_date or not end_date:
+            return "Error: Missing date values", 400
+
+        # Get a database connection using the correct import path
+        from pylaform.commands.db import connect
+        conn = connect.db()
+        cursor = conn.cursor()
+
+        # Update the database directly
+        cursor.execute(
+            """
+            UPDATE focus
+            SET startdate = ?,
+                enddate   = ?
+            WHERE id = ?
+            """,
+            (start_date, end_date, focus_id)
+        )
+
+        conn.commit()
+
+        # Verify the update
+        result = cursor.execute("SELECT startdate, enddate FROM focus WHERE id = ?",
+                                (focus_id,)).fetchone()
+
+        # Close the connection
+        conn.close()
+
+        # Clear any cached data
+        query.purge_cache("education")
+
+        if result:
+            return f"Updated focus {focus_id} dates: {result[0]} to {result[1]}"
+        else:
+            return f"Error: No focus found with ID {focus_id}", 404
+
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 # =====================================================================
 # DIAGNOSTIC ENDPOINTS

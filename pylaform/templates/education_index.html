@@ -1,65 +1,480 @@
 {% extends "base.html" %}
-{% from "education_iter.html" import form_group with context %}
+
 {% block content %}
-    <div class="lead d-flex align-items-bottom justify-content-center">
-        <form method="post">
-            <!-- Iterate payload -->
-            {% for i in payload %}
-                {% if i|length > 0 and i.get("focus") is not none and i.get("focus") != "None" and i.get("focus")|string != "None" %}
-                    {{ form_group(payload, ddpayload, i["school"], i["schoolname"], i["location"], i["schoolstate"], i["focus"], i["focusname"], i["startdate"], i["enddate"], i["focusstate"]) }}
-                {% endif %}
-            {% endfor %}
+<div class="container">
+    <h1>Education</h1>
 
-            <div id="newinput"></div>
-            <button id="rowAdder" type="button" class="btn btn-dark">
-                        <span class="bi bi-plus-square-dotted">
-                        </span> ADD
-            </button>
-            <button type="submit" class="btn btn-success">
-                        <span class="bi bi-plus-square-dotted">
-                        </span> SUBMIT
-            </button>
-        </form>
-    </div>
+{#    <!-- Debug Information (can be removed once everything is working) -->#}
+{#    <div style="background-color: #f5f5f5; padding: 10px; margin-bottom: 20px; border: 1px solid #ddd;">#}
+{#        <h4>Debug Information</h4>#}
+{#        <p>Payload length: {{ payload|length }}</p>#}
+{#        <pre>{{ payload|tojson(indent=2) }}</pre>#}
+{#    </div>#}
+
+    <!-- Display education entries -->
+    <form action="/education" method="post">
+        {% for item in payload %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h3>{{ item.schoolname }}</h3>
+                    <p class="text-muted mb-0">{{ item.location }}</p>
+                </div>
+                <div>
+                    <h4 class="mb-0">{{ item.focusname }}</h4>
+                    <p class="text-muted mb-0">
+                        {{ item.startdate }} - {{ item.enddate }}
+                    </p>
+                </div>
+                <!-- Add delete button -->
+                <div>
+                    <button type="button" class="btn btn-danger btn-sm deleteRow">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- School Information -->
+                    <div class="col-md-6">
+                        <h4 class="mb-3">School Information</h4>
+
+                        <!-- School Selection Dropdown -->
+                        <div class="form-group mb-3">
+                            <label for="{{ item.school }}_school_dropdown">Select School:</label>
+                            <select class="form-select" name="{{ item.school }}_school_dropdown" id="{{ item.school }}_school_dropdown">
+                                {% for school in ddpayload.school %}
+                                <option value="{{ school.id }}"
+                                    {% if school.id|string == item.school.replace('school_', '') %}selected{% endif %}>
+                                    {{ school.name }}
+                                </option>
+                                {% endfor %}
+                                <option value="EDIT">Edit Current</option>
+                                <option value="ADD">Add New</option>
+                            </select>
+
+
+                        </div>
+
+                        <!-- School Edit Fields -->
+                        <div class="school-edit-fields">
+                            <div class="form-group mb-3">
+                                <label>School Name:</label>
+                                <input type="text" class="form-control" name="{{ item.school }}_school_name" value="{{ item.schoolname }}">
+                            </div>
+                            <div class="form-group mb-3">
+                                <label>Location:</label>
+                                <input type="text" class="form-control" name="{{ item.school }}_school_location" value="{{ item.location }}">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="{{ item.school }}_school_enabled"
+                                       name="{{ item.school }}_school_enabled" {% if item.schoolstate == 1 %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ item.school }}_school_enabled">School Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Focus/Degree Information -->
+                    <div class="col-md-6">
+                        <h4 class="mb-3">Degree/Focus Information</h4>
+
+                        <!-- Focus Selection Dropdown -->
+                        <div class="form-group mb-3">
+                            <label for="{{ item.focus }}_focus_dropdown">Select Degree/Focus:</label>
+                            <select class="form-select" name="{{ item.focus }}_focus_dropdown" id="{{ item.focus }}_focus_dropdown">
+                                {% for focus in ddpayload.degree %}
+                                <option value="{{ focus.id }}"
+                                    {% if focus.id|string == item.focus.replace('focus_', '') %}selected{% endif %}>
+                                    {{ focus.name }}
+                                </option>
+                                {% endfor %}
+                                <option value="EDIT">Edit Current</option>
+                                <option value="ADD">Add New</option>
+                            </select>
+
+                        </div>
+
+                        <!-- Focus Edit Fields -->
+                        <div class="focus-edit-fields">
+                            <div class="form-group mb-3">
+                                <label>Focus/Degree Name:</label>
+                                <input type="text" class="form-control" name="{{ item.focus }}_focus_name" value="{{ item.focusname }}">
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label>Start Date:</label>
+                                        <input type="date" class="form-control" name="{{ item.focus }}_focus_startdate" value="{{ item.startdate }}">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label>End Date:</label>
+                                        <input type="date" class="form-control" name="{{ item.focus }}_focus_enddate" value="{{ item.enddate }}">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="{{ item.focus }}_focus_enabled"
+                                       name="{{ item.focus }}_focus_enabled" {% if item.focusstate == 1 %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ item.focus }}_focus_enabled">Focus Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden fields for record IDs -->
+                <input type="hidden" name="{{ item.school }}_rowid" value="{{ item.school }}">
+                <input type="hidden" name="{{ item.focus }}_rowid" value="{{ item.focus }}">
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Add New Education Entry section -->
+        <button type="button" id="add-education" class="btn btn-secondary mb-3">Add New Education</button>
+
+        <div id="new-education-template" style="display: none;">
+            <div class="card mb-4 new-education-entry">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3>New Education Entry</h3>
+                    </div>
+                    <div>
+                        <!-- Add delete button -->
+                        <button type="button" class="btn btn-danger btn-sm deleteRow">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- School Information -->
+                        <div class="col-md-6">
+                            <h4 class="mb-3">School Information</h4>
+                            <!-- School Selection Dropdown for New Entry -->
+                            <div class="form-group mb-3">
+                                <label for="new_school_dropdown">Select School:</label>
+                                <select class="form-select" name="new_school_dropdown" id="new_school_dropdown">
+                                    <option value="ADD" selected>Add New School</option>
+                                    {% for school in ddpayload.school %}
+                                    <option value="{{ school.id }}">{{ school.name }}</option>
+                                    {% endfor %}
+                                </select>
+
+                            </div>
+
+                            <!-- New School Fields -->
+                            <div class="new-school-fields">
+                                <div class="form-group mb-3">
+                                    <label>School Name:</label>
+                                    <input type="text" class="form-control" name="new_school_name" value="">
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label>Location:</label>
+                                    <input type="text" class="form-control" name="new_school_location" value="">
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input type="checkbox" class="form-check-input" id="new_school_enabled"
+                                           name="new_school_enabled" checked>
+                                    <label class="form-check-label" for="new_school_enabled">School Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Focus/Degree Information -->
+                        <div class="col-md-6">
+                            <h4 class="mb-3">Degree/Focus Information</h4>
+                            <!-- Focus Selection Dropdown for New Entry -->
+                            <div class="form-group mb-3">
+                                <label for="new_focus_dropdown">Select Degree/Focus:</label>
+                                <select class="form-select" name="new_focus_dropdown" id="new_focus_dropdown">
+                                    <option value="ADD" selected>Add New Degree/Focus</option>
+                                    {% for focus in ddpayload.degree %}
+                                    <option value="{{ focus.id }}">{{ focus.name }}</option>
+                                    {% endfor %}
+                                </select>
+
+                            </div>
+
+                            <!-- New Focus Fields -->
+                            <div class="new-focus-fields">
+                                <div class="form-group mb-3">
+                                    <label>Focus/Degree Name:</label>
+                                    <input type="text" class="form-control" name="new_focus_name" value="">
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label>Start Date:</label>
+                                            <input type="date" class="form-control" name="new_focus_startdate" value="">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label>End Date:</label>
+                                            <input type="date" class="form-control" name="new_focus_enddate" value="">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input type="checkbox" class="form-check-input" id="new_focus_enabled"
+                                           name="new_focus_enabled" checked>
+                                    <label class="form-check-label" for="new_focus_enabled">Focus Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden field for new entry -->
+                    <input type="hidden" name="new_rowid" value="new">
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+</div>
 {% endblock %}
+
 {% block scripts %}
-    <script type="text/javascript">
-        clicks = 0;
-        $("#rowAdder").click(function () {
-            clicks += 1;
-            $("#newinput").append("<hr>");
-            newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
-            $("#newinput").append(newRowAdd);
+<script>
+$(document).ready(function() {
+    // Initialize focus/degree dropdowns
+    $(".form-select[id$='_focus_dropdown']").each(function() {
+        const fullId = this.id;
+        const rowId = fullId.split('_')[0];
+        const focusId = $(`#${rowId}_focus_id`).val();
+
+        console.log(`Initializing focus dropdown ${fullId} with ID ${focusId}`);
+
+        if (focusId && focusId !== "new" && focusId !== "edit") {
+            // Try to find the option with this ID
+            const matchingOption = $(this).find(`option[value="${focusId}"]`);
+
+            if (matchingOption.length) {
+                // Found the option, select it
+                $(this).val(focusId);
+                console.log(`Selected focus option: ${matchingOption.text()}`);
+            } else {
+                console.log(`Warning: No matching focus option found for ID ${focusId}`);
+            }
+        }
+    });
+
+    // Initialize school dropdowns
+    $(".form-select[id$='_school_dropdown']").each(function() {
+        const fullId = this.id;
+        const rowId = fullId.split('_')[0];
+        const schoolId = $(`#${rowId}_school_id`).val();
+
+        console.log(`Initializing school dropdown ${fullId} with ID ${schoolId}`);
+
+        if (schoolId && schoolId !== "new" && schoolId !== "edit") {
+            // Extract the numeric ID if it includes "school_" prefix
+            const cleanId = schoolId.replace('school_', '');
+
+            // Try to find the option with this ID
+            const matchingOption = $(this).find(`option[value="${cleanId}"]`);
+
+            if (matchingOption.length) {
+                // Found the option, select it
+                $(this).val(cleanId);
+                console.log(`Selected school option: ${matchingOption.text()}`);
+            } else {
+                console.log(`Warning: No matching school option found for ID ${cleanId}`);
+            }
+        }
+    });
+
+    // Handle changes in school dropdown
+    $(".form-select[id$='_school_dropdown']").change(function() {
+        const fullId = this.id;
+        const rowId = fullId.split('_')[0];
+        const selectedValue = $(this).val();
+
+        if (selectedValue === "EDIT" || selectedValue === "ADD") {
+            // These are handled by modal dialogs or other logic
+            return;
+        }
+
+        // Update the hidden field with the selected school ID
+        $(`#${rowId}_school_id`).val("school_" + selectedValue);
+        console.log(`Updated hidden field with school_${selectedValue}`);
+    });
+
+    // Handle changes in focus dropdown
+    $(".form-select[id$='_focus_dropdown']").change(function() {
+        const fullId = this.id;
+        const rowId = fullId.split('_')[0];
+        const selectedValue = $(this).val();
+
+        if (selectedValue === "EDIT" || selectedValue === "ADD") {
+            // These are handled by modal dialogs or other logic
+            return;
+        }
+
+        // Update the hidden field with the selected focus ID
+        $(`#${rowId}_focus_id`).val("focus_" + selectedValue);
+        console.log(`Updated hidden field with focus_${selectedValue}`);
+    });
+});
+$(document).ready(function() {
+    // Toggle edit fields based on dropdown selection
+    function handleDropdownChange(dropdownId, fieldsClass) {
+        $(document).on('change', dropdownId, function() {
+            const selectedValue = $(this).val();
+            const editFields = $(this).closest('.card-body').find(fieldsClass);
+
+            if (selectedValue === 'EDIT' || selectedValue === 'ADD') {
+                editFields.show();
+            } else {
+                editFields.hide();
+            }
+        });
+    }
+
+    // Initialize edit fields visibility for existing entries
+    $('[id$="_school_dropdown"]').each(function() {
+        const selectedValue = $(this).val();
+        const editFields = $(this).closest('.card-body').find('.school-edit-fields');
+
+        if (selectedValue === 'EDIT' || selectedValue === 'ADD') {
+            editFields.show();
+        } else {
+            editFields.hide();
+        }
+    });
+
+    $('[id$="_focus_dropdown"]').each(function() {
+        const selectedValue = $(this).val();
+        const editFields = $(this).closest('.card-body').find('.focus-edit-fields');
+
+        if (selectedValue === 'EDIT' || selectedValue === 'ADD') {
+            editFields.show();
+        } else {
+            editFields.hide();
+        }
+    });
+
+    // Handle dropdown changes
+    handleDropdownChange('[id$="_school_dropdown"]', '.school-edit-fields');
+    handleDropdownChange('[id$="_focus_dropdown"]', '.focus-edit-fields');
+
+    // Add new education entry
+    $('#add-education').click(function() {
+        // Clone the template
+        var newEntry = $('#new-education-template').children().clone();
+
+        // Insert before the template container
+        newEntry.insertBefore('#new-education-template');
+
+        // Show the new entry
+        newEntry.show();
+    });
+
+    <!-- Delete row button handler -->
+    $(document).on("click", ".deleteRow", function() {
+        const card = $(this).closest(".card");
+
+        // Find hidden input fields containing IDs from the card
+        const schoolInput = card.find("input[name$='_rowid']").filter(function() {
+            return this.name.includes("school_");
         });
 
-        $("body").on("click", ".rowEditor", function () {
-            var div_id = $(this).closest("div").attr("id");
-            var currentRow = $("#" + div_id);
-            var schoolVal = currentRow.find("[name$='school']").val();
-            var schoolNameVal = currentRow.find("[name$='schoolname']").val();
-            var locationVal = currentRow.find("[name$='location']").val();
-            var focusVal = currentRow.find("[name$='focus']").val();
-            var focusNameVal = currentRow.find("[name$='focusname']").val();
-            var startDateVal = currentRow.find("[name$='startdate']").val();
-            var endDateVal = currentRow.find("[name$='enddate']").val();
-
-            newRowAdd = `{{ form_group(payload, ddpayload, "edit", "", "", true, "", "", "", "", true, hidden=False) }}`;
-            currentRow.html(newRowAdd);
-
-            currentRow.find("[name$='school']").val(schoolVal);
-            currentRow.find("[name$='schoolname']").val(schoolNameVal);
-            currentRow.find("[name$='location']").val(locationVal);
-            currentRow.find("[name$='focus']").val(focusVal);
-            currentRow.find("[name$='focusname']").val(focusNameVal);
-            currentRow.find("[name$='startdate']").val(startDateVal);
-            currentRow.find("[name$='enddate']").val(endDateVal);
+        const focusInput = card.find("input[name$='_rowid']").filter(function() {
+            return this.name.includes("focus_");
         });
 
-        $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest("div").attr("id");
-            $("#" + div_id).remove();
-            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-        });
-    </script>
-    {% include "_scripts.html" %}
+        // Add hidden fields to mark both school and focus for deletion
+        if (schoolInput.length) {
+            const schoolId = schoolInput.val();
+            console.log(`Marking school ${schoolId} for deletion`);
+
+            $("<input>").attr({
+                type: "hidden",
+                name: `${schoolId}_delete`,
+                value: "true"
+            }).appendTo("form");
+        }
+
+        if (focusInput.length) {
+            const focusId = focusInput.val();
+            console.log(`Marking focus ${focusId} for deletion`);
+
+            $("<input>").attr({
+                type: "hidden",
+                name: `${focusId}_delete`,
+                value: "true"
+            }).appendTo("form");
+        }
+
+        // Remove the card from display
+        card.hide();
+        
+        // Add a visual indicator that this item will be deleted
+        card.before('<div class="alert alert-warning mb-3">This education entry will be deleted when you save.</div>');
+    });
+
+    // Handle New Entry Dropdowns
+    $(document).on('change', '#new_school_dropdown', function() {
+        const selectedValue = $(this).val();
+        const newSchoolFields = $(this).closest('.col-md-6').find('.new-school-fields');
+
+        if (selectedValue === 'ADD') {
+            newSchoolFields.show();
+        } else {
+            newSchoolFields.hide();
+        }
+    });
+
+    $(document).on('change', '#new_focus_dropdown', function() {
+        const selectedValue = $(this).val();
+        const newFocusFields = $(this).closest('.col-md-6').find('.new-focus-fields');
+
+        if (selectedValue === 'ADD') {
+            newFocusFields.show();
+        } else {
+            newFocusFields.hide();
+        }
+    });
+});
+// Fix for dropdown selection issue - simplified version
+document.addEventListener("DOMContentLoaded", function() {
+  // Find all dropdowns in the document
+  const dropdowns = document.querySelectorAll("select");
+  
+  dropdowns.forEach(function(dropdown) {
+    // Find options with the selected attribute
+    const preselectedOption = dropdown.querySelector("option[selected]");
+    
+    if (preselectedOption) {
+      // Set the dropdown value to match the preselected option
+      console.log(`Setting dropdown ${dropdown.id || 'unnamed'} to value: ${preselectedOption.value}`);
+      dropdown.value = preselectedOption.value;
+    }
+  });
+  
+  // Simpler approach - find any dropdowns with specific options
+  const allDropdowns = document.querySelectorAll("select");
+  allDropdowns.forEach(function(dropdown) {
+    // Check each dropdown for an option with value="3" and selected attribute
+    const options = dropdown.querySelectorAll("option");
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].value === "3" && options[i].hasAttribute("selected")) {
+        console.log('Found dropdown with option value="3" selected, forcing selection');
+        dropdown.value = "3";
+        break;
+      }
+    }
+  });
+});
+// Add to your document.ready function in _scripts.html
+// Handle date fields specifically
+$("input[name$='_startdate'], input[name$='_enddate']").on('change', function() {
+    const id = $(this).attr('id');
+    console.log('Date field changed:', id, 'value:', $(this).val());
+    commit_value(id);
+});
+
+</script>
 {% endblock %}

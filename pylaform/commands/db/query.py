@@ -613,6 +613,12 @@ class Queries:
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
             for (employer_id, employer, location, employer_state,
                  position_id, positionname, start_date, end_date, position_state, selected_position) in result:
+
+                # Skip employers with no positions
+                if position_id is None:
+                    logger.debug(f"Skipping employer {employer_id} ({employer}) with no positions")
+                    continue
+
                 # Log each position and its selected_position
                 logger.debug(f"Processing position {position_id} with selected_position: {selected_position}")
 

@@ -1,66 +1,478 @@
 {% extends "base.html" %}
-{% from "employment_iter.html" import form_group with context %}
+
 {% block content %}
-    <div class="lead d-flex align-items-bottom justify-content-center">
-        <form method="post">
-            <!-- Iterate payload -->
-            {% for i in payload %}
-                {% if i|length > 0 and i.get("position") is not none and i.get("position") != "None" and i.get("position")|string != "None" %}
-                    {# Find selected_position in the raw payload #}
-                    {% set position_id = i["position"]|string %}
-                    {% set selected_position = None %}
-                    {% set found = false %}
+<div class="container">
+    <h1>Employment History</h1>
 
-                    {# Directly search through payload items for the selected_position #}
-                    {% for item in payload %}
-                        {% if not found and item.get("id") == "position_" + position_id and item.get("attr") == "selected_position" %}
-                            {% set selected_position = item.get("value") %}
-                            {% set found = true %}
-                        {% endif %}
-                    {% endfor %}
+    <!-- Display employment entries -->
+    <form action="/employment" method="post">
+        {% for position in payload.payload %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h3>{{ position.employername }}</h3>
+                    <p class="text-muted mb-0">{{ position.location }}</p>
+                </div>
+                <div>
+                    <h4 class="mb-0">{{ position.positionname }}</h4>
+                    <p class="text-muted mb-0">
+                        {{ position.startdate }} - {% if position.enddate == '9999-01-01' %}Present{% else %}{{ position.enddate }}{% endif %}
+                    </p>
+                </div>
+                <!-- Add delete button to the header -->
+                <div>
+                    <button type="button" class="btn btn-danger btn-sm deleteRow">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Rest of the card content remains unchanged -->
+                <div class="row">
+                    <!-- Employer Information -->
+                    <div class="col-md-6">
+                        <h4 class="mb-3">Employer Information</h4>
 
-                    {{ form_group(
-                        payload,
-                        ddpayload,
-                        i["employer"],
-                        i["employername"],
-                        i["location"],
-                        i["employerstate"],
-                        i["position"],
-                        i["positionname"],
-                        i["startdate"],
-                        i["enddate"],
-                        i["positionstate"],
-                        selected_position
-                    ) }}
-                {% endif %}
-            {% endfor %}
+                        <!-- Generate a proper row ID for positions with None -->
+                        {% set row_id = position.position if position.position != 'None' and position.position is not none else 'new' + range(1000, 9999)|random|string %}
 
-            <div id="newinput"></div>
-            <button id="rowAdder" type="button" class="btn btn-dark">
-                <span class="bi bi-plus-square-dotted"></span> ADD
-            </button>
-            <button type="submit" class="btn btn-success">
-                <span class="bi bi-plus-square-dotted"></span> SUBMIT
-            </button>
-        </form>
-    </div>
+                        <!-- Employer Selection Dropdown - note: NOT using 'dropdown' class -->
+                        <div class="form-group mb-3">
+                            <label for="{{ row_id }}_employer_dropdown">Select Employer:</label>
+                            <select class="form-select custom-employer-dropdown" name="{{ row_id }}_employer_dropdown" id="{{ row_id }}_employer_dropdown">
+                                {% for employer_id, employer_name in ddpayload.get("employer", []) %}
+                                <option value="{{ employer_id }}"
+                                    {% if employer_id|string == position.employer.replace('employer_', '')|string %}selected{% endif %}>
+                                    {{ employer_name }}
+                                </option>
+                                {% endfor %}
+                                <option value="EDIT">Edit Current</option>
+                                <option value="ADD">Add New</option>
+                            </select>
+                        </div>
+
+                        <!-- Employer Edit Fields -->
+                        <div class="employer-edit-div d-none" id="{{ row_id }}_employer_div">
+                            <div class="form-group mb-3">
+                                <label>Employer Name:</label>
+                                <input type="text" class="form-control" id="{{ row_id }}_employer_name"
+                                       name="{{ row_id }}_employer_name" value="{{ position.employername }}">
+                            </div>
+                            <div class="form-group mb-3">
+                                <label>Location:</label>
+                                <input type="text" class="form-control" id="{{ row_id }}_location"
+                                       name="{{ row_id }}_location" value="{{ position.location }}">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="{{ row_id }}_employer_enabled"
+                                       name="{{ row_id }}_employer_enabled" {% if position.employerstate == 1 %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ row_id }}_employer_enabled">Employer Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Position Information -->
+                    <div class="col-md-6">
+                        <h4 class="mb-3">Position Information</h4>
+
+                        <!-- Position Selection Dropdown - note: NOT using 'dropdown' class -->
+                        <div class="form-group mb-3">
+                            <label for="{{ row_id }}_position_dropdown">Select Position:</label>
+                            <select class="form-select custom-position-dropdown" name="{{ row_id }}_position_dropdown" id="{{ row_id }}_position_dropdown">
+                                <optgroup label="Positions">
+                                {% for position_id, position_name, employer_id in ddpayload.get("position", []) %}
+                                <option value="{{ position_id }}"
+                                        data-employer-id="{{ employer_id }}"
+                                        {% if position_id|string == position.position.replace('position_', '')|string %}selected{% endif %}>
+                                    {{ position_name }}
+                                </option>
+                                {% endfor %}
+                                </optgroup>
+                                <option value="EDIT">Edit Current</option>
+                                <option value="ADD">Add New</option>
+                            </select>
+                        </div>
+
+                        <!-- Position Edit Fields -->
+                        <div class="position-edit-div d-none" id="{{ row_id }}_position_div">
+                            <div class="form-group mb-3">
+                                <label>Position Title:</label>
+                                <input type="text" class="form-control" id="{{ row_id }}_position_name"
+                                       name="{{ row_id }}_position_name" value="{{ position.positionname }}">
+                            </div>
+                            <!-- Fixed date input fields -->
+                            <div class="form-group mb-3">
+                                <label>Start Date:</label>
+                                <input type="date" class="form-control" 
+                                       name="{{ row_id }}_startdate" 
+                                       id="{{ row_id }}_startdate"
+                                       value="{{ position.startdate }}">
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label>End Date:</label>
+                                <input type="date" class="form-control" 
+                                       name="{{ row_id }}_enddate" 
+                                       id="{{ row_id }}_enddate"
+                                       value="{{ position.enddate }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden fields for record IDs -->
+                <input type="hidden" id="{{ row_id }}_rowid" name="{{ row_id }}_rowid" value="{{ position.position }}">
+                <input type="hidden" id="{{ row_id }}_employer_id" name="{{ row_id }}_employer_id" value="{{ position.employer }}">
+                <input type="hidden" id="{{ row_id }}_employer" name="{{ row_id }}_employer" value="{{ position.employername }}">
+                <input type="hidden" id="{{ row_id }}_position_id" name="{{ row_id }}_position_id" value="{{ position.position }}">
+                <input type="hidden" id="{{ row_id }}_position" name="{{ row_id }}_position" value="{{ position.positionname }}">
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Add New Position Entry section -->
+        <button type="button" id="add-position" class="btn btn-secondary mb-3">Add New Position</button>
+        <div id="newinput"></div>
+
+        <!-- Save button -->
+        <div class="row mt-4 mb-4">
+            <div class="col-md-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
 {% endblock %}
-{% block scripts %}
-    <script type="text/javascript">
-        clicks = 0;
-        $("#rowAdder").click(function () {
-            clicks += 1;
-            $("#newinput").append("<hr>");
-            newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "new", "", "", "", true, None, false) }}`;
-            $("#newinput").append(newRowAdd);
-        });
 
-        $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest("div").attr("id");
-            $("#" + div_id).remove();
-            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Debug the dropdown data available
+    console.log("Employment dropdown data:", {{ ddpayload|tojson }});
+
+    // The key fix: Disable the global dropdown handler for our custom dropdowns
+    // First, store the original handler
+    const originalDropdownHandler = $._data($("body")[0], "events")?.change?.find(
+        handler => handler.selector === ".dropdown"
+    )?.handler;
+
+    if (originalDropdownHandler) {
+        console.log("Found global dropdown handler, preventing it from affecting our dropdowns");
+
+        // Remove the dropdown class immediately to prevent the handler from being triggered
+        $(".custom-employer-dropdown, .custom-position-dropdown").removeClass("dropdown");
+
+        // Extra safety - prevent the handler from affecting our dropdowns even if the class is present
+        $("body").on("change", ".custom-employer-dropdown, .custom-position-dropdown", function(e) {
+            // Stop propagation to prevent the global handler from running
+            e.stopPropagation();
         });
-    </script>
-    {% include "_scripts.html" %}
+    }
+
+    // Employer dropdown change handler
+    $(document).on("change", ".custom-employer-dropdown", function(e) {
+        // Stop propagation to prevent global handlers
+        e.stopPropagation();
+
+        const selectedValue = $(this).val();
+        const rowId = $(this).attr('id').split('_')[0];
+
+        // Handle EDIT/ADD options
+        if (selectedValue === "EDIT") {
+            $(`#${rowId}_employer_div`).removeClass("d-none");
+            $(this).prop("disabled", true);
+            return;
+        } else if (selectedValue === "ADD") {
+            // Reset and show the edit fields
+            $(`#${rowId}_employer_div`).removeClass("d-none");
+            $(`#${rowId}_employer_name`).val('');
+            $(`#${rowId}_location`).val('');
+            $(this).prop("disabled", true);
+            return;
+        }
+
+        // Handle regular employer selection
+        $(`#${rowId}_employer_div`).addClass("d-none");
+        $(this).prop("disabled", false);
+
+        // Find the selected employer's name and location
+        const selectedText = $(this).find("option:selected").text().trim();
+
+        // Update hidden fields
+        $(`#${rowId}_employer_id`).val("employer_" + selectedValue);
+        $(`#${rowId}_employer`).val(selectedText);
+
+        // Filter positions dropdown for this employer
+        updatePositionOptions(rowId, selectedValue);
+    });
+
+    // Position dropdown change handler
+    $(document).on("change", ".custom-position-dropdown", function(e) {
+        // Stop propagation to prevent global handlers
+        e.stopPropagation();
+
+        const selectedValue = $(this).val();
+        const rowId = $(this).attr('id').split('_')[0];
+
+        console.log(`Position dropdown changed: rowId=${rowId}, selectedValue=${selectedValue}`);
+
+        // Handle EDIT/ADD options
+        if (selectedValue === "EDIT") {
+            $(`#${rowId}_position_div`).removeClass("d-none");
+            $(this).prop("disabled", true);
+            return;
+        } else if (selectedValue === "ADD") {
+            // Reset and show the edit fields
+            $(`#${rowId}_position_div`).removeClass("d-none");
+            $(`#${rowId}_position_name`).val('');
+            $(this).prop("disabled", true);
+            return;
+        }
+
+        // Handle regular position selection
+        $(`#${rowId}_position_div`).addClass("d-none");
+        $(this).prop("disabled", false);
+
+        // Find the selected position's name
+        const selectedText = $(this).find("option:selected").text().trim();
+
+        console.log(`Selected position: ${selectedText}`);
+
+        // Update hidden fields
+        $(`#${rowId}_position_id`).val("position_" + selectedValue);
+        $(`#${rowId}_position`).val(selectedText);
+    });
+
+    // Function to update position options based on employer
+    function updatePositionOptions(rowId, employerId) {
+        const positionDropdown = $(`#${rowId}_position_dropdown`);
+
+        console.log(`Filtering positions for employer ${employerId}`);
+
+        // Hide all positions first
+        positionDropdown.find('option[data-employer-id]').hide();
+
+        // Show only positions for this employer
+        positionDropdown.find(`option[data-employer-id="${employerId}"]`).show();
+
+        // Always show the EDIT/ADD options
+        positionDropdown.find('option[value="EDIT"], option[value="ADD"]').show();
+
+        // Reset selection if current selection is now hidden
+        if (positionDropdown.find('option:selected').is(':hidden')) {
+            positionDropdown.val('');
+        }
+    }
+
+    // Add new row button
+    $("#add-position").click(function() {
+        const newId = "new" + Date.now();
+        const newRowHtml = `
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3>New Position Entry</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Employer Information -->
+                        <div class="col-md-6">
+                            <h4 class="mb-3">Employer Information</h4>
+
+                            <!-- Employer Selection Dropdown -->
+                            <div class="form-group mb-3">
+                                <label for="${newId}_employer_dropdown">Select Employer:</label>
+                                <select class="form-select custom-employer-dropdown" id="${newId}_employer_dropdown" name="${newId}_employer_dropdown">
+                                    <option value="">-- Select an employer --</option>
+                                    {% for employer_id, employer_name in ddpayload.get("employer", []) %}
+                                    <option value="{{ employer_id }}">{{ employer_name }}</option>
+                                    {% endfor %}
+                                    <option value="EDIT" selected>Add New Employer</option>
+                                </select>
+                            </div>
+
+                            <!-- Employer Edit Fields -->
+                            <div class="employer-edit-div" id="${newId}_employer_div">
+                                <div class="form-group mb-3">
+                                    <label>Employer Name:</label>
+                                    <input type="text" class="form-control" id="${newId}_employer_name" name="${newId}_employer_name" value="">
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label>Location:</label>
+                                    <input type="text" class="form-control" id="${newId}_location" name="${newId}_location" value="">
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input type="checkbox" class="form-check-input" id="${newId}_employer_enabled"
+                                           name="${newId}_employer_enabled" checked>
+                                    <label class="form-check-label" for="${newId}_employer_enabled">Employer Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Position Information -->
+                        <div class="col-md-6">
+                            <h4 class="mb-3">Position Information</h4>
+
+                            <!-- Position Selection Dropdown -->
+                            <div class="form-group mb-3">
+                                <label for="${newId}_position_dropdown">Select Position:</label>
+                                <select class="form-select custom-position-dropdown" id="${newId}_position_dropdown" name="${newId}_position_dropdown">
+                                    <option value="">-- Select a position --</option>
+                                    {% for position_id, position_name, employer_id in ddpayload.get("position", []) %}
+                                    <option value="{{ position_id }}" data-employer-id="{{ employer_id }}">
+                                        {{ position_name }}
+                                    </option>
+                                    {% endfor %}
+                                    <option value="EDIT" selected>Add New Position</option>
+                                </select>
+                            </div>
+
+                            <!-- Position Edit Fields -->
+                            <div class="position-edit-div" id="${newId}_position_div">
+                                <div class="form-group mb-3">
+                                    <label>Position Title:</label>
+                                    <input type="text" class="form-control" id="${newId}_position_name" name="${newId}_position_name" value="">
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label>Start Date:</label>
+                                            <input type="date" class="form-control" id="${newId}_startdate" name="${newId}_startdate" value="">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label>End Date:</label>
+                                            <input type="date" class="form-control" id="${newId}_enddate" name="${newId}_enddate" value="">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input type="checkbox" class="form-check-input" id="${newId}_position_enabled"
+                                           name="${newId}_position_enabled" checked>
+                                    <label class="form-check-label" for="${newId}_position_enabled">Position Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden fields for record IDs -->
+                    <input type="hidden" id="${newId}_rowid" name="${newId}_rowid" value="${newId}">
+                    <input type="hidden" id="${newId}_employer_id" name="${newId}_employer_id" value="new">
+                    <input type="hidden" id="${newId}_employer" name="${newId}_employer" value="">
+                    <input type="hidden" id="${newId}_position_id" name="${newId}_position_id" value="new">
+                    <input type="hidden" id="${newId}_position" name="${newId}_position" value="">
+
+                    <!-- Remove button -->
+                    <div class="row mt-3">
+                        <div class="col-md-12 text-end">
+                            <button type="button" class="btn btn-danger deleteRow">Remove</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $("#newinput").append(newRowHtml);
+
+        // Show the edit fields by default for new entries
+        $(`#${newId}_employer_div`).removeClass("d-none");
+        $(`#${newId}_position_div`).removeClass("d-none");
+
+        // Disable the dropdowns when in edit mode
+        $(`#${newId}_employer_dropdown`).prop("disabled", true);
+        $(`#${newId}_position_dropdown`).prop("disabled", true);
+    });
+
+    // Initialize all existing dropdowns on page load
+    $(".custom-employer-dropdown").each(function() {
+        console.log("Initializing employer dropdown", this.id);
+
+        const rowId = $(this).attr('id').split('_')[0];
+        const employerId = $(`#${rowId}_employer_id`).val();
+
+        // Extract just the numeric part of the employer ID if it's in format "employer_123"
+        let employerNumericId = employerId;
+        if (employerId && employerId.startsWith('employer_')) {
+            employerNumericId = employerId.replace('employer_', '');
+        }
+
+        if (employerNumericId && employerNumericId !== "new" && employerNumericId !== "edit") {
+            // Make sure to select the correct option
+            $(this).val(employerNumericId);
+            console.log(`Setting employer dropdown to ${employerNumericId}`);
+
+            updatePositionOptions(rowId, employerNumericId);
+        }
+
+        // If edit is selected, show the edit div
+        if ($(this).val() === "EDIT") {
+            $(`#${rowId}_employer_div`).removeClass("d-none");
+            $(this).prop("disabled", true);
+        }
+    });
+
+    $(".custom-position-dropdown").each(function() {
+        console.log("Initializing position dropdown", this.id);
+
+        const rowId = $(this).attr('id').split('_')[0];
+        const positionId = $(`#${rowId}_position_id`).val();
+
+        // Extract just the numeric part of the position ID if it's in format "position_123"
+        let positionNumericId = positionId;
+        if (positionId && positionId.startsWith('position_')) {
+            positionNumericId = positionId.replace('position_', '');
+        }
+
+        // Set the dropdown to the correct value
+        if (positionNumericId && positionNumericId !== "new" && positionNumericId !== "edit") {
+            $(this).val(positionNumericId);
+            console.log(`Setting position dropdown to ${positionNumericId}`);
+        }
+
+        // Get employer ID
+        const employerId = $(`#${rowId}_employer_id`).val();
+        let employerNumericId = employerId;
+        if (employerId && employerId.startsWith('employer_')) {
+            employerNumericId = employerId.replace('employer_', '');
+        }
+
+        // Only hide options if an employer is selected
+        if (employerNumericId && employerNumericId !== "new" && employerNumericId !== "edit") {
+            // First show all options, then hide the ones not matching the employer
+            $(this).find('option[data-employer-id]').show();
+            $(this).find(`option[data-employer-id]:not([data-employer-id="${employerNumericId}"])`).hide();
+
+            // Always show the EDIT/ADD options
+            $(this).find('option[value="EDIT"], option[value="ADD"]').show();
+        }
+
+        // If edit is selected, show the edit div
+        if ($(this).val() === "EDIT") {
+            $(`#${rowId}_position_div`).removeClass("d-none");
+            $(this).prop("disabled", true);
+        }
+    });
+
+    // Delete row button handler
+    $(document).on("click", ".deleteRow", function() {
+        const card = $(this).closest(".card");
+        const rowId = card.find("input[id$='_rowid']").val();
+
+        // Add a hidden field to mark this row for deletion
+        $("<input>").attr({
+            type: "hidden",
+            name: `${rowId}_delete`,
+            value: "true"
+        }).appendTo("form");
+
+        // Remove the card from display
+        card.remove();
+    });
+
+    // Log a debug message once the page is fully loaded and initialized
+    console.log("Employment page fully initialized");
+});
+</script>
 {% endblock %}
