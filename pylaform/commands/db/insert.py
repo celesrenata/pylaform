@@ -35,10 +35,16 @@ class Inserts:
         for i, value in enumerate(kwargs.values()):
             if list(kwargs.keys())[i] == "id":
                 continue
-            try:
-                values = values + f"{int(value)}, "
-            except ValueError:
-                values = values + f"'{value}', "
+
+            # Handle None values properly
+            if value is None:
+                values = values + "NULL, "
+            else:
+                try:
+                    values = values + f"{int(value)}, "
+                except (ValueError, TypeError):
+                    values = values + f"'{value}', "
+
         print(
             f"""
             INSERT INTO `{table}`

@@ -6,7 +6,11 @@
         <form method="post">
             <!-- Iterate payload -->
         {% for i in payload %}
-            {{ form_group(i["employer"], i["employername"], i["employerstate"], i["position"], i["positionname"], i["positionstate"], i["achievement"], i["shortdesc"], i["longdesc"], i["achievementstate"]) }}
+            {{ form_group(i.get("employer", ""), i.get("employername", ""), i.get("employerstate", false),
+                  i.get("position", ""), i.get("positionname", ""), i.get("positionstate", false),
+                  i.get("achievement", ""), i.get("shortdesc", ""), i.get("longdesc", ""),
+                  i.get("achievementstate", false), i.get("school", ""), i.get("schoolname", ""),
+                  i.get("schoolstate", false)) }}
         {% endfor %}
         <div id="newinput"></div>
         <button id="rowAdder" type="button" class="btn btn-dark">
@@ -22,125 +26,154 @@
 {% endblock %}
 {% block scripts %}
     <script type="text/javascript">
-        // Create a map of employer IDs to position IDs for client-side filtering
+    $(function() {
+        // Debug logging
+        console.log("Dropdown data:", {{ ddpayload|tojson }});
+        console.log("Employer data:", {{ ddpayload.get('employer', [])|tojson }});
+        console.log("Position data:", {{ ddpayload.get('position', [])|tojson }});
+
+        // Store employer-position mappings for quick access
         const employerPositionsMap = {{ ddpayload.get("employer_positions", {})|tojson|safe }};
+        console.log("Employer-positions map:", employerPositionsMap);
 
-        // Track the number of added rows
-        clicks = 0;
+        // Track clicks for new rows
+        let clicks = 0;
 
-        // Add a new row when the ADD button is clicked
-        $("#rowAdder").click(function () {
+        // ADD button handler
+        $("#rowAdder").click(function() {
             clicks += 1;
             $("#newinput").append("<hr>");
             newRowAdd = `{{ form_group("new", "", true, "", "", true, "", "", "", true) }}`;
             $("#newinput").append(newRowAdd);
 
-            // Initialize dropdowns for the new row
-            const newRowEmployerDropdown = $("#newinput").find("[id$='_employer_dropdown']").last();
-            if (newRowEmployerDropdown.length) {
-                newRowEmployerDropdown.trigger("change");
-            }
+            // Initialize new row dropdown
+            const newRowId = "new" + clicks;
+            initializeDropdowns(newRowId);
         });
 
-        // Handle employer dropdown changes to filter position options
+        // Delete row handler
+        $("body").on("click", "#deleteRow", function() {
+            const div_id = $(this).closest("div").attr("id");
+            $("#" + div_id).remove();
+            $("#newinput").append(`<input type="hidden" id="${div_id}_delete" name="${div_id}_delete" value="True">`);
+        });
+
+        // Employer dropdown change handler
         $("body").on("change", "[id$='_employer_dropdown']", function() {
             const employerId = $(this).val();
             const rowId = this.id.split('_')[0];
             const positionDropdown = $(`#${rowId}_position_dropdown`);
 
-            // Get the organization type (employer or school)
-            const orgType = $(this).find("option:selected").data("org-type") || "employer";
+            // Get employer info from selected option
+            const selectedOption = $(this).find("option:selected");
+            const employerName = selectedOption.text();
+            const orgType = selectedOption.data("org-type") || "employer";
 
-            // Store the selected employer in the hidden field
-            $(`#${rowId}_employer`).val($(this).find("option:selected").text().replace(" (College)", ""));
+            // Update hidden fields with employer info
+            $(`#${rowId}_employer`).val(employerName.replace(" (College)", ""));
             $(`#${rowId}_employer_type`).val(orgType);
 
-            // For debugging
-            console.log(`Selected employer ID: ${employerId}, type: ${orgType}`);
-            console.log(`Valid role IDs: ${JSON.stringify(employerPositionsMap[employerId] || [])}`);
+            console.log(`Selected employer: ${employerName} (${orgType}) with ID: ${employerId}`);
 
-            // Filter positions based on the employer-position mapping
-            positionDropdown.find("option").each(function() {
-                const roleId = parseInt($(this).val());
-                const roleType = $(this).data("role-type") || "position";
-                const roleEmployerId = $(this).data("employer-id");
+            // Clear position dropdown
+            positionDropdown.empty();
 
-                // For debugging
-                console.log(`Option: ${$(this).text()}, ID: ${roleId}, type: ${roleType}, employerId: ${roleEmployerId}`);
+            // Get all positions from template data
+            const allPositions = {{ ddpayload.get('position', [])|tojson }};
 
-                // Show roles that match the org type and belong to the selected employer
-                const matchingTypes = (orgType === "employer" && roleType === "position") ||
-                                     (orgType === "school" && roleType === "focus");
-                const belongsToEmployer = employerPositionsMap[employerId] &&
-                                         employerPositionsMap[employerId].includes(roleId);
+            // Filter positions based on employer type and ID
+            let matchingPositions = [];
 
-                if (matchingTypes && belongsToEmployer) {
-                    $(this).show();
-                } else {
-                    $(this).hide();
-                }
+            if (orgType === "school") {
+                // For schools, show focus items
+                matchingPositions = allPositions.filter(p =>
+                    p.type === "focus" && p.employer == employerId
+                );
+            } else {
+                // For regular employers, show positions
+                matchingPositions = allPositions.filter(p =>
+                    p.type !== "focus" && p.employer == employerId
+                );
+            }
+
+            console.log(`Found ${matchingPositions.length} matching positions/focuses for ${orgType} ID ${employerId}`);
+
+            // Add matching positions to dropdown
+            matchingPositions.forEach(pos => {
+                $("<option>")
+                    .val(pos.id)
+                    .text(pos.name + (pos.type === "focus" ? " (Focus)" : ""))
+                    .attr("data-role-type", pos.type)
+                    .attr("data-employer-id", pos.employer)
+                    .appendTo(positionDropdown);
             });
 
-            // If current selection is not valid for this employer, reset it
-            const currentRoleId = parseInt(positionDropdown.val());
-            const validRoleIds = employerPositionsMap[employerId] || [];
-            const currentRoleType = positionDropdown.find(`option[value='${positionDropdown.val()}']`).data("role-type");
+            // If no matching positions, provide a message
+            if (matchingPositions.length === 0) {
+                $("<option>")
+                    .val("")
+                    .text("No matching positions/focuses")
+                    .appendTo(positionDropdown);
+            }
 
-            if (currentRoleId &&
-                (!validRoleIds.includes(currentRoleId) ||
-                 (orgType === "employer" && currentRoleType !== "position") ||
-                 (orgType === "school" && currentRoleType !== "focus"))) {
-
-                // Find the first visible option and select it
-                const firstVisibleOption = positionDropdown.find("option:visible:first");
-                if (firstVisibleOption.length) {
-                    positionDropdown.val(firstVisibleOption.val());
-                } else {
-                    positionDropdown.val("");
-                }
-                // Trigger change to update hidden fields
+            // Select first option and update hidden fields
+            if (positionDropdown.find("option").length > 0) {
+                positionDropdown.val(positionDropdown.find("option:first").val());
                 positionDropdown.trigger("change");
             }
         });
 
-        // Handle position dropdown changes
+        // Position dropdown change handler
         $("body").on("change", "[id$='_position_dropdown']", function() {
             const rowId = this.id.split('_')[0];
             const selectedOption = $(this).find("option:selected");
+            const positionName = selectedOption.text();
+            const positionType = selectedOption.data("role-type") || "position";
 
-            // For debugging
-            console.log(`Selected position: ${selectedOption.text()}, role type: ${selectedOption.data("role-type")}`);
+            // Update hidden fields with position info
+            $(`#${rowId}_position`).val(positionName.replace(" (Focus)", ""));
+            $(`#${rowId}_position_type`).val(positionType);
 
-            // Store the selected position in the hidden field
-            $(`#${rowId}_position`).val(selectedOption.text().replace(" (Focus)", ""));
-
-            // Store the role type
-            $(`#${rowId}_position_type`).val(selectedOption.data("role-type") || "position");
+            console.log(`Selected position: ${positionName}, type: ${positionType}`);
         });
 
-        // Handle deletions
-        $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest("div").attr("id");
-            $("#" + div_id).remove();
-            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-        });
+        // Helper function to initialize dropdowns for a row
+        function initializeDropdowns(rowId) {
+            // Initialize employer dropdown
+            const employerDropdown = $(`#${rowId}_employer_dropdown`);
+            if (employerDropdown.length) {
+                employerDropdown.trigger("change");
+            }
 
-        // Initialize all employer dropdowns when the page loads
-        $(document).ready(function() {
-            console.log("Employer-positions map:", employerPositionsMap);
+            // Position dropdown will be initialized by the employer change event
+        }
 
-            // First initialize the employer-position relationships
-            $("[id$='_employer_dropdown']").each(function() {
-                $(this).trigger("change");
-            });
+        // Initialize all existing rows when page loads
+        function initializeAllRows() {
+            console.log("Initializing all rows");
 
-            // Update position types immediately
+            // First set the position types correctly
             $("[id$='_position_dropdown']").each(function() {
                 const rowId = this.id.split('_')[0];
                 const selectedOption = $(this).find("option:selected");
-                $(`#${rowId}_position_type`).val(selectedOption.data("role-type") || "position");
+                const positionType = selectedOption.data("role-type") || "position";
+
+                // Update the position type hidden field
+                $(`#${rowId}_position_type`).val(positionType);
+                console.log(`Set position type for row ${rowId} to: ${positionType}`);
             });
-        });
+
+            // Then initialize employer-position relationships
+            $("[id$='_employer_dropdown']").each(function() {
+                const rowId = this.id.split('_')[0];
+                console.log(`Initializing row: ${rowId}`);
+                $(this).trigger("change");
+            });
+        }
+
+        // Run initialization once everything is ready
+        initializeAllRows();
+    });
     </script>
     {% include "_scripts.html" %}
 {% endblock %}

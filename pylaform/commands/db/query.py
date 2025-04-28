@@ -658,48 +658,66 @@ class Queries:
         if len(self.result_achievements) == 0:
             result: Cursor = self.query(
                 """
-                SELECT e.id    as employer_id,
+                SELECT e.id     as employer_id,
                        e.employer,
-                       e.state as employer_state,
-                       p.id    as position_id,
+                       e.state  as employer_state,
+                       p.id     as position_id,
                        p.position,
-                       p.state as position_state,
-                       a.id    as achievement_id,
+                       p.state  as position_state,
+                       a.id     as achievement_id,
                        a.shortdesc,
                        a.longdesc,
-                       a.state as achievement_state
+                       a.state  as achievement_state,
+                       a.school as school_id,
+                       s.name   as school_name,
+                       s.state  as school_state
                 FROM `achievement` a
                          LEFT JOIN `position` p ON a.position = p.id
-                         LEFT JOIN `employer` e ON a.employer = e.id;
+                         LEFT JOIN `employer` e ON a.employer = e.id
+                         LEFT JOIN `school` s ON a.school = s.id;
                 """)
 
             # Create raw NESTED list based on 'id/attr/value/state.'
             for (employer_id, employername, employer_state,
                  position_id, positionname, position_state,
-                 achievement_id, shortdesc, longdesc, achievement_state) in result:
+                 achievement_id, shortdesc, longdesc, achievement_state,
+                 school_id, school_name, school_state) in result:
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "employer",
-                    "value": str(employer_id),
-                    "state": employer_state,
+                    "value": str(employer_id) if employer_id is not None else "",
+                    "state": employer_state if employer_state is not None else 0,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "employername",
-                    "value": employername,
-                    "state": employer_state,
+                    "value": employername if employername is not None else "",
+                    "state": employer_state if employer_state is not None else 0,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "position",
-                    "value": str(position_id),
-                    "state": position_state,
+                    "value": str(position_id) if position_id is not None else "",
+                    "state": position_state if position_state is not None else 0,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "positionname",
-                    "value": positionname,
-                    "state": position_state,
+                    "value": positionname if positionname is not None else "",
+                    "state": position_state if position_state is not None else 0,
+                })
+                # Add school information
+                self.result_achievements.append({
+                    "id": str(achievement_id),
+                    "attr": "school",
+                    "value": str(school_id) if school_id is not None else "",
+                    "state": school_state if school_state is not None else 0,
+                })
+                self.result_achievements.append({
+                    "id": str(achievement_id),
+                    "attr": "schoolname",
+                    "value": school_name if school_name is not None else "",
+                    "state": school_state if school_state is not None else 0,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),
@@ -722,14 +740,20 @@ class Queries:
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "employerstate",
-                    "value": employer_state,
-                    "state": employer_state,
+                    "value": employer_state if employer_state is not None else 0,
+                    "state": employer_state if employer_state is not None else 0,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),
                     "attr": "positionstate",
-                    "value": position_state,
-                    "state": position_state,
+                    "value": position_state if position_state is not None else 0,
+                    "state": position_state if position_state is not None else 0,
+                })
+                self.result_achievements.append({
+                    "id": str(achievement_id),
+                    "attr": "schoolstate",
+                    "value": school_state if school_state is not None else 0,
+                    "state": school_state if school_state is not None else 0,
                 })
                 self.result_achievements.append({
                     "id": str(achievement_id),

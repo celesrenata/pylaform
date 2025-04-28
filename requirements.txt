@@ -1,6 +1,6 @@
 Flask==2.3.3
 requests==2.31.0
-pylatex==1.4.1
+pylatex==1.4.2
 tenacity==8.2.3
 Jinja2==3.1.2
 Werkzeug==2.3.7

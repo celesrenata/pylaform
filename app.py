@@ -201,9 +201,9 @@ def achievements():
     # Create payload with correct structure
     payload = {
         "payload": processed_achievements,
-        "attrs": ["employer", "employername", "position", "positionname",
+        "attrs": ["employer", "employername", "school", "schoolname", "position", "positionname",
                   "achievement", "shortdesc", "longdesc", "employerstate",
-                  "positionstate", "achievementstate"]
+                  "positionstate", "schoolstate", "achievementstate"]
     }
 
     return render_template("achievements_index.html",

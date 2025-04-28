@@ -1,5 +1,5 @@
 {% from "_dropdown.html" import drop_down with context %}
-{% macro form_group(employerid, employer, employerstate, positionid, position, positionstate, achievementid, shortdesc, longdesc, achievementstate) %}
+{% macro form_group(employerid, employer, employerstate, positionid, position, positionstate, achievementid, shortdesc, longdesc, achievementstate, schoolid, schoolname, schoolstate) %}
     <!-- Test if new template element -->
     {% if employerid == "new" %}
         {% set employerid = "new` + clicks + `"|safe %}
@@ -7,7 +7,7 @@
         {% set achievementid = "new` + clicks + `"|safe %}
     {% endif %}
     <div id="{{ achievementid }}" class="lead d-flex align-items-bottom justify-content-center">
-        <input type="hidden" name="{{ achievementid }}_rowid" value="{{ employerid }}">
+        <input type="hidden" name="{{ achievementid }}_rowid" value="{{ achievementid }}">
         <table>
             <tr>
                 <td>
@@ -16,7 +16,9 @@
                     <select class="dropdown" name="{{ achievementid }}_employer_dropdown" id="{{ achievementid }}_employer_dropdown">
                     {% for i in ddpayload["employer"] %}
                         <option
-                                {% if (employerid is not none and i["id"]|string == employerid|string) %}
+                                {% if schoolid and i.get('type') == 'school' and i["id"]|string == schoolid|string %}
+                                    selected
+                                {% elif not schoolid and employerid and i.get('type') != 'school' and i["id"]|string == employerid|string %}
                                     selected
                                 {% endif %}
                                 value="{{ i["id"] }}" data-org-type="{{ i.get('type', 'employer') }}">
@@ -26,9 +28,9 @@
                     {% endfor %}
                     </select>
                     <input type="hidden" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
-                           value="{{ employer if employer is defined else "" }}">
+                           value="{% if schoolid %}{{ schoolname }}{% else %}{{ employer }}{% endif %}">
                     <input type="hidden" name="{{ achievementid }}_employer_type" id="{{ achievementid }}_employer_type"
-                           value="">
+                           value="{% if schoolid %}school{% else %}employer{% endif %}">
                 </td>
                 <td>
                     <label for="{{ achievementid }}_position_dropdown">Position/Focus:</label>

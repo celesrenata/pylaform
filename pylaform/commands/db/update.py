@@ -148,15 +148,19 @@ class Updates:
         # Build the query.
         set_group: str = ""
         for key, value in kwargs.items():
-            try:
-                set_group = set_group + f"`{key.split('_')[-1]}` = {int(value)}, "
-            except ValueError:
-                # Escape single quotes in string values by replacing ' with ''
-                if isinstance(value, str):
-                    escaped_value = value.replace("'", "''")
-                    set_group = set_group + f"`{key.split('_')[-1]}` = '{escaped_value}', "
-                else:
-                    set_group = set_group + f"`{key.split('_')[-1]}` = '{value}', "
+            if value is None:
+                # For None/NULL values, use NULL directly in SQL
+                set_group = set_group + f"`{key.split('_')[-1]}` = NULL, "
+            else:
+                try:
+                    set_group = set_group + f"`{key.split('_')[-1]}` = {int(value)}, "
+                except ValueError:
+                    # Escape single quotes in string values by replacing ' with ''
+                    if isinstance(value, str):
+                        escaped_value = value.replace("'", "''")
+                        set_group = set_group + f"`{key.split('_')[-1]}` = '{escaped_value}', "
+                    else:
+                        set_group = set_group + f"`{key.split('_')[-1]}` = '{value}', "
 
         print(
             f"""

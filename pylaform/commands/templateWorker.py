@@ -26,98 +26,144 @@ class Worker:
         self.update = Updates()
         self.delete = Deletes()
 
-    def dropdowns(self, template: str) -> list[dict[str, int]]:
+    def dropdowns(self, template: str) -> dict:
         """
-        Takes list of column names and returns a list of dictionaries with column values.
-        :param str template: Target template.
-        :return list[str]: list of dictionaries with column values.
+        Returns dropdowns for templates.
+        :param template: The template to get dropdowns for.
+        :return: A dictionary of dropdown options.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Getting dropdowns for template: {template}")
 
-        match template:
-            case "education":
-                return self.query.get_options(["school", "focus"], ["name", "name"])
-            case "employment":
-                return self.query.get_options(["employer", "position"], ["employer", "position"])
-            case "achievements":
-                # Get employer and school options
-                employer_options = self.query.get_options(["employer"], ["employer"])["employer"]
-                school_options = self.query.get_options(["school"], ["name"])["school"]
+        # Ensure cursor is initialized
+        if not hasattr(self, 'cursor') or self.cursor is None:
+            from . import connect
+            self.conn = connect.db()
+            self.cursor = self.conn.cursor()
+            logger.info("Initialized cursor connection")
 
-                # Get position options with employer ID
-                self.cursor.execute("""
-                                    SELECT p.id, p.position, p.employer
-                                    FROM position p
-                                    ORDER BY p.position
-                                    """)
-                position_options = [
-                    {"id": int(item[0]), "name": item[1], "employer": item[2], "type": "position"}
-                    for item in self.cursor.fetchall()
-                ]
+        try:
+            match template:
+                case "education":
+                    logger.info("Handling education template")
+                    result = self.query.get_options(["school", "focus"], ["name", "name"])
+                case "employment":
+                    logger.info("Handling employment template")
+                    result = self.query.get_options(["employer", "position"], ["employer", "position"])
+                case "achievements":
+                    logger.info("Handling achievements template")
+                    # Get employer and school options
+                    try:
+                        employer_options = self.query.get_options(["employer"], ["employer"])["employer"]
+                        logger.info(f"Got {len(employer_options)} employer options")
+                    except Exception as e:
+                        logger.error(f"Error getting employer options: {e}")
+                        employer_options = []
 
-                # Get focus options with school ID
-                self.cursor.execute("""
-                                    SELECT f.id, f.name, f.school
-                                    FROM focus f
-                                    ORDER BY f.name
-                                    """)
-                focus_options = [
-                    {"id": int(item[0]), "name": item[1], "employer": item[2], "type": "focus"}
-                    for item in self.cursor.fetchall()
-                ]
+                    try:
+                        school_options = self.query.get_options(["school"], ["name"])["school"]
+                        logger.info(f"Got {len(school_options)} school options")
+                    except Exception as e:
+                        logger.error(f"Error getting school options: {e}")
+                        school_options = []
 
-                # Combine employers and schools into one list
-                combined_orgs = []
-                for employer in employer_options:
-                    employer["type"] = "employer"
-                    combined_orgs.append(employer)
+                    # Get position options with employer ID
+                    try:
+                        self.cursor.execute("""
+                                            SELECT p.id, p.position, p.employer
+                                            FROM position p
+                                            ORDER BY p.position
+                                            """)
+                        position_options = [
+                            {"id": int(item[0]), "name": item[1], "employer": item[2], "type": "position"}
+                            for item in self.cursor.fetchall()
+                        ]
+                        logger.info(f"Got {len(position_options)} position options")
+                    except Exception as e:
+                        logger.error(f"Error getting position options: {e}")
+                        position_options = []
 
-                for school in school_options:
-                    school["type"] = "school"
-                    combined_orgs.append(school)
+                    # Get focus options with school ID
+                    try:
+                        self.cursor.execute("""
+                                            SELECT f.id, f.name, f.school
+                                            FROM focus f
+                                            ORDER BY f.name
+                                            """)
+                        focus_options = [
+                            {"id": int(item[0]), "name": item[1], "employer": item[2], "type": "focus"}
+                            for item in self.cursor.fetchall()
+                        ]
+                        logger.info(f"Got {len(focus_options)} focus options")
+                    except Exception as e:
+                        logger.error(f"Error getting focus options: {e}")
+                        focus_options = []
 
-                # Combine positions and focuses
-                combined_roles = position_options + focus_options
+                    # Combine employers and schools into one list
+                    combined_orgs = []
+                    for employer in employer_options:
+                        employer["type"] = "employer"
+                        combined_orgs.append(employer)
 
-                # Create mappings between organizations and roles
-                org_roles_map = {}
+                    for school in school_options:
+                        school["type"] = "school"
+                        combined_orgs.append(school)
 
-                # Map employers to positions
-                for position in position_options:
-                    employer_id = str(position["employer"])
-                    if employer_id not in org_roles_map:
-                        org_roles_map[employer_id] = []
-                    org_roles_map[employer_id].append(position["id"])
+                    # Combine positions and focuses
+                    combined_roles = position_options + focus_options
 
-                # Map schools to focuses
-                for focus in focus_options:
-                    school_id = str(focus["employer"])
-                    if school_id not in org_roles_map:
-                        org_roles_map[school_id] = []
-                    org_roles_map[school_id].append(focus["id"])
+                    # Create mappings between organizations and roles
+                    org_roles_map = {}
 
-                # Build the result
-                options = {
-                    "employer": combined_orgs,  # Will contain both employers and schools
-                    "position": combined_roles,  # Will contain both positions and focuses
-                    "employer_positions": org_roles_map  # Maps org IDs to role IDs
-                }
+                    # Map employers to positions
+                    for position in position_options:
+                        employer_id = str(position["employer"])
+                        if employer_id not in org_roles_map:
+                            org_roles_map[employer_id] = []
+                        org_roles_map[employer_id].append(position["id"])
 
-                return options
-            case "skills":
-                # Get options with employer-position mapping
-                options = self.query.get_options(["skill", "skill", "employer", "position"],
-                                                 ["category", "subcategory", "employer", "position"])
+                    # Map schools to focuses
+                    for focus in focus_options:
+                        school_id = str(focus["employer"])
+                        if school_id not in org_roles_map:
+                            org_roles_map[school_id] = []
+                        org_roles_map[school_id].append(focus["id"])
 
-                # Add employer-position map for client-side filtering
-                employer_positions = {}
-                self.cursor.execute("SELECT id, employer FROM position")
-                for position_id, employer_id in self.cursor.fetchall():
-                    if str(employer_id) not in employer_positions:
-                        employer_positions[str(employer_id)] = []
-                    employer_positions[str(employer_id)].append(position_id)
+                    # Build the result
+                    result = {
+                        "employer": combined_orgs,  # Will contain both employers and schools
+                        "position": combined_roles,  # Will contain both positions and focuses
+                        "employer_positions": org_roles_map  # Maps org IDs to role IDs
+                    }
+                    logger.info(f"Built result with {len(combined_orgs)} orgs, {len(combined_roles)} roles")
+                case "skills":
+                    logger.info("Handling skills template")
+                    # Get options with employer-position mapping
+                    options = self.query.get_options(["skill", "skill", "employer", "position"],
+                                                     ["category", "subcategory", "employer", "position"])
 
-                options["employer_positions"] = employer_positions
-                return options
+                    # Add employer-position map for client-side filtering
+                    employer_positions = {}
+                    self.cursor.execute("SELECT id, employer FROM position")
+                    for position_id, employer_id in self.cursor.fetchall():
+                        if str(employer_id) not in employer_positions:
+                            employer_positions[str(employer_id)] = []
+                        employer_positions[str(employer_id)].append(position_id)
+
+                    options["employer_positions"] = employer_positions
+                    result = options
+                case _:
+                    # Default case for unhandled templates
+                    logger.warning(f"Unhandled template type: {template}")
+                    result = {}
+
+            logger.info(f"Returning result of type {type(result)}")
+            return result
+        except Exception as e:
+            logger.error(f"Error in dropdowns method: {e}")
+            # Return a minimal valid result to avoid template errors
+            return {"employer": [], "position": [], "employer_positions": {}}
 
     def identification(self, form_data: ImmutableMultiDict) -> None:
         """
@@ -739,6 +785,36 @@ class Worker:
         # Get raw form data and analyze it
         raw_form_dict = form_data.to_dict(flat=False)
 
+        # Process deletion requests first
+        for key, value in raw_form_dict.items():
+            if "_delete" in key and value[0] == "True":
+                focus_id = key.split("_delete")[0]
+                if focus_id.isdigit():
+                    # Delete the focus record
+                    self.delete.delete_target(focus_id, "focus")
+                # Check if this focus is the last one for its school
+                school_id = None
+                try:
+                    school_query = self.cursor.execute(
+                        "SELECT school FROM focus WHERE id = ?", (int(focus_id),)
+                    )
+                    school_result = school_query.fetchone()
+                    if school_result:
+                        school_id = school_result[0]
+                except Exception as e:
+                    print(f"Error querying school for focus {focus_id}: {e}")
+
+                if school_id:
+                    # Count how many focuses are left for this school
+                    remaining_query = self.cursor.execute(
+                        "SELECT COUNT(*) FROM focus WHERE school = ?", (school_id,)
+                    )
+                    remaining_focuses = remaining_query.fetchone()[0]
+
+                    # If this was the last focus, delete the school too
+                    if remaining_focuses <= 1:  # Using <= 1 because the focus we're deleting is still counted
+                        self.delete.delete_target(str(school_id), "school")
+
         # Determine how many 'new' entries we have
         new_entries_count = 0
         if 'new_rowid' in raw_form_dict:
@@ -971,26 +1047,55 @@ class Worker:
         # Create a list of all achievement IDs
         achievement_ids = []
 
+        # Debug: Log form data
+        print("DEBUG - Form data:")
+        for key, value in form.items():
+            print(f"  {key}: {value}")
+
         # Process each form field to identify achievement IDs
         for key in form:
             if key.endswith("_rowid"):
                 achievement_id = key.split("_")[0]
                 achievement_ids.append(achievement_id)
 
+        print(f"DEBUG - Found achievement IDs: {achievement_ids}")
+
         # Process each achievement
         for achievement_id in achievement_ids:
             # Check if we need to delete this achievement
             if f"{achievement_id}_delete" in form:
-                self.delete(f"DELETE FROM achievement WHERE id = {achievement_id}")
+                print(f"DEBUG - Deleting achievement ID: {achievement_id}")
+                self.delete.delete_target(achievement_id, "achievement")
                 continue
 
             # Get the employer/school ID and type
-            employer_id = form.get(f"{achievement_id}_rowid")
+            employer_id = form.get(f"{achievement_id}_employer_dropdown")
             employer_type = form.get(f"{achievement_id}_employer_type", "employer")
 
+            # Get employer name to help detect if it's a school
+            employer_name = form.get(f"{achievement_id}_employer", "").strip()
+
+            # Detect if this is actually a school by checking for " (College)" suffix
+            is_school = "(College)" in employer_name
+            if is_school:
+                employer_type = "school"
+                print(f"DEBUG - Detected school from employer name: {employer_name}")
+
             # Get the position/focus ID and type
-            position_value = form.get(f"{achievement_id}_position")
+            position_value = form.get(f"{achievement_id}_position_dropdown")
             position_type = form.get(f"{achievement_id}_position_type", "position")
+
+            # Detect if this is actually a focus by checking for " (Focus)" suffix
+            position_name = form.get(f"{achievement_id}_position", "").strip()
+            is_focus = "(Focus)" in position_name
+            if is_focus:
+                position_type = "focus"
+                print(f"DEBUG - Detected focus from position name: {position_name}")
+
+            # Debug: Log key values
+            print(f"DEBUG - Achievement {achievement_id}:")
+            print(f"  Employer ID: {employer_id}, Type: {employer_type}")
+            print(f"  Position Value: {position_value}, Type: {position_type}")
 
             # Get the achievement descriptions
             shortdesc = form.get(f"{achievement_id}_shortdesc", "")
@@ -1005,64 +1110,94 @@ class Worker:
                 if employer_type == "employer" and position_type == "position":
                     # This is a regular employer/position achievement
                     position_id = self.query.query_id(position_value, "position")
-                    employer_id = self.query.query_id(form.get(f"{achievement_id}_employer"), "employer")
+                    employer_id = self.query.query_id(employer_name, "employer")
 
-                    self.insert(
-                        "INSERT INTO achievement (employer, position, shortdesc, longdesc, state) VALUES (?, ?, ?, ?, ?)",
-                        (employer_id, position_id, shortdesc, longdesc, longdesc_enabled)
-                    )
-                elif employer_type == "school" and position_type == "focus":
+                    print(f"DEBUG - New achievement with employer ID: {employer_id}, position ID: {position_id}")
+
+                    self.insert.multi_column("achievement",
+                                             employer=employer_id,
+                                             position=position_id,
+                                             shortdesc=shortdesc,
+                                             longdesc=longdesc,
+                                             state=1 if longdesc_enabled else 0
+                                             )
+                elif employer_type == "school" or is_school:
                     # This is a school/focus achievement
-                    school_id = self.query.query_id(form.get(f"{achievement_id}_employer").replace(" (College)", ""),
-                                                    "school")
-                    focus_id = self.query.query_id(position_value.replace(" (Focus)", ""), "focus")
+                    school_name = employer_name.replace(" (College)", "")
+                    school_id = self.query.query_id(school_name, "school")
 
-                    # For school achievements, we use the school ID as employer and focus ID as position
-                    self.insert(
-                        "INSERT INTO achievement (employer, position, shortdesc, longdesc, state) VALUES (?, ?, ?, ?, ?)",
-                        (school_id, focus_id, shortdesc, longdesc, longdesc_enabled)
-                    )
+                    # Handle focus vs position
+                    if position_type == "focus" or is_focus:
+                        focus_name = position_name.replace(" (Focus)", "")
+                        focus_id = self.query.query_id(focus_name, "focus")
+                        print(f"DEBUG - New achievement with school ID: {school_id}, focus ID: {focus_id}")
+
+                        position_to_use = focus_id
+                    else:
+                        # Handle regular position with school
+                        position_to_use = int(position_value) if position_value else None
+                        print(f"DEBUG - New achievement with school ID: {school_id}, position ID: {position_to_use}")
+
+                    # For school achievements, we use the school ID and focus/position ID
+                    self.insert.multi_column("achievement",
+                                             school=school_id,
+                                             employer=None,  # Make sure employer is NULL
+                                             position=position_to_use,
+                                             shortdesc=shortdesc,
+                                             longdesc=longdesc,
+                                             state=1 if longdesc_enabled else 0
+                                             )
             else:
                 # Update existing achievement
-                self.update(
-                    "UPDATE achievement SET shortdesc = ?, longdesc = ?, state = ? WHERE id = ?",
-                    (shortdesc, longdesc, longdesc_enabled, achievement_id)
-                )
+                update_data = {
+                    "id": achievement_id,
+                    "shortdesc": shortdesc,
+                    "longdesc": longdesc,
+                    "state": 1 if longdesc_enabled else 0
+                }
 
-    def update_target_table(self, item: dict[str, str | bool], table: str):
-        """
-        :param dict[str, str | bool] item: Decompiled attribute pack.
-        :param str table: table to update.
-        :return:
-        """
+                # Update employer/position references based on the types
+                if (employer_type == "school" or is_school) and employer_id:
+                    # Handle school case
+                    if is_school:
+                        # Extract school name and get ID
+                        school_name = employer_name.replace(" (College)", "")
+                        school_id = self.query.query_id(school_name, "school")
+                        update_data["school"] = school_id
+                    else:
+                        # Use the dropdown ID directly
+                        update_data["school"] = int(employer_id)
 
-        try:
-            item["value"] = int(item["value"])
-            self.cursor.execute(
-                f"""
-                UPDATE `{table}`
-                SET    `id` = {item["value"]},
-                       `state` = {item["state"]}
-                WHERE  `id` = {int(item["id"])}
-                """
-            )
-        except ValueError:
-            if item["value"] is None:
-                self.cursor.execute(
-                    f"""
-                    DELETE FROM `{table}`
-                    WHERE `id` = {int(item["id"])}"""
-                )
-            else:
-                self.cursor.execute(
-                    f"""
-                     UPDATE `{table}`
-                     SET    `{item["attr"]}` = '{item["value"]}',
-                            `state` = {item["state"]}
-                     WHERE  `id` = {int(item["id"])}
-                     """)
-            pass
+                    # Clear employer when school is set
+                    update_data["employer"] = None
 
-        # Commit changes.
-        self.conn.commit()
-        return
+                    print(f"DEBUG - Setting school ID: {update_data['school']}")
+                else:
+                    # Handle employer case
+                    if employer_id:
+                        update_data["employer"] = int(employer_id)
+                        # Clear school when employer is set
+                        update_data["school"] = None
+                        print(f"DEBUG - Setting employer ID: {update_data['employer']}")
+
+                # Update position/focus ID
+                if position_value:
+                    if position_type == "focus" or is_focus:
+                        # Handle focus type
+                        if is_focus:
+                            # Extract focus name and get ID
+                            focus_name = position_name.replace(" (Focus)", "")
+                            focus_id = self.query.query_id(focus_name, "focus")
+                            update_data["position"] = focus_id
+                        else:
+                            # Use the dropdown ID directly
+                            update_data["position"] = int(position_value)
+
+                        print(f"DEBUG - Setting focus/position ID: {update_data['position']}")
+                    else:
+                        # Handle regular position
+                        update_data["position"] = int(position_value)
+                        print(f"DEBUG - Setting position ID: {update_data['position']}")
+
+                print(f"DEBUG - Final update data: {update_data}")
+                self.update.multi_column("achievement", **update_data)
