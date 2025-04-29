@@ -36,7 +36,7 @@ class Inserts:
             if list(kwargs.keys())[i] == "id":
                 continue
 
-            # Handle None values properly
+            # Handle None values properly by using NULL in SQL
             if value is None:
                 values = values + "NULL, "
             else:
@@ -44,6 +44,23 @@ class Inserts:
                     values = values + f"{int(value)}, "
                 except (ValueError, TypeError):
                     values = values + f"'{value}', "
+
+        print(
+            f"""
+            INSERT INTO `{table}`
+            {keys}
+            {values[:-2]});
+            """)
+        response: Cursor = self.cursor.execute(
+            f"""
+            INSERT INTO `{table}`
+            {keys}
+            {values[:-2]});
+            """)
+
+        # Commit changes.
+        self.conn.commit()
+        return
 
         print(
             f"""

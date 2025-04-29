@@ -220,10 +220,67 @@ def glossary():
 
 @app.route("/generate/one-page", methods=["GET"])
 def one_page_doc():
-    generator = onePage.Generator()
-    generator.run()
-    return send_from_directory(uploads, 'one-page.pdf')
+    # Import os at the function level to ensure it's available throughout the function
+    import os
+    import glob
+    import traceback  # Add this for better error tracking
 
+    # Get force parameter from URL
+    force = request.args.get('force', 'false').lower() == 'true'
+
+    # Delete existing files if force=true
+    if force:
+        # Remove all one-page.* files
+        for file_path in glob.glob(os.path.join(app.root_path, 'data', 'one-page.*')):
+            try:
+                os.remove(file_path)
+                print(f"Removed {file_path}")
+            except Exception as e:
+                print(f"Failed to remove {file_path}: {e}")
+
+    try:
+        # Create and run the generator
+        from pylaform.latex_templates.onePage import Generator
+        generator = Generator()
+
+        # Print the generator's methods to check for process_achievements
+        print("Method signatures:")
+        import inspect
+        for name, method in inspect.getmembers(generator, predicate=inspect.ismethod):
+            if name.startswith('process_'):
+                sig = inspect.signature(method)
+                print(f"{name}{sig}")
+
+        # Run the generator
+        generator.run()
+
+        # Check if the PDF was actually created, regardless of whether errors occurred
+        pdf_path = os.path.join(uploads, 'one-page.pdf')
+
+        # Additional validation to ensure the PDF exists and is valid
+        if os.path.exists(pdf_path):
+            # Check the file size to ensure it's not empty
+            if os.path.getsize(pdf_path) > 0:
+                print(f"PDF found at {pdf_path} with size {os.path.getsize(pdf_path)} bytes")
+                return send_from_directory(uploads, 'one-page.pdf')
+            else:
+                return jsonify({"error": "PDF file exists but is empty"}), 500
+        else:
+            return jsonify({"error": "PDF file was not created"}), 500
+
+    except ImportError as e:
+        return jsonify({"error": f"Import error: {str(e)}"}), 500
+    except Exception as e:
+        print(f"Exception in one_page_doc route: {str(e)}")
+        traceback.print_exc()  # Print the full traceback for better debugging
+
+        # As a fallback, check if PDF exists anyway (it might have been created despite errors)
+        pdf_path = os.path.join(uploads, 'one-page.pdf')
+        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+            print(f"Despite errors, PDF exists and will be served")
+            return send_from_directory(uploads, 'one-page.pdf')
+        else:
+            return jsonify({"error": f"Failed to generate PDF: {str(e)}"}), 500
 
 @app.route("/generate/hybrid", methods=["GET"])
 def hybrid_doc():

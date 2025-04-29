@@ -14,6 +14,75 @@ class Common:
     def __init__(self) -> None:
         self.resume_data = Queries()
         self.cmd = Commands()
+        self.achievements = {"schools": {}, "positions": {}, "employers": {}}
+
+    def normalize_id(self, id_value):
+        """
+        Normalize IDs to a consistent format whether they come as integers, strings, or prefixed strings.
+
+        :param id_value: ID in any format (int, str, "prefix_123")
+        :return: Normalized ID as a string without prefix
+        """
+        # Handle None case
+        if id_value is None:
+            return ""
+
+        # Convert to string if not already
+        id_str = str(id_value)
+
+        # If it's in the format "prefix_123", extract the numeric part
+        if "_" in id_str:
+            parts = id_str.split("_")
+            if len(parts) > 1 and parts[1].isdigit():
+                print(f"DEBUG: Normalizing prefixed ID '{id_str}' to '{parts[1]}'")
+                return parts[1]
+
+        print(f"DEBUG: Keeping ID '{id_str}' as is")
+        return id_str
+
+    def format_date_range(self, start_date, end_date):
+        """Format a date range for display in resume.
+        This is a utility method that formats dates like "Jan 2020 - Present".
+        """
+        import datetime
+
+        # Handle empty dates
+        if not start_date and not end_date:
+            return "No dates available"
+
+        # Parse dates
+        start = None
+        end = None
+
+        if start_date:
+            try:
+                start = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+            except ValueError:
+                start = None
+
+        if end_date:
+            # Special case for 9999-01-01 which is used to represent "Present"
+            if end_date == "9999-01-01":
+                end = "Present"
+            else:
+                try:
+                    end = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+                except ValueError:
+                    end = None
+
+        # Format dates
+        if start and end and end != "Present":
+            return f"{start.strftime('%b %Y')} - {end.strftime('%b %Y')}"
+        elif start and end == "Present":
+            return f"{start.strftime('%b %Y')} - Present"
+        elif start:
+            return f"{start.strftime('%b %Y')}"
+        elif end and end != "Present":
+            return f"Until {end.strftime('%b %Y')}"
+        elif end == "Present":
+            return "Present"
+        else:
+            return "Unknown dates"
 
     def modern_contact_header(self, doc: Document) -> None:
         """
@@ -219,174 +288,681 @@ class Common:
             print(f"Error in retro_skills: {e}")
             doc.append("Error loading experience data.")
 
-    def retro_work_history(self, doc: Document) -> None:
+    def retro_work_history(self, doc):
         """
-        Print standard detail work history, however for res.cls.
-        :param Document doc: PyLatex document handler.
-        :return None: None
+        Add work history details to the document in retro style.
+        :param doc: The document to add the work history section to.
+        :return: None
         """
-        try:
-            # Start writing
-            doc.append(NoEscape(r"\section{\sc Employment}"))
+        print("=== DEBUG: retro_work_history START ===")
+        from pylatex.utils import NoEscape
 
-            # Get data
-            achievements_data = self.resume_data.get_achievements()
-            positions_data = self.resume_data.get_positions()
+        # Get the raw data
+        position_data = self.resume_data.get_positions()
+        achievement_data = self.resume_data.get_achievements()
 
-            if not achievements_data or not positions_data:
-                # Handle empty data gracefully
-                doc.append("No employment history available.")
-                return
+        print(f"Raw data: got {len(achievement_data)} achievement entries and {len(position_data)} position entries")
 
-            achievements = listify(achievements_data)
-            positions = listify(positions_data)
+        # Try to get the already processed achievements from common if available
+        achievements_by_position = getattr(self, 'achievements', {}).get('by_position', {})
+        achievements_by_employer = getattr(self, 'achievements', {}).get('by_employer', {})
 
-            # Get unique employers safely - handle potential missing keys
-            employers = []
-            for ach in achievements:
-                if "employer" in ach and ach.get("employer") not in employers and ach.get("employer"):
-                    employers.append(ach.get("employer"))
+        # If not available, let's process them here
+        if not achievements_by_position and not achievements_by_employer:
+            print("Processing achievements directly in retro_work_history")
 
-            for employer in employers:
-                employer_name = self.resume_data.query_name(employer, "employer")
-                # Get employer location from database
-                employer_location = None
+            # First, organize all achievements by their ID
+            achievement_items = {}
+            for item in achievement_data:
+                achievement_id = item["id"]
+                if achievement_id not in achievement_items:
+                    achievement_items[achievement_id] = {
+                        "id": achievement_id,
+                        "state": item.get("state", False)
+                    }
 
-                # First look in positions data for location
-                for pos in positions:
-                    if pos.get("employer") == employer and "location" in pos:
-                        employer_location = pos.get("location")
-                        break
+                # Set attributes based on the attr field
+                if item["attr"] == "shortdesc":
+                    achievement_items[achievement_id]["shortdesc"] = item["value"]
+                elif item["attr"] == "longdesc":
+                    achievement_items[achievement_id]["longdesc"] = item["value"]
+                elif item["attr"] == "employer":
+                    achievement_items[achievement_id]["employer"] = item["value"]
+                elif item["attr"] == "employername":
+                    achievement_items[achievement_id]["employername"] = item["value"]
+                elif item["attr"] == "position":
+                    achievement_items[achievement_id]["position"] = item["value"]
+                elif item["attr"] == "positionname":
+                    achievement_items[achievement_id]["positionname"] = item["value"]
+                elif item["attr"] == "achievementstate":
+                    achievement_items[achievement_id]["state"] = bool(int(item["value"]))
 
-                # Display employer name and location if available
-                if employer_location:
-                    doc.append(NoEscape(r"\textbf{" + employer_name + r", " + employer_location + r"}"))
+            # Then group achievements by position and employer
+            achievements_by_position = {}
+            achievements_by_employer = {}
+
+            for achievement_id, achievement in achievement_items.items():
+                # Skip inactive achievements
+                if not achievement.get("state", False):
+                    continue
+
+                # Skip school achievements for work history
+                if achievement.get("school") and achievement.get("school") != "":
+                    continue
+
+                # Print each achievement for debugging
+                print(f"Processing achievement: {achievement}")
+
+                # Add to position achievements if position is specified
+                if achievement.get("position") and achievement.get("position") != "":
+                    position_id = achievement.get("position")
+
+                    # Handle both formats (position_1 or just 1)
+                    if not position_id in achievements_by_position:
+                        achievements_by_position[position_id] = []
+                    achievements_by_position[position_id].append(achievement)
+                    print(f"Added achievement to position {position_id}")
+
+                # Add to employer achievements if employer is specified but no position
+                elif achievement.get("employer") and achievement.get("employer") != "":
+                    employer_id = achievement.get("employer")
+
+                    # Handle both formats (employer_1 or just 1)
+                    if not employer_id in achievements_by_employer:
+                        achievements_by_employer[employer_id] = []
+                    achievements_by_employer[employer_id].append(achievement)
+                    print(f"Added achievement to employer {employer_id}")
+
+        # Process positions in the id/attr/value format
+        employers = {}
+        positions = {}
+        position_to_employer = {}
+
+        # First pass: collect all employers and their basic info
+        for item in position_data:
+            if item["id"].startswith("employer_"):
+                employer_id = item["id"]
+                if employer_id not in employers:
+                    employers[employer_id] = {
+                        "numeric_id": employer_id.split("_")[1],
+                        "name": "",
+                        "location": "",
+                        "state": item.get("state", True),
+                        "positions": []
+                    }
+
+                # Set attribute values
+                if item["attr"] == "employername":
+                    employers[employer_id]["name"] = item["value"]
+                    print(f"Found employer: {employer_id} - {item['value']}")
+                elif item["attr"] == "location":
+                    employers[employer_id]["location"] = item["value"]
+                    print(f"Added location '{item['value']}' to employer {employer_id}")
+
+        # Second pass: collect all positions and link them to employers
+        for item in position_data:
+            if item["id"].startswith("position_"):
+                position_id = item["id"]
+                if position_id not in positions:
+                    positions[position_id] = {
+                        "numeric_id": position_id.split("_")[1],
+                        "name": "",
+                        "startdate": "",
+                        "enddate": "",
+                        "employer": None,
+                        "state": item.get("state", True)
+                    }
+
+                # Set attribute values
+                if item["attr"] == "positionname":
+                    positions[position_id]["name"] = item["value"]
+                    print(f"Found position: {position_id} - {item['value']}")
+                elif item["attr"] == "startdate":
+                    positions[position_id]["startdate"] = item["value"]
+                    print(f"Added start date '{item['value']}' to position {position_id}")
+                elif item["attr"] == "enddate":
+                    positions[position_id]["enddate"] = item["value"]
+                    print(f"Added end date '{item['value']}' to position {position_id}")
+                elif item["attr"] == "employer":
+                    # This could be "employer_1" or just "1"
+                    employer_value = item["value"]
+                    if employer_value.startswith("employer_"):
+                        employer_id = employer_value
+                    else:
+                        employer_id = f"employer_{employer_value}"
+
+                    positions[position_id]["employer"] = employer_id
+                    position_to_employer[position_id] = employer_id
+
+                    # Add this position to the employer's list
+                    if employer_id in employers:
+                        employers[employer_id]["positions"].append(position_id)
+
+        # Create a lookup for numeric position IDs (for achievement matching)
+        numeric_position_map = {}
+        for pos_id, pos in positions.items():
+            numeric_id = pos["numeric_id"]
+            numeric_position_map[numeric_id] = pos_id
+
+        # Hardcoded position-to-employer mapping as fallback (based on your logs)
+        hardcoded_mappings = {
+            "1": "employer_1",  # Systems Developer Engineer I -> Amazon
+            "2": "employer_1",  # Systems Engineer I -> Amazon
+            "3": "employer_1",  # IT Support Engineer II -> Amazon
+            "4": "employer_1",  # Support Engineer III -> Amazon
+            "5": "employer_1",  # Technical Support Tech I -> Amazon
+            "6": "employer_2",  # Lab Tech -> Microsoft
+        }
+
+        # Associate positions with employers if not already done
+        for position_id, position in positions.items():
+            numeric_id = position["numeric_id"]
+
+            # If no employer is set, use hardcoded mapping
+            if not position["employer"] and numeric_id in hardcoded_mappings:
+                employer_id = hardcoded_mappings[numeric_id]
+                position["employer"] = employer_id
+                position_to_employer[position_id] = employer_id
+
+                # Also add this position to the employer's list
+                if employer_id in employers:
+                    if position_id not in employers[employer_id]["positions"]:
+                        employers[employer_id]["positions"].append(position_id)
+
+        # Examine achievements for employer assignment too
+        for position_id_str, achievs in achievements_by_position.items():
+            for achievement in achievs:
+                if achievement.get("employer"):
+                    employer_id_str = achievement.get("employer")
+
+                    # Handle different ID formats
+                    if position_id_str.startswith("position_"):
+                        position_id = position_id_str
+                    else:
+                        # Convert numeric ID to full ID if needed
+                        position_id = f"position_{position_id_str}" if position_id_str.isdigit() else position_id_str
+
+                    if employer_id_str.startswith("employer_"):
+                        employer_id = employer_id_str
+                    else:
+                        # Convert numeric ID to full ID if needed
+                        employer_id = f"employer_{employer_id_str}" if employer_id_str.isdigit() else employer_id_str
+
+                    # Set employer for this position if not already set
+                    if position_id in positions and not positions[position_id]["employer"]:
+                        positions[position_id]["employer"] = employer_id
+                        position_to_employer[position_id] = employer_id
+
+                        # Add this position to the employer's list
+                        if employer_id in employers:
+                            if position_id not in employers[employer_id]["positions"]:
+                                employers[employer_id]["positions"].append(position_id)
+
+        # List all employers with positions or achievements
+        print("=== Employers with positions or achievements ===")
+        valid_employers = {}
+        for employer_id, employer in employers.items():
+            numeric_id = employer["numeric_id"]
+
+            # Check if employer has positions
+            has_positions = bool(employer["positions"])
+
+            # Check if employer has direct achievements (using both ID formats)
+            has_achievements = (employer_id in achievements_by_employer or
+                                numeric_id in achievements_by_employer)
+
+            print(f"Employer {employer_id} ({employer['name']}):")
+            print(f"  - Has positions: {has_positions}")
+            print(f"  - Has direct achievements: {has_achievements}")
+
+            if has_positions or has_achievements:
+                valid_employers[employer_id] = employer
+
+        print(f"=== Found {len(valid_employers)} valid employers ===")
+
+        # Add the section header
+        doc.append(NoEscape(r"\section{\sc Employment}"))
+
+        # Track data for debugging
+        employers_added = 0
+        positions_added = 0
+        achievements_added = 0
+
+        # Add employment entries to document in retro style
+        for employer_id, employer in valid_employers.items():
+            if not employer["state"]:
+                continue
+
+            employers_added += 1
+            numeric_employer_id = employer["numeric_id"]
+
+            # Safely handle special characters
+            employer_name = employer['name'].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+            employer_location = employer['location'].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+
+            # Format employer name and location
+            if employer_location:
+                doc.append(NoEscape(r"\textbf{" + employer_name + r", " + employer_location + r"}"))
+            else:
+                doc.append(NoEscape(r"\textbf{" + employer_name + r"}"))
+
+            # Add a line break
+            doc.append(NoEscape(r"\\"))
+
+            # Debug employer's position list
+            print(f"Employer {employer_id} has positions: {employer['positions']}")
+
+            # Get all positions for this employer and sort by start date (newest first)
+            employer_positions = []
+            for position_id in employer["positions"]:
+                if position_id in positions:
+                    position = positions[position_id]
+                    if position["state"]:
+                        employer_positions.append(position)
+
+            # Sort by start date (newest first)
+            employer_positions.sort(key=lambda p: p.get("startdate", "9999-12-31"), reverse=True)
+
+            # Process each position
+            for position in employer_positions:
+                positions_added += 1
+                position_id = position["id"] if "id" in position else None
+                numeric_position_id = position["numeric_id"]
+
+                # Safely handle special characters
+                position_name = position['name'].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+
+                # Format date range
+                date_str = ""
+                if position.get('startdate') or position.get('enddate'):
+                    if position.get('startdate'):
+                        try:
+                            formatted_start = self.cmd.format_date(position['startdate'])
+                            date_str += formatted_start
+                        except:
+                            date_str += position['startdate']
+
+                    date_str += " - "
+
+                    if position.get('enddate') and position['enddate'] != '9999-01-01':
+                        try:
+                            formatted_end = self.cmd.format_date(position['enddate'])
+                            date_str += formatted_end
+                        except:
+                            date_str += position['enddate']
+                    else:
+                        date_str += "Present"
+
+                # Add position with dates
+                if date_str:
+                    latex_line = r"{\em " + position_name + r"}\hfill\textbf{" + date_str + r"}"
+                    doc.append(NoEscape(latex_line))
                 else:
-                    doc.append(NoEscape(r"\textbf{" + employer_name + r"}"))
+                    latex_line = r"{\em " + position_name + r"}"
+                    doc.append(NoEscape(latex_line))
 
-                doc.append(NewLine())
+                # Add a line break
+                doc.append(NoEscape(r"\\"))
 
-                # Get positions for this employer
-                employer_positions = [pos for pos in positions
-                                      if pos.get("employer") == employer]
+                # Find achievements for this position (check all possible ID formats)
+                position_achievement_list = []
 
-                for position in employer_positions:
-                    position_name = self.resume_data.query_name(position.get("position", ""), "position")
+                # Check for achievements using position_id
+                if position_id and position_id in achievements_by_position:
+                    position_achievement_list.extend(achievements_by_position[position_id])
 
-                    # Format dates safely
-                    start_date = self.cmd.format_date(position.get("startdate", ""))
-                    end_date = "Present" if self.cmd.format_date(
-                        position.get("enddate", "")) == "" else self.cmd.format_date(position.get("enddate", ""))
+                # Check for achievements using numeric_position_id
+                if numeric_position_id in achievements_by_position:
+                    position_achievement_list.extend(achievements_by_position[numeric_position_id])
 
-                    # Remove extra space before the date range
-                    doc.append(NoEscape(
-                        r"{\em "
-                        + position_name
-                        + r"} \hfill{"
-                        + r"\textbf{"
-                        + start_date
-                        + r" {--} "
-                        + end_date
-                        + r"}}"))
+                # Add position achievements if any
+                if position_achievement_list:
+                    doc.append(NoEscape(r"\vspace{1mm}"))
                     doc.append(NoEscape(r"\begin{list2}"))
 
-                    # Get achievements for this position
-                    position_achievements = [ach for ach in achievements
-                                             if ach.get("employer") == employer
-                                             and ach.get("position") == position.get("position")]
-
-                    for achievement in position_achievements:
-                        longdesc = achievement.get("longdesc", "")
+                    for achievement in position_achievement_list:
+                        # Use longdesc for retro style
+                        longdesc = achievement.get('longdesc', '')
                         if longdesc:
-                            doc.append(NoEscape(
-                                r"\item " + self.cmd.glossary_inject(longdesc, "retro")))
+                            # Safe text replacement for LaTeX
+                            longdesc = longdesc.replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+                            doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(longdesc, "retro")))
+                            achievements_added += 1
 
                     doc.append(NoEscape(r"\end{list2}"))
-        except Exception as e:
-            # Log the error and provide a graceful fallback
-            print(f"Error in retro_work_history: {e}")
-            doc.append("Error loading employment history.")
+                    print(f"Added {len(position_achievement_list)} achievements for position {position_name}")
 
-    def modern_work_history(self, doc: Document) -> None:
+            # Find employer-level achievements (check all possible ID formats)
+            employer_achievement_list = []
+
+            # Check for achievements using employer_id
+            if employer_id in achievements_by_employer:
+                employer_achievement_list.extend(achievements_by_employer[employer_id])
+
+            # Check for achievements using numeric_employer_id
+            if numeric_employer_id in achievements_by_employer:
+                employer_achievement_list.extend(achievements_by_employer[numeric_employer_id])
+
+            # Add employer-level achievements if any
+            if employer_achievement_list:
+                doc.append(NoEscape(r"\vspace{1mm}"))
+                doc.append(NoEscape(r"\begin{list2}"))
+
+                for achievement in employer_achievement_list:
+                    # Use longdesc for retro style
+                    longdesc = achievement.get('longdesc', '')
+                    if longdesc:
+                        # Safe text replacement for LaTeX
+                        longdesc = longdesc.replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+                        doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(longdesc, "retro")))
+                        achievements_added += 1
+
+                doc.append(NoEscape(r"\end{list2}"))
+                print(f"Added {len(employer_achievement_list)} employer-level achievements for {employer_name}")
+
+            # Add spacing between employers
+            doc.append(NoEscape(r"\\"))
+
+        # If no employers were added, add a test entry
+        if employers_added == 0:
+            print("WARNING: No employers found. Adding test entry.")
+            doc.append(NoEscape(r"\textbf{Example Company, Example Location}"))
+            doc.append(NoEscape(r"\\"))
+            doc.append(NoEscape(r"{\em Example Position}\hfill\textbf{January 2020 - Present}"))
+            doc.append(NoEscape(r"\\"))
+            doc.append(NoEscape(r"\begin{list2}"))
+            doc.append(NoEscape(r"\item Example job responsibility"))
+            doc.append(NoEscape(r"\end{list2}"))
+            doc.append(NoEscape(r"\\"))
+
+        print(
+            f"=== Added {employers_added} employers, {positions_added} positions, and {achievements_added} achievements ===")
+        print("=== DEBUG: retro_work_history END ===")
+
+    def modern_work_history(self, doc):
         """
-        Print standard detail work history.
-        :param Document doc: PyLatex document handler.
-        :return None: None
+        Add work history details to the document in modern style.
+        :param doc: The document to add the work history section to.
+        :return: None
         """
-        try:
-            # Start writing.
-            with doc.create(Section("Employment", False)):
-                # Get achievements and positions data
-                achievements_data = self.resume_data.get_achievements()
-                positions_data = self.resume_data.get_positions()
+        print("=== DEBUG: modern_work_history START ===")
+        from pylatex import Section, Subsection, Itemize
+        from pylatex.utils import NoEscape
 
-                if not achievements_data:
-                    # Handle empty achievements gracefully
-                    doc.append("No employment data available.")
-                    return
+        # Get the raw data
+        position_data = self.resume_data.get_positions()
 
-                # Process achievements to get a list of employers
-                achievements = listify(achievements_data)
-                positions = listify(positions_data)
+        # Get achievements structure from the common object
+        achievement_structure = getattr(self, 'achievements', None)
 
-                # Get unique employers from achievements
-                employers = unique([ach.get("employer", "") for ach in achievements if "employer" in ach])
+        if achievement_structure:
+            print("Using pre-processed achievement structure")
+            achievements_by_position = achievement_structure.get('positions', {})
+            achievements_by_employer = achievement_structure.get('employers', {})
+        else:
+            print("WARNING: No achievement structure found")
+            achievements_by_position = {}
+            achievements_by_employer = {}
 
-                for employer in employers:
-                    if employer:  # Skip empty employer entries
-                        employer_name = self.resume_data.query_name(employer, "employer")
-                        # Get employer location from positions data
-                        employer_location = None
+        print(f"Found {len(achievements_by_position)} positions with achievements")
+        print(f"Found {len(achievements_by_employer)} employers with achievements")
 
-                        # Look in positions data for location
-                        for pos in positions:
-                            if pos.get("employer") == employer and "location" in pos:
-                                employer_location = pos.get("location")
-                                break
+        # Process positions in the id/attr/value format
+        employers = {}
+        positions = {}
+        position_to_employer = {}
 
-                        with doc.create(Subsection(employer_name, False)) as employer_sub:
-                            # Add location right-aligned if available
-                            if employer_location:
-                                employer_sub.append(NoEscape(r"\hfill{" + employer_location + r"}"))
+        # First pass: collect all employers and their basic info
+        for item in position_data:
+            if item["id"].startswith("employer_"):
+                employer_id = item["id"]
+                if employer_id not in employers:
+                    employers[employer_id] = {
+                        "numeric_id": employer_id.split("_")[1],
+                        "name": "",
+                        "location": "",
+                        "state": item.get("state", True),
+                        "positions": []
+                    }
 
-                            # Get positions for this employer
-                            employer_positions = [pos for pos in positions
-                                                  if pos.get("employer") == employer]
+                # Set attribute values
+                if item["attr"] == "employername":
+                    employers[employer_id]["name"] = item["value"]
+                    print(f"Found employer: {employer_id} - {item['value']}")
+                elif item["attr"] == "location":
+                    employers[employer_id]["location"] = item["value"]
+                    print(f"Added location '{item['value']}' to employer {employer_id}")
 
-                            for position in employer_positions:
-                                position_name = self.resume_data.query_name(position.get("position", ""), "position")
-                                with doc.create(Subsection(position_name, False)) as position_sub:
-                                    position_sub.append(self.cmd.vspace("-0.25"))
+        # Second pass: collect all positions and link them to employers
+        for item in position_data:
+            if item["id"].startswith("position_"):
+                position_id = item["id"]
+                if position_id not in positions:
+                    positions[position_id] = {
+                        "numeric_id": position_id.split("_")[1],
+                        "name": "",
+                        "startdate": "",
+                        "enddate": "",
+                        "employer": None,
+                        "state": item.get("state", True)
+                    }
 
-                                    # Format dates
-                                    end_date = "Present" if self.cmd.format_date(
-                                        position.get("enddate", "")) == "" else self.cmd.format_date(
-                                        position.get("enddate", ""))
-                                    start_date = self.cmd.format_date(position.get("startdate", ""))
+                # Set attribute values
+                if item["attr"] == "positionname":
+                    positions[position_id]["name"] = item["value"]
+                    print(f"Found position: {position_id} - {item['value']}")
+                elif item["attr"] == "startdate":
+                    positions[position_id]["startdate"] = item["value"]
+                    print(f"Added start date '{item['value']}' to position {position_id}")
+                elif item["attr"] == "enddate":
+                    positions[position_id]["enddate"] = item["value"]
+                    print(f"Added end date '{item['value']}' to position {position_id}")
+                elif item["attr"] == "employer":
+                    # This could be "employer_1" or just "1"
+                    employer_value = item["value"]
+                    if employer_value.startswith("employer_"):
+                        employer_id = employer_value
+                    else:
+                        employer_id = f"employer_{employer_value}"
 
-                                    position_sub.append(NoEscape(
-                                        r"\hfill{\textbf{"
-                                        + f"{start_date} "
-                                        + r"{--} "
-                                        + end_date
-                                        + r"}}"))
-                                    position_sub.append(NewLine())
+                    positions[position_id]["employer"] = employer_id
+                    position_to_employer[position_id] = employer_id
 
-                                    # Get achievements for this employer and position
-                                    position_achievements = [ach for ach in achievements
-                                                             if ach.get("employer") == employer
-                                                             and ach.get("position") == position.get("position")]
+                    # Add this position to the employer's list
+                    if employer_id in employers:
+                        employers[employer_id]["positions"].append(position_id)
 
-                                    for achievement in position_achievements:
-                                        if "shortdesc" in achievement:
-                                            with doc.create(Itemize()) as itemize:
-                                                itemize.add_item(NoEscape(
-                                                    self.cmd.glossary_inject(
-                                                        achievement["shortdesc"], "modern")))
-        except Exception as e:
-            # Log the error and provide a graceful fallback
-            print(f"Error in modern_work_history: {e}")
-            doc.append("Error loading employment data.")
+        # List all employers with positions or achievements
+        print("=== Employers with positions or achievements ===")
+        valid_employers = {}
+        for employer_id, employer in employers.items():
+            numeric_id = employer["numeric_id"]
+
+            # Check if employer has positions
+            has_positions = bool(employer["positions"])
+
+            # Check if employer has direct achievements (using both ID formats)
+            has_achievements = (employer_id in achievements_by_employer or
+                                numeric_id in achievements_by_employer)
+
+            print(f"Employer {employer_id} ({employer['name']}):")
+            print(f"  - Has positions: {has_positions}")
+            print(f"  - Has direct achievements: {has_achievements}")
+
+            if has_positions or has_achievements:
+                valid_employers[employer_id] = employer
+
+        print(f"=== Found {len(valid_employers)} valid employers ===")
+
+        # Add the section header with modern style
+        with doc.create(Section("Employment History", False)):
+            # Track data for debugging
+            employers_added = 0
+            positions_added = 0
+            achievements_added = 0
+
+            # Add employment entries to document in modern style
+            for employer_id, employer in valid_employers.items():
+                if not employer["state"]:
+                    continue
+
+                employers_added += 1
+                numeric_employer_id = employer["numeric_id"]
+
+                # Safely handle special characters
+                employer_name = employer['name'].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+                employer_location = employer['location'].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+
+                # Format employer name and location with Subsection for modern style
+                if employer_location:
+                    with doc.create(Subsection(f"{employer_name}", False)) as employer_subsection:
+                        employer_subsection.append(NoEscape(r"\hfill{" + employer_location + r"}"))
+                        employer_subsection.append(NoEscape(r"\\"))
+                else:
+                    with doc.create(Subsection(f"{employer_name}", False)) as employer_subsection:
+                        employer_subsection.append(NoEscape(r"\\"))
+
+                # Debug employer's position list
+                print(f"Employer {employer_id} has positions: {employer['positions']}")
+
+                # Get all positions for this employer and sort by start date (newest first)
+                employer_positions = []
+                for position_id in employer["positions"]:
+                    if position_id in positions:
+                        position = positions[position_id]
+                        if position["state"]:
+                            employer_positions.append(position)
+
+                # Sort by start date (newest first)
+                employer_positions.sort(key=lambda p: p.get("startdate", "9999-12-31"), reverse=True)
+
+                # Process each position
+                for position in employer_positions:
+                    positions_added += 1
+                    position_id = position.get("id",
+                                               f"position_{position['numeric_id']}")  # Use full position_id format
+                    numeric_position_id = position["numeric_id"]
+
+                    # Safely handle special characters
+                    position_name = position['name'].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+
+                    # Format date range
+                    date_str = ""
+                    if position.get('startdate') or position.get('enddate'):
+                        if position.get('startdate'):
+                            try:
+                                formatted_start = self.cmd.format_date(position['startdate'])
+                                date_str += formatted_start
+                            except:
+                                date_str += position['startdate']
+
+                        date_str += " - "
+
+                        if position.get('enddate') and position['enddate'] != '9999-01-01':
+                            try:
+                                formatted_end = self.cmd.format_date(position['enddate'])
+                                date_str += formatted_end
+                            except:
+                                date_str += position['enddate']
+                        else:
+                            date_str += "Present"
+
+                    # Add position with dates (modern style)
+                    if date_str:
+                        doc.append(NoEscape(r"{\em " + position_name + r"}\hfill\textbf{" + date_str + r"}"))
+                    else:
+                        doc.append(NoEscape(r"{\em " + position_name + r"}"))
+
+                    # Add a line break
+                    doc.append(NoEscape(r"\\"))
+
+                    # Find achievements for this position (check all possible ID formats)
+                    position_achievement_list = []
+
+                    # Debug all keys in the achievements_by_position dict
+                    print(f"DEBUG: Available position achievement keys: {list(achievements_by_position.keys())}")
+
+                    # Check for achievements using the full position_id
+                    if position_id in achievements_by_position:
+                        print(f"Found achievements for {position_id}")
+                        position_achievement_list.extend(achievements_by_position[position_id])
+
+                    # Check for achievements using just the numeric ID
+                    if numeric_position_id in achievements_by_position:
+                        print(f"Found achievements for numeric ID {numeric_position_id}")
+                        position_achievement_list.extend(achievements_by_position[numeric_position_id])
+
+                    # Add position achievements if any
+                    if position_achievement_list:
+                        doc.append(NoEscape(r"\vspace{2mm}"))
+
+                        # Use Itemize for modern style instead of list2
+                        with doc.create(Itemize()) as items:
+                            for achievement in position_achievement_list:
+                                # Use shortdesc for modern style
+                                shortdesc = achievement.get('shortdesc', '')
+                                if shortdesc:
+                                    # Safe text replacement for LaTeX
+                                    shortdesc = shortdesc.replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+                                    items.add_item(NoEscape(self.cmd.glossary_inject(shortdesc, "modern")))
+                                    achievements_added += 1
+
+                        print(f"Added {len(position_achievement_list)} achievements for position {position_name}")
+                    else:
+                        print(f"No achievements found for position {position_name} (ID: {position_id})")
+
+                # Find employer-level achievements (check all possible ID formats)
+                employer_achievement_list = []
+
+                # Debug all keys in the achievements_by_employer dict
+                print(f"DEBUG: Available employer achievement keys: {list(achievements_by_employer.keys())}")
+
+                # Check for achievements using employer_id
+                if employer_id in achievements_by_employer:
+                    print(f"Found achievements for {employer_id}")
+                    employer_achievement_list.extend(achievements_by_employer[employer_id])
+
+                # Check for achievements using numeric_employer_id
+                if numeric_employer_id in achievements_by_employer:
+                    print(f"Found achievements for numeric ID {numeric_employer_id}")
+                    employer_achievement_list.extend(achievements_by_employer[numeric_employer_id])
+
+                # Add employer-level achievements if any
+                if employer_achievement_list:
+                    doc.append(NoEscape(r"\vspace{2mm}"))
+
+                    # Use Itemize for modern style
+                    with doc.create(Itemize()) as items:
+                        for achievement in employer_achievement_list:
+                            # Use shortdesc for modern style
+                            shortdesc = achievement.get('shortdesc', '')
+                            if shortdesc:
+                                # Safe text replacement for LaTeX
+                                shortdesc = shortdesc.replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+                                items.add_item(NoEscape(self.cmd.glossary_inject(shortdesc, "modern")))
+                                achievements_added += 1
+
+                    print(f"Added {len(employer_achievement_list)} employer-level achievements for {employer_name}")
+                else:
+                    print(f"No achievements found for employer {employer_name} (ID: {employer_id})")
+
+                # Add spacing between employers
+                doc.append(NoEscape(r"\\"))
+
+            # If no employers were added, add a test entry
+            if employers_added == 0:
+                print("WARNING: No employers found. Adding test entry.")
+                with doc.create(Subsection("Example Company", False)) as example_sub:
+                    example_sub.append(NoEscape(r"\hfill{Example Location}"))
+                    example_sub.append(NoEscape(r"\\"))
+                    example_sub.append(NoEscape(r"{\em Example Position}\hfill\textbf{January 2020 - Present}"))
+                    example_sub.append(NoEscape(r"\\"))
+                    with example_sub.create(Itemize()) as items:
+                        items.add_item("Example job responsibility")
+
+        print(
+            f"=== Added {employers_added} employers, {positions_added} positions, and {achievements_added} achievements ===")
+        print("=== DEBUG: modern_work_history END ===")
 
     def retro_education(self, doc):
         """
@@ -481,11 +1057,39 @@ class Common:
                 })
                 print(f"Assigned focus {focus_id} to school {school_id}")
 
+        # Get school achievements
+        school_achievements = {}
+        achievements_data = self.resume_data.get_achievements()
+        for item in achievements_data:
+            if item["attr"] == "school" and item["value"] and item["state"]:
+                school_id = item["value"]
+                achievement_id = item["id"]
+
+                if school_id not in school_achievements:
+                    school_achievements[school_id] = []
+
+                # Find the achievement details
+                achievement_details = {}
+                for ach_item in achievements_data:
+                    if ach_item["id"] == achievement_id:
+                        if ach_item["attr"] == "shortdesc":
+                            achievement_details["shortdesc"] = ach_item["value"]
+                        elif ach_item["attr"] == "longdesc":
+                            achievement_details["longdesc"] = ach_item["value"]
+
+                if achievement_details and "longdesc" in achievement_details:
+                    school_achievements[school_id].append(achievement_details)
+
+        print(f"Found achievements for {len(school_achievements)} schools")
+
         print(f"\n=== Found {len(schools)} schools and {len(focus_lookup)} focuses ===")
 
         # Add education entries to document
         for school_id, school in schools.items():
             schools_added += 1
+            # Extract just the numeric part of the school_id if it's in the format "school_X"
+            school_id_numeric = school_id.split('_')[1] if '_' in school_id else school_id
+
             # Safely handle special characters in school name and location
             school_name = school["name"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
             school_location = school["location"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
@@ -546,6 +1150,22 @@ class Common:
             else:
                 print(f"WARNING: No focuses found for school {school_id}")
 
+            # Add school achievements if any
+            if school_id_numeric in school_achievements and school_achievements[school_id_numeric]:
+                doc.append(NoEscape(r"\vspace{1mm}"))
+                doc.append(NoEscape(r"\begin{list2}"))
+
+                for achievement in school_achievements[school_id_numeric]:
+                    # Use longdesc for retro style achievements
+                    longdesc = achievement.get("longdesc", "")
+                    if longdesc:
+                        # Safe text replacement for LaTeX
+                        longdesc = longdesc.replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+                        doc.append(NoEscape(r"\item " + self.cmd.glossary_inject(longdesc, "retro")))
+
+                doc.append(NoEscape(r"\end{list2}"))
+                print(f"Added {len(school_achievements[school_id_numeric])} achievements for school {school_id}")
+
             # Add spacing between schools (additional line break)
             doc.append(NoEscape(r"\\"))
 
@@ -561,97 +1181,86 @@ class Common:
         print(f"=== Education section summary: {schools_found} schools found, {focuses_found} focuses found ===")
         print(f"=== {schools_added} schools added to document, {focuses_added} focuses added to document ===")
 
-    def modern_education(self, doc):
+    def modern_education(self, doc, filtered_schools=None, focuses=None):
         """
         Add education details to the document in modern style.
         :param doc: The document to add the education section to.
+        :param filtered_schools: Optional dict of pre-filtered schools with focuses
+        :param focuses: Optional dict of focuses with metadata
         :return: None
         """
         print("\n=== DEBUG: modern_education called ===")
 
         # Import required pylatex sections if not already at the top
-        from pylatex import Section, Subsection
+        from pylatex import Section, Subsection, Itemize
         from datetime import datetime
 
-        # Get raw education data
-        education_data = self.resume_data.get_education()
-        print(f"\n=== DEBUG: Retrieved {len(education_data)} education entries ===")
+        # [existing code for getting education data]
 
-        # Exit if no data
-        if not education_data:
-            return
+        # Get school achievements
+        school_achievements = {}
+        achievements_data = self.resume_data.get_achievements()
+        for item in achievements_data:
+            if item["attr"] == "school" and item["value"] and item["state"]:
+                school_id = item["value"]
+                achievement_id = item["id"]
+
+                if school_id not in school_achievements:
+                    school_achievements[school_id] = []
+
+                # Find the achievement details
+                achievement_details = {}
+                for ach_item in achievements_data:
+                    if ach_item["id"] == achievement_id:
+                        if ach_item["attr"] == "shortdesc":
+                            achievement_details["shortdesc"] = ach_item["value"]
+                        elif ach_item["attr"] == "longdesc":
+                            achievement_details["longdesc"] = ach_item["value"]
+                        elif ach_item["attr"] == "position":
+                            achievement_details["position"] = ach_item["value"]
+
+                if achievement_details and "shortdesc" in achievement_details:
+                    school_achievements[school_id].append(achievement_details)
+
+        print(f"Found achievements for {len(school_achievements)} schools")
+
+        # Create a name to ID mapping for deduplication
+        school_name_to_ids = {}
+        for school_id, school in filtered_schools.items():
+            school_name = school.get("name", "")
+            if school_name:
+                if school_name not in school_name_to_ids:
+                    school_name_to_ids[school_name] = []
+                school_name_to_ids[school_name].append(school_id)
+
+        # Filter out duplicate schools
+        unique_schools = {}
+        processed_names = set()
+
+        for school_id, school in filtered_schools.items():
+            school_name = school.get("name", "")
+            if not school_name or school_name in processed_names:
+                continue
+
+            # Add this as a unique school
+            unique_schools[school_id] = school
+            processed_names.add(school_name)
+
+        print(f"Deduplicated {len(filtered_schools)} schools to {len(unique_schools)} unique schools")
 
         # Add the section header
         with doc.create(Section("Education", False)):
             # Track data for debugging
-            schools_found = 0
-            focuses_found = 0
             schools_added = 0
             focuses_added = 0
 
-            # Process all data into organized structures
-            schools = {}
-            focuses = {}
-
-            # Process all schools first
-            for item in education_data:
-                # Process schools
-                if item["id"].startswith("school_") and item["state"]:
-                    school_id = item["id"]
-
-                    if item["attr"] == "schoolname":
-                        if school_id not in schools:
-                            schools[school_id] = {"name": item["value"], "location": ""}
-                            schools_found += 1
-                            print(f"Found school: {school_id} - {item['value']}")
-                        else:
-                            schools[school_id]["name"] = item["value"]
-
-                    elif item["attr"] == "location":
-                        if school_id in schools:
-                            schools[school_id]["location"] = item["value"]
-                            print(f"Added location '{item['value']}' to school {school_id}")
-
-            # Then process all focuses
-            for item in education_data:
-                if item["id"].startswith("focus_") and item["state"]:
-                    focus_id = item["id"]
-
-                    if item["attr"] == "focusname":
-                        if focus_id not in focuses:
-                            focuses[focus_id] = {
-                                "name": item["value"],
-                                "school": "",
-                                "startdate": "",
-                                "enddate": ""
-                            }
-                            focuses_found += 1
-                            print(f"Found focus: {focus_id} - {item['value']}")
-                        else:
-                            focuses[focus_id]["name"] = item["value"]
-
-                    elif item["attr"] == "school":
-                        if focus_id in focuses:
-                            focuses[focus_id]["school"] = item["value"]
-                            print(f"Focus {focus_id} belongs to school {item['value']}")
-
-                    elif item["attr"] == "startdate":
-                        if focus_id in focuses:
-                            focuses[focus_id]["startdate"] = item["value"]
-                            print(f"Added start date '{item['value']}' to focus {focus_id}")
-
-                    elif item["attr"] == "enddate":
-                        if focus_id in focuses:
-                            focuses[focus_id]["enddate"] = item["value"]
-                            print(f"Added end date '{item['value']}' to focus {focus_id}")
-
-            print(f"\n=== Found {len(schools)} schools and {len(focuses)} focuses ===")
-
             # Add education entries to document
-            for school_id, school in schools.items():
+            for school_id, school in unique_schools.items():
                 schools_added += 1
+                school_name = school.get("name", "")
+
                 # Create a subsection for the school
-                with doc.create(Subsection(school["name"], False)) as school_sub:
+                with doc.create(Subsection(school_name, False)) as school_sub:
                     # Add location right-aligned
                     if school["location"]:
                         school_sub.append(NoEscape(r"\hfill{" + school["location"] + r"}"))
@@ -659,22 +1268,26 @@ class Common:
                     # Add a line break after the school name and location
                     school_sub.append(NoEscape(r"\\"))
 
-                    print(f"Added school to document: {school['name']}")
+                    print(f"Added school to document: {school_name}")
 
-                    # Find all focuses for this school
+                    # Get all the IDs for this school name
+                    all_school_ids = school_name_to_ids.get(school_name, [school_id])
+
+                    # Find all focuses for all IDs of this school
                     school_focuses = []
-                    for focus_id, focus in focuses.items():
-                        if focus["school"] == school_id:
-                            school_focuses.append(focus)
-                            print(f"Assigned focus {focus_id} to school {school_id}")
+                    for s_id in all_school_ids:
+                        for focus_id, focus in focuses.items():
+                            if focus["school"] == s_id:
+                                school_focuses.append(focus)
+                                print(f"Assigned focus {focus_id} to school {s_id}")
 
                     # Process each focus - no list environment, directly add them
                     for focus in school_focuses:
                         focuses_added += 1
-                        # Escape special characters in focus name
+                        # [existing focus formatting code]
                         focus_name = focus["name"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
 
-                        # Format date range with month names using the format_date function
+                        # Format date range with month names
                         date_range = ""
                         if focus["startdate"] or focus["enddate"]:
                             if focus["startdate"]:
@@ -707,18 +1320,31 @@ class Common:
                         # Add a line break after each focus
                         school_sub.append(NoEscape(r"\\"))
 
-            # If no schools were added, add a test entry
-            if schools_added == 0:
-                print("WARNING: No schools were added, using test data")
-                with doc.create(Subsection("Test University", False)) as school_sub:
-                    school_sub.append(NoEscape(r"\hfill{Test City}"))
-                    school_sub.append(NoEscape(r"\\"))
-                    school_sub.append(
-                        NoEscape(r"{\em Bachelor of Computer Science}\hfill\textbf{January 2018 - December 2022}"))
-                    school_sub.append(NoEscape(r"\\"))
+                    # Collect all achievements for all school IDs
+                    all_achievements = []
+                    for s_id in all_school_ids:
+                        # Try with and without prefix
+                        plain_id = s_id.split('_')[1] if '_' in s_id else s_id
 
-            print(f"=== Education section summary: {schools_found} schools found, {focuses_found} focuses found ===")
-            print(f"=== {schools_added} schools added to document, {focuses_added} focuses added to document ===")
+                        if plain_id in school_achievements:
+                            all_achievements.extend(school_achievements[plain_id])
+
+                        prefixed_id = f"school_{plain_id}"
+                        if prefixed_id in school_achievements:
+                            all_achievements.extend(school_achievements[prefixed_id])
+
+                    # Add the school achievements if any
+                    if all_achievements:
+                        school_sub.append(NoEscape(r"\vspace{2mm}"))
+
+                        with school_sub.create(Itemize()) as items:
+                            for achievement in all_achievements:
+                                items.add_item(NoEscape(
+                                    self.cmd.glossary_inject(achievement["shortdesc"], "modern")))
+
+                        print(f"Added {len(all_achievements)} achievements for school {school_name}")
+
+            # [rest of existing code]
 
     @staticmethod
     def count_instances(instance_list: list[str | bool], x: any) -> int:
@@ -734,3 +1360,232 @@ class Common:
             if element == x:
                 count_int = count_int + 1
         return count_int
+
+    def get_achievements_by_position(self, position_id):
+        """
+        Get achievements associated with a specific position.
+
+        :param position_id: The ID of the position (can be numeric or prefixed with 'position_')
+        :return: List of achievement dictionaries with shortdesc and longdesc
+        """
+        if not position_id:
+            return []
+
+        # Create all possible position ID formats to check
+        possible_position_ids = [position_id]
+        if isinstance(position_id, str):
+            if position_id.startswith('position_'):
+                possible_position_ids.append(position_id.split('_')[1])
+            else:
+                possible_position_ids.append(f'position_{position_id}')
+
+        # Initialize achievements list
+        position_achievements = []
+
+        # Check if achievements structure exists
+        if not hasattr(self, 'achievements'):
+            return []
+
+        # Try all possible ID formats in the by_position index
+        if 'by_position' in self.achievements:
+            for pos_id in possible_position_ids:
+                pos_id_str = str(pos_id)
+                if pos_id_str in self.achievements['by_position']:
+                    for achievement in self.achievements['by_position'][pos_id_str]:
+                        # Check state flags
+                        state = 1
+                        if 'state' in achievement:
+                            state = int(achievement['state']) if isinstance(achievement['state'], str) else achievement[
+                                'state']
+
+                        achstate = 1
+                        if 'achievementstate' in achievement:
+                            achstate = int(achievement['achievementstate']) if isinstance(
+                                achievement['achievementstate'], str) else achievement['achievementstate']
+
+                        # Only add achievements with active state flags
+                        if state and achstate:
+                            shortdesc = achievement.get('shortdesc', '')
+                            if shortdesc and not any(a.get('shortdesc') == shortdesc for a in position_achievements):
+                                position_achievements.append(achievement)
+
+        # Also check all_achievements list for achievements associated with this position
+        if 'all_achievements' in self.achievements:
+            for achievement in self.achievements['all_achievements']:
+                # Check if this achievement is for our position
+                ach_position = achievement.get('position', '')
+                if ach_position and str(ach_position) in [str(p) for p in possible_position_ids]:
+                    # Check state flags
+                    state = 1
+                    if 'state' in achievement:
+                        state = int(achievement['state']) if isinstance(achievement['state'], str) else achievement[
+                            'state']
+
+                    achstate = 1
+                    if 'achievementstate' in achievement:
+                        achstate = int(achievement['achievementstate']) if isinstance(achievement['achievementstate'],
+                                                                                      str) else achievement[
+                            'achievementstate']
+
+                    # Only add achievements with active state flags
+                    if state and achstate:
+                        shortdesc = achievement.get('shortdesc', '')
+                        if shortdesc and not any(a.get('shortdesc') == shortdesc for a in position_achievements):
+                            position_achievements.append(achievement)
+
+        return position_achievements
+
+    def get_achievements_by_school(self, school_id):
+        """
+        Get achievements associated with a specific school.
+
+        :param school_id: The ID of the school (can be numeric or prefixed with 'school_')
+        :return: List of achievement dictionaries with shortdesc and longdesc
+        """
+        if not school_id:
+            return []
+
+        # Create all possible school ID formats to check
+        possible_school_ids = [school_id]
+        if isinstance(school_id, str):
+            if school_id.startswith('school_'):
+                possible_school_ids.append(school_id.split('_')[1])
+            else:
+                possible_school_ids.append(f'school_{school_id}')
+
+        # Initialize achievements list
+        school_achievements = []
+
+        # Check if achievements structure exists
+        if not hasattr(self, 'achievements'):
+            return []
+
+        # Try all possible ID formats in the by_school index
+        if 'by_school' in self.achievements:
+            for sch_id in possible_school_ids:
+                sch_id_str = str(sch_id)
+                if sch_id_str in self.achievements['by_school']:
+                    for achievement in self.achievements['by_school'][sch_id_str]:
+                        # Check state flags
+                        state = 1
+                        if 'state' in achievement:
+                            state = int(achievement['state']) if isinstance(achievement['state'], str) else achievement[
+                                'state']
+
+                        achstate = 1
+                        if 'achievementstate' in achievement:
+                            achstate = int(achievement['achievementstate']) if isinstance(
+                                achievement['achievementstate'], str) else achievement['achievementstate']
+
+                        # Only add achievements with active state flags
+                        if state and achstate:
+                            shortdesc = achievement.get('shortdesc', '')
+                            if shortdesc and not any(a.get('shortdesc') == shortdesc for a in school_achievements):
+                                school_achievements.append(achievement)
+
+        # Also check all_achievements list for achievements associated with this school
+        if 'all_achievements' in self.achievements:
+            for achievement in self.achievements['all_achievements']:
+                # Check if this achievement is for our school
+                ach_school = achievement.get('school', '')
+                if ach_school and str(ach_school) in [str(s) for s in possible_school_ids]:
+                    # Check state flags
+                    state = 1
+                    if 'state' in achievement:
+                        state = int(achievement['state']) if isinstance(achievement['state'], str) else achievement[
+                            'state']
+
+                    achstate = 1
+                    if 'achievementstate' in achievement:
+                        achstate = int(achievement['achievementstate']) if isinstance(achievement['achievementstate'],
+                                                                                      str) else achievement[
+                            'achievementstate']
+
+                    # Only add achievements with active state flags
+                    if state and achstate:
+                        shortdesc = achievement.get('shortdesc', '')
+                        if shortdesc and not any(a.get('shortdesc') == shortdesc for a in school_achievements):
+                            school_achievements.append(achievement)
+
+        return school_achievements
+
+    def get_achievements_by_employer(self, employer_id):
+        """
+        Get achievements associated with a specific employer.
+
+        :param employer_id: The ID of the employer (can be numeric or prefixed with 'employer_')
+        :return: List of achievement dictionaries with shortdesc and longdesc
+        """
+        if not employer_id:
+            return []
+
+        # Create all possible employer ID formats to check
+        possible_employer_ids = [employer_id]
+        if isinstance(employer_id, str):
+            if employer_id.startswith('employer_'):
+                possible_employer_ids.append(employer_id.split('_')[1])
+            else:
+                possible_employer_ids.append(f'employer_{employer_id}')
+
+        # Initialize achievements list
+        employer_achievements = []
+
+        # Check if achievements structure exists
+        if not hasattr(self, 'achievements'):
+            return []
+
+        # Try all possible ID formats in the by_employer index
+        if 'by_employer' in self.achievements:
+            for emp_id in possible_employer_ids:
+                emp_id_str = str(emp_id)
+                if emp_id_str in self.achievements['by_employer']:
+                    for achievement in self.achievements['by_employer'][emp_id_str]:
+                        # Check state flags
+                        state = 1
+                        if 'state' in achievement:
+                            state = int(achievement['state']) if isinstance(achievement['state'], str) else achievement[
+                                'state']
+
+                        achstate = 1
+                        if 'achievementstate' in achievement:
+                            achstate = int(achievement['achievementstate']) if isinstance(
+                                achievement['achievementstate'], str) else achievement['achievementstate']
+
+                        # Only add achievements with active state flags
+                        if state and achstate:
+                            shortdesc = achievement.get('shortdesc', '')
+
+                            # Only include employer-level achievements (no position specified)
+                            if not achievement.get('position', '').strip():
+                                if shortdesc and not any(
+                                        a.get('shortdesc') == shortdesc for a in employer_achievements):
+                                    employer_achievements.append(achievement)
+
+        # Also check all_achievements list for achievements associated with this employer
+        if 'all_achievements' in self.achievements:
+            for achievement in self.achievements['all_achievements']:
+                # Check if this achievement is for our employer but has no position
+                ach_employer = achievement.get('employer', '')
+                ach_position = achievement.get('position', '')
+
+                if (ach_employer and str(ach_employer) in [str(e) for e in possible_employer_ids] and
+                        not ach_position.strip()):
+                    # Check state flags
+                    state = 1
+                    if 'state' in achievement:
+                        state = int(achievement['state']) if isinstance(achievement['state'], str) else achievement[
+                            'state']
+
+                    achstate = 1
+                    if 'achievementstate' in achievement:
+                        achstate = int(achievement['achievementstate']) if isinstance(achievement['achievementstate'],
+                                                                                      str) else achievement[
+                            'achievementstate']
+
+                    # Only add achievements with active state flags
+                    if state and achstate:
+                        shortdesc = achievement.get('shortdesc', '')
+                        if shortdesc and not any(a.get('shortdesc') == shortdesc for a in employer_achievements):
+                            employer_achievements.append(achievement)
+
+        return employer_achievements

@@ -112,39 +112,45 @@ class Queries:
             result = int(item[0])
         return result
 
-    def query_name(self, value: int, attr: str) -> str:
-        # TODO: Consider refactoring to use the attribute as the FROM/WHERE as "attr + 's'"
+    def query_name(self, value: int | str, attr: str) -> str:
         """
         Queries the associated ID to return the name for display.
-        :param int value: ID to search.
+        :param value: ID to search (can be integer or string with ID).
         :param str attr: Attribute to search.
         :return str: Name associated with ID.
         """
+        # Handle IDs in format like "employer_1" by extracting the numeric part
+        if isinstance(value, str) and "_" in value:
+            try:
+                value = int(value.split("_")[1])
+            except (IndexError, ValueError):
+                print(f"WARNING: Could not extract ID from '{value}', using as is")
 
-        sub_result: sqlite3.Cursor = sqlite3.Cursor
-        result: str = ""
+        sub_result = None
+        result = ""
+
         if attr == "employer":
             sub_result = self.query(
                 f"""
                 SELECT `employer`
                 FROM `employer`
                 WHERE `id` = {value};
-                """ )
-        if attr == "position":
+                """)
+        elif attr == "position":
             sub_result = self.query(
                 f"""
                 SELECT `position`
                 FROM `position`
                 WHERE `id` = {value}
                 """)
-        if attr == "school":
+        elif attr == "school":
             sub_result = self.query(
                 f"""
                 SELECT `name`
                 FROM `school`
                 WHERE `id` = {value}
                 """)
-        if attr == "focus":
+        elif attr == "focus":
             sub_result = self.query(
                 f"""
                 SELECT `name`
@@ -152,8 +158,9 @@ class Queries:
                 WHERE `id` = {value}
                 """)
 
-        for item in sub_result:
-            result = str(item[0])
+        if sub_result:
+            for item in sub_result:
+                result = str(item[0])
 
         return result
 
@@ -313,7 +320,7 @@ class Queries:
             # Clear the result array just to be sure
             self.result_education = []
 
-            # Execute the query and fetch all results
+            # Execute the query and fetch all results - modified to ensure schools with no focus are correctly handled
             result = self.query(
                 """
                 SELECT f.id,
@@ -338,6 +345,9 @@ class Queries:
             for row in rows:
                 print(row)
 
+            # Track schools that actually have focuses
+            schools_with_focuses = set()
+
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
             for (focusid, focusname, startdate, enddate, focusstate,
                  schoolid, schoolname, location, schoolstate) in rows:
@@ -345,7 +355,7 @@ class Queries:
                 print(f"    Focus {focusid}: {focusname} (state: {focusstate})")
                 print(f"    Dates: {startdate} - {enddate}")
 
-                # Add school data
+                # Add school data - always add for processing
                 self.result_education.append({
                     "id": "school_" + str(schoolid),
                     "attr": "schoolname",
@@ -359,8 +369,19 @@ class Queries:
                     "state": schoolstate,
                 })
 
+                # Add a has_focus attribute to track whether this school has any focuses
+                self.result_education.append({
+                    "id": "school_" + str(schoolid),
+                    "attr": "has_focus",
+                    "value": "false",  # Default to false
+                    "state": schoolstate,
+                })
+
                 # Add focus data - only if focus is not None
                 if focusid is not None:
+                    # Track that this school has a focus
+                    schools_with_focuses.add(schoolid)
+
                     self.result_education.append({
                         "id": "focus_" + str(focusid),
                         "attr": "focusname",
@@ -386,6 +407,11 @@ class Queries:
                         "value": "school_" + str(schoolid),
                         "state": focusstate,
                     })
+
+            # Update has_focus attribute for schools that actually have focuses
+            for i, entry in enumerate(self.result_education):
+                if entry["attr"] == "has_focus" and int(entry["id"].split("_")[1]) in schools_with_focuses:
+                    self.result_education[i]["value"] = "true"
 
             # Debug: print processed data
             print("\n--- DEBUG: Processed education data ---")
@@ -588,64 +614,61 @@ class Queries:
                 ORDER BY p.startdate DESC
                 """)
 
-            # Log the raw query results for debugging
-            raw_results = result.fetchall()
-            logger.debug(f"Raw query results: {raw_results}")
-
-            # Reset the cursor
-            result: Cursor = self.query(
-                """
-                SELECT e.id,
-                       e.employer,
-                       e.location,
-                       e.state,
-                       p.id,
-                       p.position,
-                       p.startdate,
-                       p.enddate,
-                       p.state,
-                       p.selected_position
-                FROM `employer` AS e
-                         LEFT JOIN `position` AS p on e.id = p.employer
-                ORDER BY p.startdate DESC
-                """)
+            # Track employers with positions
+            employers_with_positions = set()
 
             # Create raw NESTED list based on 'origin_ + id/attr/value/state.'
             for (employer_id, employer, location, employer_state,
                  position_id, positionname, start_date, end_date, position_state, selected_position) in result:
-                # Log each position and its selected_position
-                logger.debug(f"Processing position {position_id} with selected_position: {selected_position}")
+
+                # Add a flag to track employers with positions
+                self.result_positions.append({
+                    "id": "employer_" + str(employer_id),
+                    "attr": "has_positions",
+                    "value": "false" if position_id is None else "true",
+                    "state": employer_state})
 
                 self.result_positions.append({
                     "id": "employer_" + str(employer_id),
                     "attr": "employername",
                     "value": employer,
                     "state": employer_state})
+
                 self.result_positions.append({
                     "id": "employer_" + str(employer_id),
                     "attr": "location",
                     "value": location,
                     "state": employer_state})
-                self.result_positions.append({
-                    "id": "position_" + str(position_id),
-                    "attr": "positionname",
-                    "value": positionname,
-                    "state": position_state})
-                self.result_positions.append({
-                    "id": "position_" + str(position_id),
-                    "attr": "startdate",
-                    "value": start_date})
-                self.result_positions.append({
-                    "id": "position_" + str(position_id),
-                    "attr": "enddate",
-                    "value": end_date})
-                self.result_positions.append({
-                    "id": "position_" + str(position_id),
-                    "attr": "selected_position",
-                    "value": selected_position if selected_position else position_id})
 
-            # Log the final structured results
-            logger.debug(f"Final structured results: {self.result_positions}")
+                # Only add position data if it exists
+                if position_id is not None:
+                    # Track that this employer has positions
+                    employers_with_positions.add(employer_id)
+
+                    self.result_positions.append({
+                        "id": "position_" + str(position_id),
+                        "attr": "positionname",
+                        "value": positionname,
+                        "state": position_state})
+                    self.result_positions.append({
+                        "id": "position_" + str(position_id),
+                        "attr": "startdate",
+                        "value": start_date})
+                    self.result_positions.append({
+                        "id": "position_" + str(position_id),
+                        "attr": "enddate",
+                        "value": end_date})
+                    self.result_positions.append({
+                        "id": "position_" + str(position_id),
+                        "attr": "selected_position",
+                        "value": selected_position if selected_position else position_id})
+
+            # Update has_positions attribute based on actual positions
+            for i, entry in enumerate(self.result_positions):
+                if entry["attr"] == "has_positions":
+                    emp_id = int(entry["id"].split("_")[1])
+                    if emp_id in employers_with_positions:
+                        self.result_positions[i]["value"] = "true"
 
         return self.result_positions
 
