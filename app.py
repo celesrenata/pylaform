@@ -401,6 +401,9 @@ def summary():
         # Run cleanup after processing the form
         worker.delete.cleanup_disabled_entries(["summary"])
 
+        # Clear cache to ensure changes are immediately visible
+        worker.query.purge_cache("summary")
+
         return redirect(url_for("summary"))
 
     # Get summary data

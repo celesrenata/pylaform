@@ -824,6 +824,9 @@ class Worker:
                 except Exception as e:
                     print(f"Error updating summary item {item_id}: {e}")
 
+        # Purge the cache after all operations are complete
+        self.query.purge_cache("summary")
+
         return
 
     def update_education(self, form_data: ImmutableMultiDict) -> None:
