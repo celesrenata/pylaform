@@ -22,19 +22,49 @@ def fatten(full_list: list[dict[str, str | int | bool]]) -> dict[str, list[dict[
     return {"payload": listify(result), "attrs": attrs}
 
 
-def slim(full_list: list[dict[str, str | int | bool]]) -> list[dict[str, str | bool]]:
+def slim(summary_data):
     """
-    Extracts 'id/attr/value/state' and drops items with false states for latex writing.
-    :param list[dict[str, str | int | bool]] full_list: Decompiled attribute list.
-    :return dict: Payload passed to templates.
+    Convert the raw summary data to a format expected by the templates.
     """
+    # If empty data, return empty list
+    if not summary_data:
+        return []
 
-    bloated = [{"id": sub["id"], "attr": sub["attr"], "value": sub["value"], "state": sub["state"]}
-               for sub in full_list]
-    for item in bloated:
-        if not item["state"]:
-            bloated.remove(item)
-    return listify(bloated)
+    # Debug info
+    print(f"Processing {len(summary_data)} summary items")
+
+    # Create dictionary to group items by ID
+    result = {}
+
+    # Process each item in the summary data
+    for item in summary_data:
+        item_id = item.get('id')
+
+        # Initialize the item in our result dict if not present
+        if item_id not in result:
+            result[item_id] = {
+                'id': item_id,
+                'shortdesc': '',
+                'longdesc': '',
+                'state': item.get('state', 0)
+            }
+
+        # Update fields based on the attribute name
+        attr = item.get('attr')
+        if attr == 'shortdesc':
+            result[item_id]['shortdesc'] = item.get('value', '')
+        elif attr == 'longdesc':
+            result[item_id]['longdesc'] = item.get('value', '')
+
+    # Filter for only active items (state = 1)
+    active_items = [item for item in result.values() if item['state'] == 1]
+
+    # Debug the output
+    print(f"Found {len(active_items)} active summary items")
+    for item in active_items:
+        print(f"Active summary: {item['shortdesc']}")
+
+    return active_items
 
 
 def contact_flatten(full_list: list[dict[str, str | int | bool]]) -> dict[any, dict[str, any]]:
@@ -190,12 +220,16 @@ def transform_get_id(form_data: ImmutableMultiDict) -> list[dict[str, str | bool
     # Second pass: Update state based on enabled flags
     for item in form_data:
         item_split = str(item).split("_")
-        if len(item_split) >= 2 and item_split[-1] == "enabled" and form_data[item]:
-            # If this is an enabled field and it's turned on
+        if len(item_split) >= 2 and item_split[-1] == "enabled":
+            # If this is an enabled checkbox field
+            item_id = item_split[0]
+            # Convert checkbox value to boolean - form checkboxes are either present (on) or absent (off)
+            enabled = item in form_data and form_data[item] == 'on'
+
+            # Update all entries with this ID
             for entry in result:
-                # Match by id and update state
-                if entry["id"] == item_split[0]:
-                    entry["state"] = True
+                if entry["id"] == item_id:
+                    entry["state"] = enabled
 
     return result
 
@@ -245,12 +279,70 @@ def find_nested_indexes(input_list: list[dict[str, str | bool]], key: str | list
     return result
 
 
+def process_date_form_fields(form_data):
+    """
+    Process date fields from forms to handle the hidden actual date values
+    and convert them to the proper database format.
+
+    :param form_data: The form data from the request
+    :return: Updated form data with properly formatted dates
+    """
+    updated_form_data = form_data.copy()
+
+    # Find all fields with _actual suffix (hidden date fields)
+    for key in form_data.keys():
+        if key.endswith('_actual'):
+            # Get the base field name without _actual suffix
+            base_name = key[:-7]
+            # Get the value from the hidden field
+            date_value = form_data[key]
+
+            # Apply date_adapter to ensure proper format
+            formatted_date = date_adapter(date_value)
+
+            # Update the original field with the formatted date
+            updated_form_data[base_name] = formatted_date
+
+            # Remove the _actual field to avoid duplicates
+            updated_form_data.pop(key, None)
+
+    return updated_form_data
+
+
+def process_form_dates(form_data):
+    """
+    Process all date fields in form data to ensure they're in the correct format
+    for database storage.
+
+    :param dict form_data: The form data from request.form
+    :return dict: Processed form data with dates in YYYY-MM-DD format
+    """
+    processed_data = {}
+
+    for key, value in form_data.items():
+        if key.endswith('_actual') and value:
+            # Get the base field name (without _actual)
+            base_key = key[:-7]
+
+            # Process the date value
+            processed_date = date_adapter(value)
+
+            # Store with the original field name (not the _actual version)
+            processed_data[base_key] = processed_date
+        elif not key.endswith('_actual'):
+            # For non-date fields or if no _actual field is found, keep as is
+            processed_data[key] = value
+
+    return processed_data
+
+
 def date_adapter(value: str) -> str:
     """
     Updates text overloaded dates to be accepted by the DB with static dates.
-    :param str value: YYYY-MM-DD date format as string. with "Present" and "" as acceptable values.
+    :param str value: YYYY-MM-DD format as string, but also handles other formats like MM/YYYY.
     :return str: YYYY-MM-DD only
     """
+    import re
 
     # Handle None value
     if value is None:
@@ -258,18 +350,37 @@ def date_adapter(value: str) -> str:
 
     # TODO: Add present checkbox to academic and employment templates.
     result: str = value
+
+    # Handle empty strings
     if value == "":
-        result = "9999-01-01"
+        return "9999-01-01"
     elif value == "hidden":
-        result = "0001-01-01"
+        return "0001-01-01"
+    elif value == "Present":
+        return "9999-01-01"
+
+    # Handle MM/YYYY format (e.g., "05/2023")
+    mm_yyyy_pattern = re.compile(r'^(\d{1,2})/(\d{4})$')
+    mm_yyyy_match = mm_yyyy_pattern.match(value)
+    if mm_yyyy_match:
+        month, year = mm_yyyy_match.groups()
+        # Pad month with leading zero if needed
+        month = month.zfill(2)
+        return f"{year}-{month}-01"
+
     # Handle partial dates (YYYY-MM) - convert to expected format
     elif len(value) == 7 and value[4] == '-':
-        result = f"{value}-01"
+        return f"{value}-01"
+
     # Handle year only (YYYY)
     elif len(value) == 4 and value.isdigit():
-        result = f"{value}-01-01"
-    # Handle invalid dates gracefully
-    elif not (len(value) == 10 and value[4] == '-' and value[7] == '-'):
-        result = "9999-01-01"  # Use same value as empty string for invalid input
+        return f"{value}-01-01"
 
-    return result
+    # If already in YYYY-MM-DD format, return as is
+    elif len(value) == 10 and value[4] == '-' and value[7] == '-':
+        return value
+
+    # Handle invalid dates gracefully
+    else:
+        print(f"WARNING: Invalid date format: '{value}', using default")
+        return "9999-01-01"  # Use same value as empty string for invalid input

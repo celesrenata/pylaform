@@ -57,6 +57,7 @@ class Updates:
         return
 
     @retry(stop=(stop_after_delay(10)))
+    @retry(stop=(stop_after_delay(10)))
     def single_item(self, table: str, item: dict[str, str | int | bool], nested: bool = False) -> None:
         """
         Updates a table based on a single value group for basic Select From Where clauses.
@@ -78,18 +79,19 @@ class Updates:
             response: Cursor = self.cursor.execute(
                 f"""
                 UPDATE {table}
-                SET    `{item["attr"]}` = {item["value"]},
-                       `state` = {int(item["state"])}
-                WHERE  `id` = {int(item["id"])}
-                """)
+                SET    `{item["attr"]}` = ?,
+                       `state` = ?
+                WHERE  `id` = ?
+                """, (value, int(item["state"]), int(item["id"])))
         except ValueError:
+            # Properly escape the string value by using parameterized queries
             response: Cursor = self.cursor.execute(
                 f"""
                 UPDATE {table}
-                SET    `{item["attr"]}` = '{item["value"]}',
-                       `state` = {int(item["state"])}
-                WHERE  `id` = {int(item["id"])}
-                """)
+                SET    `{item["attr"]}` = ?,
+                       `state` = ?
+                WHERE  `id` = ?
+                """, (item["value"], int(item["state"]), int(item["id"])))
 
         # Commit changes.
         self.conn.commit()

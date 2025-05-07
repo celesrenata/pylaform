@@ -1,0 +1,34 @@
+{% macro date_picker(id, label, icon="calendar", value="", placeholder="YYYY-MM-DD", help_text="", required=False, with_time=False, include_present=False) %}
+<div class="date-picker-container mb-3">
+    <label for="{{ id }}" class="form-label fw-medium">
+        <i class="bi bi-{{ icon }} me-2"></i>{{ label }}
+        {% if required %}<span class="text-danger">*</span>{% endif %}
+    </label>
+    <div class="input-group">
+        {% set display_value = "Present" if value == "9999-01-01" else value %}
+        <input type="text"
+               class="form-control bg-light datepicker"
+               id="{{ id }}"
+               name="{{ id }}"
+               value="{{ display_value }}"
+               placeholder="{{ placeholder }}"
+               {% if required %}required{% endif %}
+               autocomplete="off"
+               data-with-time="{{ with_time|lower }}"
+               data-include-present="{{ include_present|lower }}">
+        <span class="input-group-text bg-light cursor-pointer date-picker-toggle">
+            <i class="bi bi-calendar"></i>
+        </span>
+        {% if include_present %}
+        <button type="button" class="btn btn-outline-secondary set-present-btn" data-target="{{ id }}">
+            Present
+        </button>
+        {% endif %}
+    </div>
+    {% if help_text %}<div class="form-text text-muted">{{ help_text }}</div>{% endif %}
+
+    <!-- Hidden field to store the actual date value in YYYY-MM-DD format -->
+    <input type="hidden" id="{{ id }}_actual" name="{{ id }}_actual"
+           value="{% if value == 'Present' %}9999-01-01{% elif value == '9999-01-01' %}9999-01-01{% else %}{{ value }}{% endif %}">
+</div>
+{% endmacro %}

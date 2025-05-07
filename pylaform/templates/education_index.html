@@ -1,65 +1,155 @@
 {% extends "base.html" %}
 {% from "education_iter.html" import form_group with context %}
 {% block content %}
-    <div class="lead d-flex align-items-bottom justify-content-center">
-        <form method="post">
-            <!-- Iterate payload -->
-            {% for i in payload %}
-                {% if i|length > 0 and i.get("focus") is not none and i.get("focus") != "None" and i.get("focus")|string != "None" %}
-                    {{ form_group(payload, ddpayload, i["school"], i["schoolname"], i["location"], i["schoolstate"], i["focus"], i["focusname"], i["startdate"], i["enddate"], i["focusstate"]) }}
-                {% endif %}
-            {% endfor %}
-
-            <div id="newinput"></div>
-            <button id="rowAdder" type="button" class="btn btn-dark">
-                        <span class="bi bi-plus-square-dotted">
-                        </span> ADD
-            </button>
-            <button type="submit" class="btn btn-success">
-                        <span class="bi bi-plus-square-dotted">
-                        </span> SUBMIT
-            </button>
-        </form>
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="section-header">Education History</h1>
+            <p class="lead text-muted">
+                Enter your educational background, including degrees, certifications, and areas of study.
+            </p>
+        </div>
     </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="h5 mb-0 text-primary">
+                            <i class="bi bi-mortarboard me-2"></i>Education Entries
+                        </h2>
+                        <div class="text-muted small">
+                            <i class="bi bi-info-circle me-1"></i>List your educational history in reverse chronological order
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" id="educationForm">
+                        <!-- Iterate payload -->
+                        {% for i in payload %}
+                            {% if i|length > 0 and i.get("focus") is not none and i.get("focus") != "None" and i.get("focus")|string != "None" %}
+                                {{ form_group(payload, ddpayload, i["school"], i["schoolname"], i["location"], i["schoolstate"], i["focus"], i["focusname"], i["startdate"], i["enddate"], i["focusstate"]) }}
+                            {% endif %}
+                        {% endfor %}
+
+                        <div id="newinput"></div>
+
+                        <!-- Action buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <button id="rowAdder" type="button" class="btn btn-outline-primary">
+                                <i class="bi bi-plus-circle me-2"></i>Add Education
+                            </button>
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-check-circle me-2"></i>Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Tips card -->
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body p-4">
+                    <h3 class="h5 text-primary mb-3">
+                        <i class="bi bi-lightbulb me-2"></i>Education Section Tips
+                    </h3>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4 class="h6 mb-2">Formatting Guidelines:</h4>
+                            <ul class="mb-0">
+                                <li class="mb-2">List most recent education first</li>
+                                <li class="mb-2">Include the full formal name of your degree</li>
+                                <li class="mb-2">Use MM/YYYY date format (e.g., 09/2018)</li>
+                                <li class="mb-2">Use "Present" for ongoing education</li>
+                                <li>Include location information for each institution</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h4 class="h6 mb-2">What to Include:</h4>
+                            <ul class="mb-0">
+                                <li class="mb-2">University degrees (Bachelor's, Master's, Ph.D., etc.)</li>
+                                <li class="mb-2">Vocational or technical training</li>
+                                <li class="mb-2">Professional development courses</li>
+                                <li class="mb-2">Study abroad programs</li>
+                                <li>Honors, awards, or notable achievements</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 {% block scripts %}
-    <script type="text/javascript">
-        clicks = 0;
-        $("#rowAdder").click(function () {
-            clicks += 1;
-            $("#newinput").append("<hr>");
-            newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
-            $("#newinput").append(newRowAdd);
-        });
+<script type="text/javascript">
+    // Counter for new items
+    let clicks = 0;
 
-        $("body").on("click", ".rowEditor", function () {
-            var div_id = $(this).closest("div").attr("id");
-            var currentRow = $("#" + div_id);
-            var schoolVal = currentRow.find("[name$='school']").val();
-            var schoolNameVal = currentRow.find("[name$='schoolname']").val();
-            var locationVal = currentRow.find("[name$='location']").val();
-            var focusVal = currentRow.find("[name$='focus']").val();
-            var focusNameVal = currentRow.find("[name$='focusname']").val();
-            var startDateVal = currentRow.find("[name$='startdate']").val();
-            var endDateVal = currentRow.find("[name$='enddate']").val();
+    // Add new education entry
+    $("#rowAdder").click(function () {
+        clicks += 1;
+        newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "", "", "", "", true, hidden=False) }}`;
+        $('#newinput').append(newRowAdd);
 
-            newRowAdd = `{{ form_group(payload, ddpayload, "edit", "", "", true, "", "", "", "", true, hidden=False) }}`;
-            currentRow.html(newRowAdd);
+        // Smooth scroll to the new element
+        const newestElement = $('#newinput').children().last()[0];
+        if (newestElement) {
+            newestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
 
-            currentRow.find("[name$='school']").val(schoolVal);
-            currentRow.find("[name$='schoolname']").val(schoolNameVal);
-            currentRow.find("[name$='location']").val(locationVal);
-            currentRow.find("[name$='focus']").val(focusVal);
-            currentRow.find("[name$='focusname']").val(focusNameVal);
-            currentRow.find("[name$='startdate']").val(startDateVal);
-            currentRow.find("[name$='enddate']").val(endDateVal);
-        });
+    // Handle edit button clicks
+    $("body").on("click", ".rowEditor", function () {
+        const div_id = $(this).closest("div.card").attr("id");
+        const currentRow = $("#" + div_id);
 
-        $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest("div").attr("id");
-            $("#" + div_id).remove();
-            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-        });
-    </script>
-    {% include "_scripts.html" %}
+        // Get current values
+        const schoolVal = currentRow.find("[name$='rowid']").val();
+        const schoolNameVal = currentRow.find("[name$='school_name']").val();
+        const locationVal = currentRow.find("[name$='school_location']").val();
+        const focusVal = currentRow.find("[id$='_focus_dropdown']").val();
+        const focusNameVal = currentRow.find("[name$='focus_name']").val();
+        const startDateVal = currentRow.find("[name$='focus_startdate']").val();
+        const endDateVal = currentRow.find("[name$='focus_enddate']").val();
+
+        // Create new row with edit mode
+        newRowAdd = `{{ form_group(payload, ddpayload, "edit", "", "", true, "", "", "", "", true, hidden=False) }}`;
+        currentRow.html(newRowAdd);
+
+        // Restore values
+        currentRow.find("[name$='rowid']").val(schoolVal);
+        currentRow.find("[name$='school_name']").val(schoolNameVal);
+        currentRow.find("[name$='school_location']").val(locationVal);
+        currentRow.find("[id$='_focus_dropdown']").val(focusVal);
+        currentRow.find("[name$='focus_name']").val(focusNameVal);
+        currentRow.find("[name$='focus_startdate']").val(startDateVal);
+        currentRow.find("[name$='focus_enddate']").val(endDateVal);
+
+        // Show the edit fields
+        currentRow.find(".updatevalue").removeClass("d-none");
+    });
+
+    // Handle delete button clicks
+    $("body").on("click", "#deleteRow", function () {
+        const div_id = $(this).closest("div.card").attr("id");
+
+        // Confirm deletion
+        if (confirm("Are you sure you want to delete this education entry?")) {
+            // Fade out the element before removing
+            $("#" + div_id).fadeOut(300, function() {
+                $(this).remove();
+                $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
+            });
+        }
+    });
+
+    // Function to handle dropdown changes
+    function commit_value(field_id) {
+        console.log("Committing value for field: " + field_id);
+        // Additional functionality can be added here if needed
+    }
+</script>
+{% include "_scripts.html" %}
 {% endblock %}

@@ -4,64 +4,172 @@
     {% if id == "new" %}
         {% set id = "new` + clicks + `"|safe %}
     {% endif %}
-    <div id="{{ id }}" class="container align-items-center listitem item{{ id }}">
-        <table>
-            <tr>
-                <td>
-                    {{ drop_down(id, payload, ddpayload, "category", primarybyname=True) }}
-                    <br>
-                    <div class="{{ "d-none" if hidden else "" }}" id="{{ id }}_category_div">
-                        <label for="{{ id }}_category">Category:</label>
-                        <br>
-                        <input type="text" name="{{ id }}_category" id="{{ id }}_category"
-                               value="{{ category if category is defined else "" }}">
+
+    <div id="{{ id }}" class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <!-- Category and Subcategory Section -->
+                <div class="col-md-6">
+                    <div class="card h-100 bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-tags me-2"></i>Skill Categories
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="{{ id }}_category_dropdown" class="form-label fw-medium">
+                                    <i class="bi bi-folder me-2"></i>Skill Category
+                                </label>
+                                {{ drop_down(id, payload, ddpayload, "category", primarybyname=True) }}
+                                <div class="form-text text-muted">
+                                    Primary grouping for your skills (e.g., "Programming", "Leadership")
+                                </div>
+                            </div>
+
+                            <div class="{{ "d-none" if hidden else "" }} mb-3" id="{{ id }}_category_div">
+                                <label for="{{ id }}_category" class="form-label fw-medium">
+                                    <i class="bi bi-pencil me-2"></i>Custom Category
+                                </label>
+                                <input type="text"
+                                       name="{{ id }}_category"
+                                       id="{{ id }}_category"
+                                       class="form-control bg-white"
+                                       value="{{ category if category is defined else "" }}"
+                                       placeholder="Enter a custom category name">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ id }}_subcategory_dropdown" class="form-label fw-medium">
+                                    <i class="bi bi-tag me-2"></i>Subcategory
+                                </label>
+                                {{ drop_down(id, payload, ddpayload, "category", secondary="subcategory", secondaryid=id, secondarybyname=True) }}
+                                <div class="form-text text-muted">
+                                    Specific area within the category (e.g., "Python", "Team Management")
+                                </div>
+                            </div>
+
+                            <div class="{{ "d-none" if hidden else "" }} mb-3" id="{{ id }}_subcategory_div">
+                                <label for="{{ id }}_subcategory" class="form-label fw-medium">
+                                    <i class="bi bi-pencil me-2"></i>Custom Subcategory
+                                </label>
+                                <input type="text"
+                                       name="{{ id }}_subcategory"
+                                       id="{{ id }}_subcategory"
+                                       class="form-control bg-white"
+                                       value="{{ subcategory if subcategory is defined else "" }}"
+                                       placeholder="Enter a custom subcategory name">
+                            </div>
+                        </div>
                     </div>
-                </td>
-                <td class="align-items-center">
-                    {{ drop_down(id, payload, ddpayload, "category", secondary="subcategory", secondaryid=id, secondarybyname=True) }}
-                    <br>
-                    <div class="{{ "d-none" if hidden else "" }}" id="{{ id }}_subcategory_div">
-                        <label for="{{ id }}_subcategory">Subcategory:</label>
-                        <br>
-                        <input type="text" name="{{ id }}_subcategory" id="{{ id }}_subcategory"
-                               value="{{ subcategory if subcategory is defined else "" }}">
+                </div>
+
+                <!-- Employer and Position Section -->
+                <div class="col-md-6">
+                    <div class="card h-100 bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-briefcase me-2"></i>Experience Association
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="{{ id }}_employer_dropdown" class="form-label fw-medium">
+                                    <i class="bi bi-building me-2"></i>Associated Employer
+                                </label>
+                                {{ drop_down(id, payload, ddpayload, "employer", extra=False, primarybyname=True) }}
+                                <div class="form-text text-muted">
+                                    Optional: Connect this skill to a specific employer
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ id }}_position_dropdown" class="form-label fw-medium">
+                                    <i class="bi bi-person-workspace me-2"></i>Associated Position
+                                </label>
+                                {{ drop_down(id, payload, ddpayload, "position", extra=False, primarybyname=True) }}
+                                <div class="form-text text-muted">
+                                    Optional: Connect this skill to a specific job position
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </td>
-                <td>
-                    {{ drop_down(id, payload, ddpayload, "employer", extra=False, primarybyname=True) }}
-                    <br>
-                    {{ drop_down(id, payload, ddpayload, "position", extra=False, primarybyname=True) }}
-                </td>
-                <td>
-                    <button class="btn btn-danger"
-                                    id="deleteRow"
-                                    type="button">
-                                <i class="bi bi-trash"></i>
-                                Delete
+                </div>
+
+                <!-- Skill Description Section -->
+                <div class="col-12">
+                    <div class="card bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-card-text me-2"></i>Skill Description
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="{{ id }}_shortdesc" class="form-label fw-medium">
+                                    <i class="bi bi-file-earmark-text me-2"></i>Skill Title
+                                </label>
+                                <input type="text"
+                                       name="{{ id }}_shortdesc"
+                                       id="{{ id }}_shortdesc"
+                                       class="form-control bg-light"
+                                       value="{{ shortdesc if shortdesc is defined else "" }}"
+                                       placeholder="Enter a concise skill title">
+                                <div class="form-text text-muted">
+                                    Brief title for this skill (e.g., "Python Development", "Project Management")
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ id }}_longdesc" class="form-label fw-medium">
+                                    <i class="bi bi-file-earmark-richtext me-2"></i>Detailed Description
+                                </label>
+                                <div class="input-group">
+                                    <textarea
+                                        name="{{ id }}_longdesc"
+                                        id="{{ id }}_longdesc"
+                                        class="form-control bg-light"
+                                        rows="3"
+                                        placeholder="Describe your expertise, experience, and accomplishments with this skill"
+                                    >{{ longdesc if longdesc is defined else "" }}</textarea>
+                                    <div class="ai-improve-button input-group-text bg-light">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                onclick="openAiHelper('{{ id }}_longdesc', 'List')">
+                                            <i class="bi bi-magic"></i> Improve
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-text text-muted">
+                                    Detailed explanation of your proficiency and achievements with this skill
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    role="switch"
+                                    id="{{ id }}_longdesc_enabled"
+                                    name="{{ id }}_longdesc_enabled"
+                                    {% if state %}checked{% endif %}
+                                >
+                                <label class="form-check-label" for="{{ id }}_longdesc_enabled">
+                                    Include this skill in your resume
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div class="row mt-3">
+                <div class="col-12 d-flex justify-content-end">
+                    <button class="btn btn-outline-danger" id="deleteRow" type="button">
+                        <i class="bi bi-trash"></i> Delete Skill
                     </button>
-                </td>
-            </tr>
-        </table>
-    <br>
-    <ul>
-        <li>
-            <label for="{{ id }}_shortdesc">Short Description</label>
-            <br>
-            <input type="text" name="{{ id }}_shortdesc" id="{{ id }}_shortdesc"
-                   value="{{ shortdesc if shortdesc is defined else "" }}">
-        </li>
-    </ul>
-    <ul>
-        <li>
-            <label for="{{ id }}_longdesc">Long Description</label>
-            <br>
-            <input type="text" name="{{ id }}_longdesc" id="{{ id }}_longdesc"
-                   value="{{ longdesc if longdesc is defined else "" }}">
-            <br>
-            <label for="{{ id }}_longdesc_enabled">Displayed</label>
-            <input type="checkbox" name="{{ id }}_longdesc_enabled"
-                    {{ "checked" if state }}>
-        </li>
-    </ul>
-</div>
+                </div>
+            </div>
+        </div>
+    </div>
 {%- endmacro %}

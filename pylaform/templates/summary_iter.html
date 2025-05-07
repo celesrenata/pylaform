@@ -3,40 +3,66 @@
     {% if id == "new" %}
         {% set id = "new` + clicks + `"|safe %}
     {% endif %}
-    <div id="{{ id }}" class="d-flex align-items-bottom justify-content-center">
-        <table>
-            <tr>
-                <td>
-                    <label for="{{ id }}_shortdesc">Short Description</label>
-                    <br>
-                    <textarea name="{{ id }}_shortdesc"
-                              id="{{ id }}_shortdesc"
-                              rows="1"
-                              cols="60"
-                              >{{ shortdesc if shortdesc is defined else "" }}</textarea>
-                    <br>
-                    <label for="{{ id }}_longdesc">Long Description</label>
-                    <br>
-                    <textarea name="{{ id }}_longdesc"{{ longdesc }}
-                              id="{{ id }}_longdesc"
-                              rows="2"
-                              cols="60"
-                              >{{ longdesc if longdesc is defined else "" }}</textarea>
-                    <br>
-                    <label for="{{ id }}_longdesc_enabled">Displayed</label>
-                    <input type="checkbox" name="{{ id }}_longdesc_enabled"
-                            {{ "checked" if state }}>
-                </td>
-                <td>
-                    <input type="hidden" id="{{ id }}_summaryorder" name="{{ id }}_summaryorder" value="{{ id }}">
-                    <button class="btn btn-danger"
-                            id="deleteRow"
+    <div id="{{ id }}" class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <div class="row">
+                <div class="col-md-11">
+                    <div class="mb-3">
+                        <label for="{{ id }}_shortdesc" class="form-label fw-medium">
+                            <i class="bi bi-tag me-2"></i>Short Description
+                        </label>
+                        <textarea
+                            name="{{ id }}_shortdesc"
+                            id="{{ id }}_shortdesc"
+                            class="form-control bg-light"
+                            rows="1"
+                            placeholder="Enter a brief title or headline for this summary point"
+                        >{{ shortdesc if shortdesc is defined else "" }}</textarea>
+                        <div class="form-text text-muted">A concise headline for this summary point (e.g., "Project Management")</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ id }}_longdesc" class="form-label fw-medium">
+                            <i class="bi bi-card-text me-2"></i>Long Description
+                        </label>
+                        <div class="input-group">
+                            <textarea
+                                name="{{ id }}_longdesc"
+                                id="{{ id }}_longdesc"
+                                class="form-control bg-light"
+                                rows="3"
+                                placeholder="Describe your skills, expertise, or experience in this area"
+                            >{{ longdesc if longdesc is defined else "" }}</textarea>
+                            <div class="ai-improve-button input-group-text bg-light">
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        onclick="openAiHelper('{{ id }}_longdesc', 'Core Principle')">
+                                    <i class="bi bi-magic"></i> Improve
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-text text-muted">Detailed explanation of your expertise in this area</div>
+                    </div>
+
+                    <div class="form-check form-switch">
+                        <input
+                            type="checkbox"
+                            class="form-check-input"
+                            role="switch"
+                            id="{{ id }}_longdesc_enabled"
+                            name="{{ id }}_longdesc_enabled"
+                            {% if state %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="{{ id }}_longdesc_enabled">Display this summary point</label>
+                    </div>
+                    <input type="hidden" id="{{ id }}_rowid" name="{{ id }}_rowid" value="{{ id }}">
+                </div>
+                <div class="col-md-1 d-flex align-items-center justify-content-end">
+                    <button class="btn btn-outline-danger deleteRow"
                             type="button">
                         <i class="bi bi-trash"></i>
-                        Delete
                     </button>
-                </td>
-            </tr>
-        </table>
+                </div>
+            </div>
+        </div>
     </div>
 {%- endmacro %}

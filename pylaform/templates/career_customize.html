@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="section-header">Resume Customization</h1>
+            <p class="lead text-muted">Tailor your resume content for a specific career opportunity</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0 py-3">
+                    <h2 class="h5 mb-0 text-primary">
+                        <i class="bi bi-gear-fill me-2"></i>Customization Options
+                    </h2>
+                </div>
+                <div class="card-body p-4">
+                    <form id="career-customize-form" method="post" action="/career_customize">
+                        <!-- Career Title -->
+                        <div class="mb-4">
+                            <label for="career_title" class="form-label fw-medium">Target Career Title</label>
+                            <input type="text" class="form-control" id="career_title" name="career_title"
+                                   placeholder="e.g., Senior Software Engineer" required>
+                            <small class="text-muted">Enter the specific job title you're targeting</small>
+                        </div>
+
+                        <!-- Job Description -->
+                        <div class="mb-4">
+                            <label for="job_description" class="form-label fw-medium">Job Description</label>
+                            <textarea class="form-control" id="job_description" name="job_description"
+                                      rows="8" placeholder="Paste the job description here..." required></textarea>
+                            <small class="text-muted">Paste the full job posting to help the AI customize your resume effectively</small>
+                        </div>
+
+                        <!-- Sections to Customize -->
+                        <div class="mb-4">
+                            <label class="form-label fw-medium">Select Sections to Customize</label>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="sections[]" value="summary" id="section_summary" checked>
+                                        <label class="form-check-label" for="section_summary">Professional Summary</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="sections[]" value="skills" id="section_skills" checked>
+                                        <label class="form-check-label" for="section_skills">Skills</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="sections[]" value="employment" id="section_experience" checked>
+                                        <label class="form-check-label" for="section_experience">Employment History</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="sections[]" value="education" id="section_education">
+                                        <label class="form-check-label" for="section_education">Education</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="sections[]" value="certifications" id="section_certifications">
+                                        <label class="form-check-label" for="section_certifications">Certifications</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="sections[]" value="achievements" id="section_achievements">
+                                        <label class="form-check-label" for="section_achievements">Achievements</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted">The AI will only customize sections you select</small>
+                        </div>
+
+                        <!-- Customization Style -->
+                        <div class="mb-4">
+                            <label for="customization_style" class="form-label fw-medium">Customization Style</label>
+                            <select class="form-select" id="customization_style" name="customization_style">
+                                <option value="professional" selected>Professional (Formal, industry-standard language)</option>
+                                <option value="achievement">Achievement-focused (Emphasize results and impact)</option>
+                                <option value="technical">Technical (Detailed skills and methodologies)</option>
+                                <option value="concise">Concise (Brief, impactful statements)</option>
+                            </select>
+                            <small class="text-muted">Choose the tone and emphasis for your customized content</small>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="/dashboard" class="btn btn-outline-secondary me-md-2">
+                                <i class="bi bi-arrow-left me-1"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary px-4" id="customizeButton">
+                                <i class="bi bi-magic me-1"></i>Generate Customized Resume
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% include "_scripts.html" %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const customizeForm = document.getElementById('career-customize-form');
+
+    if (customizeForm) {
+        customizeForm.addEventListener('submit', function(event) {
+            const titleField = document.getElementById('career_title');
+            const descriptionField = document.getElementById('job_description');
+            const sectionCheckboxes = document.querySelectorAll('input[name="sections[]"]:checked');
+
+            let isValid = true;
+
+            // Clear previous validation states
+            titleField.classList.remove('is-invalid');
+            descriptionField.classList.remove('is-invalid');
+
+            // Validate title
+            if (!titleField.value.trim()) {
+                titleField.classList.add('is-invalid');
+                isValid = false;
+            }
+
+            // Validate description
+            if (!descriptionField.value.trim()) {
+                descriptionField.classList.add('is-invalid');
+                isValid = false;
+            }
+
+            // Validate at least one section selected
+            if (sectionCheckboxes.length === 0) {
+                document.querySelector('.form-label[for="section_summary"]').parentElement.classList.add('is-invalid');
+                isValid = false;
+            }
+
+            if (!isValid) {
+                event.preventDefault();
+                return;
+            }
+
+            // If valid, disable button and show loading state
+            const submitButton = document.getElementById('customizeButton');
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+            submitButton.disabled = true;
+
+            // Log to console for debugging
+            console.log('Form validated successfully, submitting...');
+        });
+    }
+});
+</script>
+{% endblock %}

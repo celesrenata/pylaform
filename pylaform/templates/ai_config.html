@@ -1,0 +1,771 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="section-header">
+                <i class="bi bi-cpu me-2"></i>AI Helper Configuration
+            </h1>
+            <p class="lead text-muted">Configure the AI Resume Helper to improve your resume content.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="h5 mb-0 text-primary">
+                            <i class="bi bi-sliders me-2"></i>Ollama Configuration
+                        </h2>
+                        <div class="text-muted small">
+                            <i class="bi bi-info-circle me-1"></i>Connect to a local or remote Ollama instance
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" id="aiConfigForm">
+                        <!-- Enable AI Features toggle -->
+                        <div class="form-check form-switch mb-4">
+                            <input class="form-check-input" type="checkbox" role="switch" id="aiEnabledToggle" name="aiEnabledToggle" {% if ai_enabled %}checked{% endif %}>
+                            <label class="form-check-label fw-medium" for="aiEnabledToggle">Enable AI Features</label>
+                            <div class="form-text text-muted">Turn on AI assistance features for your resume</div>
+                        </div>
+
+                        <div id="aiConfigSection" class="{% if not ai_enabled %}opacity-50{% endif %}">
+                            <!-- Server configuration -->
+                            <div class="mb-4">
+                                <label for="ollamaServerUrl" class="form-label fw-medium">
+                                    <i class="bi bi-hdd-network me-2"></i>Ollama Server URL
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">http://</span>
+                                    <input type="text" class="form-control" id="ollamaServerHost" name="ollamaServerHost"
+                                           value="{{ ollama_server_host if ollama_server_host else 'localhost' }}"
+                                           placeholder="localhost">
+                                    <span class="input-group-text">:</span>
+                                    <input type="text" class="form-control" id="ollamaServerPort" name="ollamaServerPort"
+                                           value="{{ ollama_server_port if ollama_server_port else '11434' }}"
+                                           placeholder="11434" style="max-width: 100px;">
+                                </div>
+                                <div class="form-text text-muted">Specify the host and port of your Ollama server</div>
+                            </div>
+
+                            <!-- Model selection -->
+                            <div class="mb-4">
+                                <label for="ollamaModel" class="form-label fw-medium">
+                                    <i class="bi bi-robot me-2"></i>AI Model
+                                </label>
+                                <select class="form-select" id="ollamaModel" name="ollamaModel">
+                                    <option value="gemma3:1b" {% if ollama_model == "gemma3:1b" or not ollama_model %}selected{% endif %}>Gemma 3 (1B) - Fast, compact model</option>
+                                    <option value="llama3.2:1b" {% if ollama_model == "llama3.2:1b" %}selected{% endif %}>Llama 3.2 (1B) - Well-balanced model</option>
+                                    <option value="phi3:medium" {% if ollama_model == "phi3:medium" %}selected{% endif %}>Phi-3 Medium - Microsoft's efficient model</option>
+                                    <option value="mistral:7b" {% if ollama_model == "mistral:7b" %}selected{% endif %}>Mistral (7B) - Powerful general-purpose model</option>
+                                    <option value="codellama:7b" {% if ollama_model == "codellama:7b" %}selected{% endif %}>CodeLlama (7B) - Specialized for technical content</option>
+                                    <option value="llama3.2:9b" {% if ollama_model == "llama3.2:9b" %}selected{% endif %}>Llama 3.2 (9B) - Enhanced performance</option>
+                                    <option value="custom" {% if ollama_model and ollama_model not in ["gemma3:1b", "llama3.2:1b", "phi3:medium", "mistral:7b", "codellama:7b", "llama3.2:9b"] %}selected{% endif %}>Custom model</option>
+                                </select>
+                                <div id="customModelInput" class="mt-2 {% if not ollama_model or ollama_model in ["gemma3:1b", "llama3.2:1b", "phi3:medium", "mistral:7b", "codellama:7b", "llama3.2:9b"] %}d-none{% endif %}">
+                                    <input type="text" class="form-control" id="customOllamaModel" name="customOllamaModel"
+                                           value="{{ ollama_model if ollama_model and ollama_model not in ['gemma3:1b', 'llama3.2:1b', 'phi3:medium', 'mistral:7b', 'codellama:7b', 'llama3.2:9b'] else '' }}"
+                                           placeholder="Enter custom model name (e.g., openchat:7b)">
+                                </div>
+                                <div class="form-text text-muted">Select which AI model to use for resume improvements</div>
+                            </div>
+                            <div class="card mt-4">
+                                <div class="card-header">
+                                    <h5>Model Download</h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-3">Download a model to use with Ollama:</p>
+                                    <div class="input-group mb-3">
+                                        <input type="text" class="form-control" id="downloadModelInput" placeholder="Enter model name (e.g., gemma:7b)">
+                                        <button class="btn btn-primary" type="button" id="downloadModelBtn">
+                                            <i class="bi bi-cloud-download"></i> Download Model
+                                        </button>
+                                    </div>
+                                    <div id="downloadStatus" class="mt-2"></div>
+                                    <div id="downloadProgressContainer" class="d-none mt-3">
+                                        <p class="mb-2"><span id="downloadModelName"></span> download in progress...</p>
+                                        <div class="progress">
+                                            <div id="downloadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>
+                                        </div>
+                                        <p class="text-muted mt-2 small">
+                                            <i class="bi bi-info-circle me-1"></i> Downloads may take several minutes depending on model size and internet speed.
+                                        </p>
+                                    </div>
+
+                                    <div id="downloadProgressContainer" class="d-none mt-3">
+                                        <p class="mb-2"><span id="downloadModelName"></span> download in progress...</p>
+                                        <div class="progress">
+                                            <div id="downloadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>
+                                        </div>
+                                        <p class="text-muted mt-2 small">
+                                            <i class="bi bi-info-circle me-1"></i> Downloads may take several minutes depending on model size and internet speed.
+                                        </p>
+                                    </div>
+                                    <div id="downloadProgressContainer" class="d-none mt-3">
+                                        <p class="mb-2"><span id="downloadModelName"></span> download in progress...</p>
+                                        <div class="progress mb-2">
+                                            <div id="downloadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>
+                                        </div>
+                                        <p class="text-muted mt-2 small">
+                                            <i class="bi bi-info-circle me-1"></i> Downloads may take several minutes depending on model size and internet speed.
+                                        </p>
+                                        <button id="abortDownloadBtn" class="btn btn-sm btn-outline-danger mt-2">
+                                            <i class="bi bi-x-circle"></i> Cancel Download
+                                        </button>
+                                    </div>
+                                    <div class="alert alert-info mt-3">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Available models include: gemma:7b, llama3:8b, gemma3:1b, mistral, phi3:mini, and more.
+                                        See <a href="https://ollama.com/library" target="_blank">Ollama Model Library</a> for a complete list.
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Test connection button -->
+                            <div class="mb-4">
+                                <button type="button" class="btn btn-outline-secondary" id="testConnection">
+                                    <i class="bi bi-check-circle me-2"></i>Test Connection
+                                </button>
+                                <div id="connectionStatus" class="mt-2 d-none">
+                                    <div id="connectionSuccess" class="alert alert-success d-none">
+                                        <i class="bi bi-check-circle-fill me-2"></i>Connected successfully! The AI service is ready to use.
+                                    </div>
+                                    <div id="connectionError" class="alert alert-danger d-none">
+                                        <i class="bi bi-exclamation-triangle-fill me-2"></i><span id="errorMessage"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <div class="d-flex justify-content-end mt-4">
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-check-circle me-2"></i>Save Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Info card -->
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body p-4">
+                    <h3 class="h5 text-primary mb-3">
+                        <i class="bi bi-lightbulb me-2"></i>About the AI Resume Helper
+                    </h3>
+                    <p>The AI Resume Helper uses <a href="https://ollama.ai" target="_blank">Ollama</a> to provide intelligent resume improvements. You can:</p>
+                    <ul class="mb-0">
+                        <li class="mb-2">Convert text into impactful core principles</li>
+                        <li class="mb-2">Transform paragraphs into bulleted lists</li>
+                        <li class="mb-2">Restructure sentences for better impact</li>
+                        <li class="mb-2">Summarize lengthy content</li>
+                        <li class="mb-3">All processing happens on your selected Ollama server for privacy</li>
+                    </ul>
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>To use local AI:</strong> Download and install <a href="https://ollama.ai" target="_blank">Ollama</a>, start the service, then configure this page to connect to it.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function() {
+        const aiEnabledToggle = document.getElementById('aiEnabledToggle');
+        const aiConfigSection = document.getElementById('aiConfigSection');
+        const ollamaModelSelect = document.getElementById('ollamaModel');
+        const customModelInput = document.getElementById('customModelInput');
+        const testConnectionBtn = document.getElementById('testConnection');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectionSuccess = document.getElementById('connectionSuccess');
+        const connectionError = document.getElementById('connectionError');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Toggle AI config section based on enabled state
+        aiEnabledToggle.addEventListener('change', function() {
+            if (this.checked) {
+                aiConfigSection.classList.remove('opacity-50');
+            } else {
+                aiConfigSection.classList.add('opacity-50');
+            }
+        });
+
+        // Show/hide custom model input based on selection
+        ollamaModelSelect.addEventListener('change', function() {
+            if (this.value === 'custom') {
+                customModelInput.classList.remove('d-none');
+            } else {
+                customModelInput.classList.add('d-none');
+            }
+        });
+
+        // Test connection
+        testConnectionBtn.addEventListener('click', function() {
+            const host = document.getElementById('ollamaServerHost').value || 'localhost';
+            const port = document.getElementById('ollamaServerPort').value || '11434';
+            let model = ollamaModelSelect.value;
+
+            if (model === 'custom') {
+                model = document.getElementById('customOllamaModel').value;
+                if (!model) {
+                    connectionStatus.classList.remove('d-none');
+                    connectionSuccess.classList.add('d-none');
+                    connectionError.classList.remove('d-none');
+                    errorMessage.textContent = 'Please enter a custom model name.';
+                    return;
+                }
+            }
+
+            // Show loading state
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Testing...';
+
+            connectionStatus.classList.remove('d-none');
+            connectionSuccess.classList.add('d-none');
+            connectionError.classList.add('d-none');
+
+            // Make test request
+            fetch('/api/test-ai-connection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    host: host,
+                    port: port,
+                    model: model
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    connectionSuccess.classList.remove('d-none');
+                    connectionError.classList.add('d-none');
+                } else {
+                    connectionSuccess.classList.add('d-none');
+                    connectionError.classList.remove('d-none');
+                    errorMessage.textContent = data.error || 'Failed to connect to Ollama server.';
+                }
+            })
+            .catch(error => {
+                connectionSuccess.classList.add('d-none');
+                connectionError.classList.remove('d-none');
+                errorMessage.textContent = `Error: ${error.message}`;
+            })
+            .finally(() => {
+                // Reset button state
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-check-circle me-2"></i>Test Connection';
+            });
+        });
+    });
+</script>
+<script>
+// Add abort download functionality
+const abortDownloadBtn = document.getElementById('abortDownloadBtn');
+if (abortDownloadBtn) {
+    abortDownloadBtn.addEventListener('click', function() {
+        if (downloadCheckInterval) {
+            clearInterval(downloadCheckInterval);
+            downloadCheckInterval = null;
+        }
+
+        downloadStatus.innerHTML = '<div class="alert alert-info">' +
+            '<i class="bi bi-info-circle me-2"></i>' +
+            'Download cancelled. The model may continue downloading in the background.' +
+            '</div>';
+
+        if (downloadProgressContainer) {
+            downloadProgressContainer.classList.add('d-none');
+        }
+    });
+}
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle custom model selection (if needed)
+        const ollamaModelSelect = document.getElementById('ollamaModel');
+        const customModelInput = document.getElementById('customModelInput');
+
+        if (ollamaModelSelect && customModelInput) {
+            function toggleCustomModelInput() {
+                if (ollamaModelSelect.value === 'custom') {
+                    customModelInput.classList.remove('d-none');
+                } else {
+                    customModelInput.classList.add('d-none');
+                }
+            }
+
+            // Set initial state and add listener
+            toggleCustomModelInput();
+            ollamaModelSelect.addEventListener('change', toggleCustomModelInput);
+        }
+
+        // Handle download model functionality
+        const downloadBtn = document.getElementById('downloadModelBtn');
+        const downloadInput = document.getElementById('downloadModelInput');
+        const downloadStatus = document.getElementById('downloadStatus');
+        const downloadProgressContainer = document.getElementById('downloadProgressContainer');
+        const downloadModelName = document.getElementById('downloadModelName');
+        let downloadCheckInterval = null;
+
+        if (downloadBtn && downloadInput) {
+            downloadBtn.addEventListener('click', function() {
+                const modelName = downloadInput.value.trim();
+
+                if (!modelName) {
+                    downloadStatus.innerHTML = '<div class="alert alert-danger">' +
+                        '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                        'Please enter a model name' +
+                        '</div>';
+                    return;
+                }
+
+                // Show loading state
+                downloadBtn.disabled = true;
+                downloadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Downloading...';
+                downloadStatus.innerHTML = '<div class="alert alert-info">' +
+                    '<i class="bi bi-info-circle me-2"></i>' +
+                    'Initiating download for ' + modelName + '...' +
+                    '</div>';
+
+                // Show progress bar
+                if (downloadProgressContainer) {
+                    downloadProgressContainer.classList.remove('d-none');
+                    if (downloadModelName) {
+                        downloadModelName.textContent = modelName;
+                    }
+                }
+
+                // Clear any existing interval
+                if (downloadCheckInterval) {
+                    clearInterval(downloadCheckInterval);
+                    downloadCheckInterval = null;
+                }
+
+                // Send request to download model
+                fetch('/api/download-model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelName
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log("Download initiated, setting up status check interval");
+
+                        // Set up an interval to check model status but also add a timeout
+                        downloadCheckInterval = setInterval(function() {
+                            checkModelDownloadStatus(modelName);
+                        }, 5000); // Check every 5 seconds
+
+                        // Add a timeout to stop checking after a reasonable amount of time (10 minutes)
+                        setTimeout(function() {
+                            if (downloadCheckInterval) {
+                                clearInterval(downloadCheckInterval);
+                                downloadCheckInterval = null;
+
+                                // Update UI to show the timeout
+                                downloadStatus.innerHTML = '<div class="alert alert-warning">' +
+                                    '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                                    'Download timed out. The model may be unavailable or taking too long to download. ' +
+                                    'Check the Ollama logs for more information.' +
+                                    '</div>';
+
+                                if (downloadProgressContainer) {
+                                    downloadProgressContainer.classList.add('d-none');
+                                }
+                            }
+                        }, 10 * 60 * 1000); // 10 minutes timeout
+                    } else {
+                        downloadStatus.innerHTML = '<div class="alert alert-danger">' +
+                            '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                            'Error: ' + (data.error || 'Unknown error') +
+                            '</div>';
+
+                        if (downloadProgressContainer) {
+                            downloadProgressContainer.classList.add('d-none');
+                        }
+                    }
+                })
+                .catch(error => {
+                    downloadStatus.innerHTML = '<div class="alert alert-danger">' +
+                        '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                        'Network error: ' + error.message +
+                        '</div>';
+
+                    if (downloadProgressContainer) {
+                        downloadProgressContainer.classList.add('d-none');
+                    }
+                })
+                .finally(() => {
+                    // Reset button state
+                    downloadBtn.disabled = false;
+                    downloadBtn.innerHTML = '<i class="bi bi-cloud-download"></i> Download Model';
+                });
+            });
+        }
+
+        // Function to check if model has been downloaded
+        function checkModelDownloadStatus(modelName) {
+            console.log("Checking status for model:", modelName);
+            fetch('/api/model-status')
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Model status data:", data);
+                    if (data.success && data.models) {
+                        // Check if our model is in the list of installed models
+                        const modelFound = data.models.some(model => model.name === modelName);
+
+                        if (modelFound) {
+                            console.log("Model found! Download completed.");
+                            // Model download completed!
+                            if (downloadCheckInterval) {
+                                clearInterval(downloadCheckInterval);
+                                downloadCheckInterval = null;
+                            }
+
+                            // Update status and hide progress bar
+                            downloadStatus.innerHTML = '<div class="alert alert-success">' +
+                                '<i class="bi bi-check-circle-fill me-2"></i>' +
+                                'Model <strong>' + modelName + '</strong> has been successfully downloaded and is ready to use!' +
+                                '</div>';
+
+                            if (downloadProgressContainer) {
+                                downloadProgressContainer.classList.add('d-none');
+                            }
+
+                            // Refresh the installed models list
+                            refreshModelsList();
+                        } else {
+                            console.log("Model not found yet, continuing to check...");
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking model status:', error);
+                });
+        }
+
+        // Function to refresh the models list
+        function refreshModelsList() {
+            const installedModelsDiv = document.getElementById('installedModels');
+            if (installedModelsDiv) {
+                installedModelsDiv.innerHTML = '<p class="text-center text-muted">' +
+                    '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' +
+                    'Loading models...' +
+                    '</p>';
+
+                fetch('/api/model-status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.models.length > 0) {
+                            let html = '<ul class="list-group">';
+                            data.models.forEach(model => {
+                                const size = Math.round(model.size / (1024 * 1024));
+                                html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                                    ${model.name}
+                                    <span class="badge bg-secondary rounded-pill">${size} MB</span>
+                                </li>`;
+                            });
+                            html += '</ul>';
+                            installedModelsDiv.innerHTML = html;
+                        } else {
+                            installedModelsDiv.innerHTML = '<div class="alert alert-warning">' +
+                                '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                                'No models found. Download a model to get started.' +
+                                '</div>';
+                        }
+                    })
+                    .catch(error => {
+                        installedModelsDiv.innerHTML = '<div class="alert alert-danger">' +
+                            '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                            'Error retrieving models: ' + error.message +
+                            '</div>';
+                    });
+            }
+        }
+
+        // Refresh models on page load
+        refreshModelsList();
+
+        // Add refresh button functionality if it exists
+        const refreshModelsBtn = document.getElementById('refreshModelsBtn');
+        if (refreshModelsBtn) {
+            refreshModelsBtn.addEventListener('click', refreshModelsList);
+        }
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle download model button
+        const downloadBtn = document.getElementById('downloadModelBtn');
+        const downloadInput = document.getElementById('downloadModelInput');
+        const downloadStatus = document.getElementById('downloadStatus');
+
+        // Add these lines to get the progress elements
+        const downloadProgressContainer = document.getElementById('downloadProgressContainer');
+        const downloadModelName = document.getElementById('downloadModelName');
+        let downloadCheckInterval = null;
+
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', function() {
+                const modelName = downloadInput.value.trim();
+
+                if (!modelName) {
+                    downloadStatus.innerHTML = '<div class="alert alert-danger">' +
+                        '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                        'Please enter a model name' +
+                        '</div>';
+                    return;
+                }
+
+                // Show loading state
+                downloadBtn.disabled = true;
+                downloadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Downloading...';
+                downloadStatus.innerHTML = '<div class="alert alert-info">' +
+                    '<i class="bi bi-info-circle me-2"></i>' +
+                    'Initiating download for ' + modelName + '...' +
+                    '</div>';
+
+                // Show progress bar
+                if (downloadProgressContainer) {
+                    downloadProgressContainer.classList.remove('d-none');
+                    if (downloadModelName) {
+                        downloadModelName.textContent = modelName;
+                    }
+                }
+
+                // Send request to download model
+                fetch('/api/download-model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelName
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Clear any existing interval
+                        if (downloadCheckInterval) {
+                            clearInterval(downloadCheckInterval);
+                        }
+
+                        // Set up interval to check if model download has completed
+                        downloadCheckInterval = setInterval(function() {
+                            checkIfModelDownloaded(modelName);
+                        }, 5000); // Check every 5 seconds
+                    } else {
+                        downloadStatus.innerHTML = '<div class="alert alert-danger">' +
+                            '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                            'Error: ' + (data.error || 'Unknown error') +
+                            '</div>';
+
+                        if (downloadProgressContainer) {
+                            downloadProgressContainer.classList.add('d-none');
+                        }
+                    }
+                })
+                .catch(error => {
+                    downloadStatus.innerHTML = '<div class="alert alert-danger">' +
+                        '<i class="bi bi-exclamation-triangle me-2"></i>' +
+                        'Network error: ' + error.message +
+                        '</div>';
+
+                    if (downloadProgressContainer) {
+                        downloadProgressContainer.classList.add('d-none');
+                    }
+                })
+                .finally(() => {
+                    // Reset button state
+                    downloadBtn.disabled = false;
+                    downloadBtn.innerHTML = '<i class="bi bi-cloud-download"></i> Download Model';
+                });
+            });
+        }
+
+        // Add the function to check if model has been downloaded
+        function checkIfModelDownloaded(modelName) {
+            fetch('/api/model-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.models) {
+                        // Check if our model is in the list of installed models
+                        const modelFound = data.models.some(model => model.name === modelName);
+
+                        if (modelFound) {
+                            // Model download completed!
+                            clearInterval(downloadCheckInterval);
+                            downloadCheckInterval = null;
+
+                            // Update status and hide progress bar
+                            downloadStatus.innerHTML = '<div class="alert alert-success">' +
+                                '<i class="bi bi-check-circle-fill me-2"></i>' +
+                                'Model <strong>' + modelName + '</strong> has been successfully downloaded and is ready to use!' +
+                                '</div>';
+
+                            if (downloadProgressContainer) {
+                                downloadProgressContainer.classList.add('d-none');
+                            }
+
+                            // Refresh the installed models list if that function exists
+                            if (typeof checkModelStatus === 'function') {
+                                checkModelStatus();
+                            }
+                        }
+                        // If model not found, continue polling
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking model status:', error);
+                });
+        }
+    });
+</script>
+<script>
+// Function to check and display model status
+function checkModelStatus() {
+    fetch('/api/model-status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.models.length > 0) {
+                // Update the model dropdown with available models
+                const select = document.getElementById('ollamaModel');
+
+                // Store the currently selected value
+                const currentValue = select.value;
+
+                // Clear existing non-custom options
+                Array.from(select.options).forEach(option => {
+                    if (option.value !== 'custom') {
+                        select.removeChild(option);
+                    }
+                });
+
+                // Add models to dropdown
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    option.textContent = model.name;
+
+                    // Insert before the custom option
+                    select.insertBefore(option, select.lastElementChild);
+                });
+
+                // Try to restore the previous selection
+                if (Array.from(select.options).some(option => option.value === currentValue)) {
+                    select.value = currentValue;
+                }
+
+                // Show installed models in a separate section
+                const installedModelsDiv = document.getElementById('installedModels');
+                if (installedModelsDiv) {
+                    let html = '<h6>Installed Models:</h6><ul class="list-group">';
+                    data.models.forEach(model => {
+                        const size = Math.round(model.size / (1024 * 1024));
+                        html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${model.name}
+                            <span class="badge bg-secondary rounded-pill">${size} MB</span>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                    installedModelsDiv.innerHTML = html;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error checking model status:', error);
+        });
+}
+
+// Check model status on page load
+checkModelStatus();
+
+// Add refresh button for model status
+const refreshModelsBtn = document.getElementById('refreshModelsBtn');
+if (refreshModelsBtn) {
+    refreshModelsBtn.addEventListener('click', function() {
+        checkModelStatus();
+    });
+}
+</script>
+<script>
+function checkModelStatus() {
+    fetch('/api/model-status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.models.length > 0) {
+                // Update the model dropdown with available models
+                const select = document.getElementById('ollamaModel');
+
+                // Store the currently selected value
+                const currentValue = select.value;
+
+                // Clear existing non-custom options
+                Array.from(select.options).forEach(option => {
+                    if (option.value !== 'custom') {
+                        select.removeChild(option);
+                    }
+                });
+
+                // Add models to dropdown
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    option.textContent = model.name;
+
+                    // Insert before the custom option
+                    select.insertBefore(option, select.lastElementChild);
+                });
+
+                // Try to restore the previous selection
+                if (Array.from(select.options).some(option => option.value === currentValue)) {
+                    select.value = currentValue;
+                }
+
+                // Show installed models in a separate section
+                const installedModelsDiv = document.getElementById('installedModels');
+                if (installedModelsDiv) {
+                    let html = '<h6>Installed Models:</h6><ul class="list-group">';
+                    data.models.forEach(model => {
+                        const size = Math.round(model.size / (1024 * 1024));
+                        html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${model.name}
+                            <span class="badge bg-secondary rounded-pill">${size} MB</span>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                    installedModelsDiv.innerHTML = html;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error checking model status:', error);
+        });
+}
+
+// Check model status on page load
+checkModelStatus();
+
+// Add refresh button for model status
+const refreshModelsBtn = document.getElementById('refreshModelsBtn');
+if (refreshModelsBtn) {
+    refreshModelsBtn.addEventListener('click', function() {
+        checkModelStatus();
+    });
+}
+</script>
+{% endblock %}

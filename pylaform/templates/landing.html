@@ -1,41 +1,105 @@
 {% extends "base.html" %}
 {% set nst = namespace(description="To be filled in by you") %}
-{{ ns.description }}
 {% for item in payload %}
     {% if item["attr"] == "description" %}
-        {% if item["value"] is defined %}
-            {% set nst.description = item["value"] %}
-        {% endif %}
+        {% set nst.description = item["value"] %}
     {% endif %}
 {% endfor %}
 
 {% block content %}
-<h1>Welcome to Pylaform!</h1>
-    <p>The purpose of this application is to help you improve your resume and your resume skills by leveraging
-    scripted templates and chatGPT</p>
-    <div class="container align-items-center">
-        <div class="row align-items-center">
-            <ul style="list-style-type:none;">
-                <li>
-                    <h2 class="text-center">Resume Notes</h2>
-                </li>
-                <li>
-                    <p class="text-center"><b>{{ nst.description }}</b></p>
-                </li>
-                <li>
-                    <h2 class="text-center">Generate Resume/CV</h2>
-                </li>
-                <li>
-                    <p class="text-center">
-                        <a href="/generate/one-page" class="btn btn-lg btn-secondary">Short</a>
-                    </p>
-                </li>
-                <li>
-                    <p class="text-center">
-                        <a href="/generate/hybrid" class="btn btn-lg btn-secondary">Hybrid</a>
-                    </p>
-                </li>
-            </ul>
+<div class="container py-4">
+    <div class="row mb-5">
+        <div class="col-12 text-center">
+            <h1 class="display-4 fw-bold text-primary mb-3">Welcome to Pylaform!</h1>
+            <p class="lead">Build impressive resumes and improve your career prospects with our AI-powered platform</p>
+            <div class="d-flex justify-content-center">
+                <hr class="w-25">
+            </div>
         </div>
     </div>
+
+    <div class="row align-items-center mb-5">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <h2 class="card-title h4 text-primary mb-3"><i class="bi bi-info-circle me-2"></i>Resume Notes</h2>
+                    <div class="card-text">
+                        <p class="lead fw-normal">{{ nst.description }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mt-4 mt-md-0">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <h2 class="card-title h4 text-primary mb-3"><i class="bi bi-file-earmark-text me-2"></i>Generate Resume/CV</h2>
+                    <p class="card-text mb-4">Choose the format that best suits your needs:</p>
+                    <div class="d-grid gap-3">
+                        <a href="/generate/one-page" class="btn btn-primary btn-lg">
+                            <i class="bi bi-file-earmark me-2"></i>Short Resume
+                            <div class="small text-light opacity-75">Concise one-page format</div>
+                        </a>
+                        <a href="/generate/hybrid" class="btn btn-secondary btn-lg">
+                            <i class="bi bi-files me-2"></i>Hybrid CV
+                            <div class="small text-light opacity-75">Comprehensive multi-page format</div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-4 mb-4">
+            <div class="card border-0 shadow-sm h-100 text-center">
+                <div class="card-body p-4">
+                    <div class="rounded-circle bg-light p-3 d-inline-flex mb-3">
+                        <i class="bi bi-pencil-square text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="h5 mb-3">Easy Editing</h3>
+                    <p class="card-text">Edit your resume information with our intuitive interface</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card border-0 shadow-sm h-100 text-center">
+                <div class="card-body p-4">
+                    <div class="rounded-circle bg-light p-3 d-inline-flex mb-3">
+                        <i class="bi bi-robot text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="h5 mb-3">AI Assistant</h3>
+                    <p class="card-text">Get personalized suggestions to enhance your resume content</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card border-0 shadow-sm h-100 text-center">
+                <div class="card-body p-4">
+                    <div class="rounded-circle bg-light p-3 d-inline-flex mb-3">
+                        <i class="bi bi-download text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="h5 mb-3">Export Options</h3>
+                    <p class="card-text">Generate professionally formatted resumes ready for submission</p>
+                </div>
+            </div>
+        </div>
+        <!-- Career Targeting Feature Card -->
+        <div class="col-md-4 mb-4">
+            <div class="card border-0 shadow-sm h-100 text-center">
+                <div class="card-body p-4">
+                    <div class="rounded-circle bg-light p-3 d-inline-flex mb-3">
+                        <i class="bi bi-briefcase text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="h5 mb-3">Career Targeting</h3>
+                    <p class="card-text">Customize your resume for specific job descriptions with AI assistance</p>
+                    <div class="mt-3">
+                        <a href="/career_customize" class="btn btn-outline-primary">
+                            <i class="bi bi-magic me-2"></i>Customize Resume
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -1,40 +1,65 @@
+{% from "_date_picker.html" import date_picker with context %}
 {% macro form_group(id, certification, year, state) %}
     <!-- Test if new template element -->
     {% if id == "new" %}
         {% set id = "new` + clicks + `"|safe %}
     {% endif %}
-    <div id="{{ id }}" class="d-flex align-items-bottom justify-content-center">
-        <table>
-            <tr>
-                <td>
-                    
-                    <label for="{{ id }}_certification">Certification Name</label>
-                    <br>
-                    <textarea name="{{ id }}_certification"
-                              id="{{ id }}_certification"
-                              rows="1"
-                              cols="42"
-                              >{{ certification if certification is defined else '' }}</textarea>
-                    <br>
-                    <label for="{{ id }}_year">Long Description</label>
-                    <br>
-                    <input type="text" name="{{ id }}_year"{{ year }}
-                           id="{{ id }}_year"
-                           value="{{ year if year is defined else '' }}">
-                    <br>
-                    <label for="{{ id }}_year_enabled">Displayed</label>
-                    <input type="checkbox" name="{{ id }}_year_enabled"
-                            {{ "checked" if state }}>
-                </td>
-                <td>
-                    <button class="btn btn-danger"
+    <div id="{{ id }}" class="card border-0 shadow-sm mb-3">
+        <div class="card-body p-4">
+            <div class="row">
+                <div class="col-md-11">
+                    <div class="row g-3">
+                        <input type="hidden" name="{{ id }}_rowid" value="{{ id }}">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="{{ id }}_certification" class="form-label fw-medium">
+                                    <i class="bi bi-patch-check me-2"></i>Certification Name
+                                </label>
+                                <input type="text"
+                                       name="{{ id }}_certification"
+                                       id="{{ id }}_certification"
+                                       class="form-control bg-light"
+                                       value="{{ certification if certification is defined else '' }}"
+                                       placeholder="Enter certification name or credential">
+                                <div class="form-text text-muted">
+                                    Enter the full name of the certification (e.g., "AWS Certified Solutions Architect")
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            {{ date_picker(
+                                (id|string) + "_year",
+                                "Year Obtained",
+                                icon="calendar-date",
+                                value=year if year is defined else "",
+                                placeholder="YYYY",
+                                help_text="Year when certification was obtained"
+                            ) }}
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch mt-2">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       role="switch"
+                                       id="{{ id }}_year_enabled"
+                                       name="{{ id }}_year_enabled"
+                                       {% if state %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ id }}_year_enabled">
+                                    Include this certification in your resume
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-1 d-flex align-items-center justify-content-end">
+                    <button class="btn btn-outline-danger"
                             id="deleteRow"
-                            type="button">
+                            type="button"
+                            title="Delete this certification">
                         <i class="bi bi-trash"></i>
-                        Delete
                     </button>
-                </td>
-            </tr>
-        </table>
+                </div>
+            </div>
+        </div>
     </div>
 {%- endmacro %}

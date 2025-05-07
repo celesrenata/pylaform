@@ -1,4 +1,5 @@
 {% from "_dropdown.html" import drop_down with context %}
+{% from "_date_picker.html" import date_picker with context %}
 {% macro form_group(payload, ddpayload, employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, selected_position=None, hidden=True) %}
     {# Ensure unique IDs for new rows #}
     {% if employerid == "new" %}
@@ -6,87 +7,175 @@
         {% set positionid = "new" %}
     {% endif %}
 
-    <div id="{{ positionid }}" class="container align-items-center form-group">
-        <input type="hidden" name="{{ positionid }}_rowid" value="{{ employerid }}">
-        <table>
-            <tr>
-                <td>
-                    {{ drop_down(
-                        employerid,
-                        payload,
-                        ddpayload,
-                        "employer",
-                        primarybyname=True,
-                        selected_value=employerid
-                    ) }}
-                    <br>
-                    <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}"
-                         id="{{ employerid }}_employer_div">
-                        <label for="{{ employerid }}_employer">Employer Name:</label>
-                        <br>
-                        <input type="text" name="{{ employerid }}_employer" id="{{ employerid }}_employer"
-                               value="{{ employername if employername is defined else "" }}"
-                               onfocusout="commit_value('{{ employerid }}_employer');"
-                               data-employer-name="{{ employername if employername is defined else '' }}">
-                        <br>
-                        <label for="{{ employerid }}_location">Employer Location:</label>
-                        <br>
-                        <input type="text" name="{{ employerid }}_location" id="{{ employerid }}_location"
-                               value="{{ location if location is defined else "" }}"
-                               onfocusout="commit_value('{{ employerid }}_location');"
-                               data-employer-location="{{ location if location is defined else '' }}">
+    <div id="{{ positionid }}" class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <input type="hidden" name="{{ positionid }}_rowid" value="{{ employerid }}">
+
+            <div class="row g-4">
+                <!-- Employer Information Section -->
+                <div class="col-md-6">
+                    <div class="card h-100 bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-building me-2"></i>Employer Information
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                {{ drop_down(
+                                    employerid,
+                                    payload,
+                                    ddpayload,
+                                    "employer",
+                                    primarybyname=True,
+                                    selected_value=employerid
+                                ) }}
+                            </div>
+
+                            <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}"
+                                 id="{{ employerid }}_employer_div">
+                                <div class="mb-3">
+                                    <label for="{{ employerid }}_employer" class="form-label fw-medium">
+                                        <i class="bi bi-building-fill me-2"></i>Company Name
+                                    </label>
+                                    <input type="text"
+                                           name="{{ employerid }}_employer"
+                                           id="{{ employerid }}_employer"
+                                           class="form-control bg-white"
+                                           value="{{ employername if employername is defined else '' }}"
+                                           onfocusout="commit_value('{{ employerid }}_employer');"
+                                           data-employer-name="{{ employername if employername is defined else '' }}"
+                                           placeholder="Enter company or organization name">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ employerid }}_location" class="form-label fw-medium">
+                                        <i class="bi bi-geo-alt-fill me-2"></i>Location
+                                    </label>
+                                    <input type="text"
+                                           name="{{ employerid }}_location"
+                                           id="{{ employerid }}_location"
+                                           class="form-control bg-white"
+                                           value="{{ location if location is defined else '' }}"
+                                           onfocusout="commit_value('{{ employerid }}_location');"
+                                           data-employer-location="{{ location if location is defined else '' }}"
+                                           placeholder="City, State/Province, Country">
+                                    <div class="form-text text-muted">
+                                        Company location (e.g., "San Francisco, CA")
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mt-3">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       role="switch"
+                                       name="{{ employerid }}_employer_enabled"
+                                       id="{{ employerid }}_employer_enabled"
+                                       {{ "checked" if employerstate }}
+                                       data-employer-state="{{ employerstate }}">
+                                <label class="form-check-label" for="{{ employerid }}_employer_enabled">
+                                    Include this employer in resume
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                    <label for="{{ employerid }}_employer_enabled">Displayed:</label>
-                    <input type="checkbox" name="{{ employerid }}_employer_enabled" id="{{ employerid }}_employer_enabled"
-                            {{ "checked" if employerstate }} data-employer-state="{{ employerstate }}">
-                </td>
-                <td class="align-items-center">
-                    {% set dropdown_selected_value = selected_position if selected_position is defined and selected_position is not none else positionid %}
-                    {{ drop_down(
-                        positionid,
-                        payload,
-                        ddpayload,
-                        "employer",
-                        secondary="position",
-                        secondaryid=positionid,
-                        secondarybyname=True,
-                        selected_value=dropdown_selected_value
-                    ) }}
-                    <br>
-                    <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ positionid }}_position_div">
-                        <label for="{{ positionid }}_position">Position Name:</label>
-                        <br>
-                        <input type="text" name="{{ positionid }}_position" id="{{ positionid }}_position"
-                               value="{{ positionname if positionname is defined else "" }}"
-                               onfocusout="commit_value('{{ positionid }}_position');"
-                               data-position-name="{{ positionname if positionname is defined else '' }}">
+                </div>
+
+                <!-- Position Information Section -->
+                <div class="col-md-6">
+                    <div class="card h-100 bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-person-workspace me-2"></i>Position Details
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                {% set dropdown_selected_value = selected_position if selected_position is defined and selected_position is not none else positionid %}
+                                {{ drop_down(
+                                    positionid,
+                                    payload,
+                                    ddpayload,
+                                    "employer",
+                                    secondary="position",
+                                    secondaryid=positionid,
+                                    secondarybyname=True,
+                                    selected_value=dropdown_selected_value
+                                ) }}
+                            </div>
+
+                            <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ positionid }}_position_div">
+                                <div class="mb-3">
+                                    <label for="{{ positionid }}_position" class="form-label fw-medium">
+                                        <i class="bi bi-briefcase-fill me-2"></i>Job Title
+                                    </label>
+                                    <input type="text"
+                                           name="{{ positionid }}_position"
+                                           id="{{ positionid }}_position"
+                                           class="form-control bg-white"
+                                           value="{{ positionname if positionname is defined else '' }}"
+                                           onfocusout="commit_value('{{ positionid }}_position');"
+                                           data-position-name="{{ positionname if positionname is defined else '' }}"
+                                           placeholder="Enter your job title">
+                                    <div class="form-text text-muted">
+                                        Your official title at this organization
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    {{ date_picker(
+                                        positionid + "_startdate",
+                                        "Start Date",
+                                        icon="calendar-event",
+                                        value=startdate if startdate is defined else "",
+                                        placeholder="MM/YYYY",
+                                        help_text="When you began this position"
+                                    ) }}
+                                </div>
+                                <div class="col-6">
+                                    {{ date_picker(
+                                        positionid + "_enddate",
+                                        "End Date",
+                                        icon="calendar-check",
+                                        value=enddate if enddate is defined else "",
+                                        placeholder="MM/YYYY",
+                                        help_text="When you left or expected end date",
+                                        include_present=true
+                                    ) }}
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mt-3">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       role="switch"
+                                       name="{{ positionid }}_position_enabled"
+                                       id="{{ positionid }}_position_enabled"
+                                       {{ "checked" if positionstate }}
+                                       data-position-state="{{ positionstate }}">
+                                <label class="form-check-label" for="{{ positionid }}_position_enabled">
+                                    Include this position in resume
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                    <label for="{{ positionid }}_position_enabled">Displayed:</label>
-                    <input type="checkbox" name="{{ positionid }}_position_enabled" id="{{ positionid }}_position_enabled"
-                            {{ "checked" if positionstate }} data-position-state="{{ positionstate }}">
-                </td>
-                <td>
-                    <label for="{{ positionid }}_startdate">Start Date:</label>
-                    <br>
-                    <input type="text" name="{{ positionid }}_startdate" id="{{ positionid }}_startdate"
-                           value="{{ startdate if startdate is defined else "" }}"
-                           data-start-date="{{ startdate if startdate is defined else '' }}">
-                    <br>
-                    <label for="{{ positionid }}_enddate">End Date:</label>
-                    <br>
-                    <input type="text" name="{{ positionid }}_enddate" id="{{ positionid }}_enddate"
-                           value="{{ enddate if enddate is defined else "" }}"
-                           data-end-date="{{ enddate if enddate is defined else '' }}">
-                </td>
-                <td>
-                    <button class="btn btn-danger"
-                            id="deleteRow"
-                            type="button">
-                        <i class="bi bi-trash"></i>
-                        Delete
+                </div>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div class="row mt-3">
+                <div class="col-12 d-flex justify-content-end">
+                    <button class="btn btn-outline-secondary me-2 rowEditor" type="button">
+                        <i class="bi bi-pencil-square"></i> Edit
                     </button>
-                </td>
-            </tr>
-        </table>
+                    <button class="btn btn-outline-danger" id="deleteRow" type="button">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
-{%- endmacro %}
+{% endmacro %}

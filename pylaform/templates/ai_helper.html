@@ -7,8 +7,13 @@
             <i class="bi bi-cpu ai-icon"></i>
             <span>AI Resume Helper</span>
         </div>
-        <div class="arrow">
-            <i class="bi bi-chevron-up"></i>
+        <div class="ai-helper-actions">
+            <a href="/ai-config" class="ai-settings-link" title="AI Settings">
+                <i class="bi bi-gear"></i>
+            </a>
+            <div class="arrow">
+                <i class="bi bi-chevron-up"></i>
+            </div>
         </div>
     </div>
 
@@ -51,7 +56,12 @@
 
         let selectedImprovement = null;
 
-        aiToggle.addEventListener('click', function() {
+        aiToggle.addEventListener('click', function(e) {
+            // Don't toggle if clicking the settings gear
+            if (e.target.classList.contains('bi-gear') ||
+                e.target.classList.contains('ai-settings-link')) {
+                return;
+            }
             aiHelper.classList.toggle('expanded');
         });
 
@@ -154,5 +164,47 @@
                     console.error('Could not copy text: ', err);
                 });
         });
+
+        // Function to open AI helper with specific text and improvement type
+        window.openAiHelper = function(fieldId, improvementType) {
+            const textField = document.getElementById(fieldId);
+            if (!textField) return;
+
+            const text = textField.value;
+
+            // Set the text in the AI helper
+            aiTextInput.value = text;
+
+            // Select the appropriate improvement type
+            let matchingOption = null;
+            aiOptions.forEach(option => {
+                if (option.textContent === improvementType) {
+                    matchingOption = option;
+                } else if (option.dataset.type === improvementType.toLowerCase()) {
+                    matchingOption = option;
+                }
+            });
+
+            if (matchingOption) {
+                // Simulate a click on the matching option
+                matchingOption.click();
+            }
+
+            // Show the AI helper if it's not already visible
+            if (!aiHelper.classList.contains('expanded')) {
+                aiHelper.classList.add('expanded');
+            }
+
+            // Focus on the text input
+            aiTextInput.focus();
+
+            // Store the source field ID for updating after improvement
+            aiTextInput.dataset.sourceFieldId = fieldId;
+
+            // Enable the submit button
+            if (text.trim() && selectedImprovement) {
+                aiSubmitBtn.disabled = false;
+            }
+        };
     });
 </script>

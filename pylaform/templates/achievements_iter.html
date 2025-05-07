@@ -6,86 +6,184 @@
         {% set positionid = "new` + clicks + `"|safe %}
         {% set achievementid = "new` + clicks + `"|safe %}
     {% endif %}
-    <div id="{{ achievementid }}" class="lead d-flex align-items-bottom justify-content-center">
-        <input type="hidden" name="{{ achievementid }}_rowid" value="{{ achievementid }}">
-        <table>
-            <tr>
-                <td>
-                    <label for="{{ achievementid }}_employer_dropdown">Employer/College:</label>
-                    <br>
-                    <select class="dropdown" name="{{ achievementid }}_employer_dropdown" id="{{ achievementid }}_employer_dropdown">
-                    {% for i in ddpayload["employer"] %}
-                        <option
-                                {% if schoolid and i.get('type') == 'school' and i["id"]|string == schoolid|string %}
-                                    selected
-                                {% elif not schoolid and employerid and i.get('type') != 'school' and i["id"]|string == employerid|string %}
-                                    selected
-                                {% endif %}
-                                value="{{ i["id"] }}" data-org-type="{{ i.get('type', 'employer') }}">
-                                {{ i["name"] }}
-                                {% if i.get('type') == 'school' %}(College){% endif %}
-                        </option>
-                    {% endfor %}
-                    </select>
-                    <input type="hidden" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
-                           value="{% if schoolid %}{{ schoolname }}{% else %}{{ employer }}{% endif %}">
-                    <input type="hidden" name="{{ achievementid }}_employer_type" id="{{ achievementid }}_employer_type"
-                           value="{% if schoolid %}school{% else %}employer{% endif %}">
-                </td>
-                <td>
-                    <label for="{{ achievementid }}_position_dropdown">Position/Focus:</label>
-                    <br>
-                   <select class="dropdown" name="{{ achievementid }}_position_dropdown" id="{{ achievementid }}_position_dropdown">
-                    {% for i in ddpayload["position"] %}
-                        <option
-                            {% if (positionid is not none and i["id"]|string == positionid|string) %}
-                                selected
-                            {% endif %}
-                            value="{{ i["id"] }}"
-                            data-employer-id="{{ i['employer'] }}"
-                            data-role-type="{{ i['type'] }}">
-                            {{ i["name"] }}
-                            {% if i['type'] == 'focus' %}(Focus){% endif %}
-                        </option>
-                    {% endfor %}
-                    </select>
-                    <input type="hidden" name="{{ achievementid }}_position" id="{{ achievementid }}_position"
-                           value="{{ position if position is defined else "" }}">
-                    <input type="hidden" name="{{ achievementid }}_position_type" id="{{ achievementid }}_position_type"
-                           value="">
-                </td>
-                <td>
-                    <label for="{{ achievementid }}_position_enabled">Position/Focus Displayed</label>
-                    <input type="checkbox" name="{{ achievementid }}_position_enabled" id="{{ achievementid }}_position_enabled"
-                           {{ "checked" if positionstate }} data-position-state="{{ positionstate }}" disabled>
-                </td>
-            </tr>
-            <tr>
-                <td class="align-items-center">
-                    <label for="{{ achievementid }}_shortdesc">Achievement Short Description</label>
-                    <br>
-                    <input type="text" name="{{ achievementid }}_shortdesc" id="{{ achievementid }}_shortdesc"
-                           value="{{ shortdesc if shortdesc is defined else "" }}">
-                </td>
-                <td>
-                    <label for="{{ achievementid }}_longdesc">Achievement Long Description</label>
-                    <br>
-                    <input type="text" name="{{ achievementid }}_longdesc" id="{{ achievementid }}_longdesc"
-                           value="{{ longdesc if longdesc is defined else "" }}">
-                    <br>
-                    <label for="{{ achievementid }}_longdesc_enabled">Displayed</label>
-                    <input type="checkbox" name="{{ achievementid }}_longdesc_enabled"
-                            {{ "checked" if achievementstate }}>
-                </td>
-                <td>
-                    <button class="btn btn-danger"
-                                    id="deleteRow"
-                                    type="button">
-                                <i class="bi bi-trash"></i>
-                                Delete
+
+    <div id="{{ achievementid }}" class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <input type="hidden" name="{{ achievementid }}_rowid" value="{{ achievementid }}">
+
+            <div class="row g-4">
+                <!-- Organization Section -->
+                <div class="col-md-6">
+                    <div class="card h-100 bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-building me-2"></i>Organization
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="{{ achievementid }}_employer_dropdown" class="form-label fw-medium">
+                                    <i class="bi bi-buildings me-2"></i>Company or Institution
+                                </label>
+                                <select class="form-select bg-white"
+                                        name="{{ achievementid }}_employer_dropdown"
+                                        id="{{ achievementid }}_employer_dropdown">
+                                    {% for i in ddpayload["employer"] %}
+                                        <option
+                                            {% if schoolid and i.get('type') == 'school' and i["id"]|string == schoolid|string %}
+                                                selected
+                                            {% elif not schoolid and employerid and i.get('type') != 'school' and i["id"]|string == employerid|string %}
+                                                selected
+                                            {% endif %}
+                                            value="{{ i["id"] }}" data-org-type="{{ i.get('type', 'employer') }}">
+                                            {{ i["name"] }}
+                                            {% if i.get('type') == 'school' %}(College){% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text text-muted">
+                                    Select the organization where this achievement occurred
+                                </div>
+                                <!-- Hidden fields for tracking organization type and name -->
+                                <input type="hidden" name="{{ achievementid }}_employer" id="{{ achievementid }}_employer"
+                                       value="{% if schoolid %}{{ schoolname }}{% else %}{{ employer }}{% endif %}">
+                                <input type="hidden" name="{{ achievementid }}_employer_type" id="{{ achievementid }}_employer_type"
+                                       value="{% if schoolid %}school{% else %}employer{% endif %}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Position/Role Section -->
+                <div class="col-md-6">
+                    <div class="card h-100 bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-person-workspace me-2"></i>Role or Focus
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="{{ achievementid }}_position_dropdown" class="form-label fw-medium">
+                                    <i class="bi bi-briefcase me-2"></i>Position or Academic Focus
+                                </label>
+                                <select class="form-select bg-white"
+                                        name="{{ achievementid }}_position_dropdown"
+                                        id="{{ achievementid }}_position_dropdown">
+                                    {% for i in ddpayload["position"] %}
+                                        <option
+                                            {% if (positionid is not none and i["id"]|string == positionid|string) %}
+                                                selected
+                                            {% endif %}
+                                            value="{{ i["id"] }}"
+                                            data-employer-id="{{ i['employer'] }}"
+                                            data-role-type="{{ i['type'] }}">
+                                            {{ i["name"] }}
+                                            {% if i['type'] == 'focus' %}(Focus){% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text text-muted">
+                                    The job position or academic focus related to this achievement
+                                </div>
+                                <!-- Hidden fields for tracking position/focus type and name -->
+                                <input type="hidden" name="{{ achievementid }}_position" id="{{ achievementid }}_position"
+                                       value="{{ position if position is defined else "" }}">
+                                <input type="hidden" name="{{ achievementid }}_position_type" id="{{ achievementid }}_position_type"
+                                       value="">
+                            </div>
+
+                            <div class="form-check form-switch mt-3">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       role="switch"
+                                       name="{{ achievementid }}_position_enabled"
+                                       id="{{ achievementid }}_position_enabled"
+                                       {{ "checked" if positionstate }}
+                                       data-position-state="{{ positionstate }}"
+                                       disabled>
+                                <label class="form-check-label" for="{{ achievementid }}_position_enabled">
+                                    Display position with achievement
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Achievement Description Section -->
+                <div class="col-12">
+                    <div class="card bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-trophy me-2"></i>Achievement Details
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="{{ achievementid }}_shortdesc" class="form-label fw-medium">
+                                    <i class="bi bi-award me-2"></i>Achievement Title
+                                </label>
+                                <input type="text"
+                                       name="{{ achievementid }}_shortdesc"
+                                       id="{{ achievementid }}_shortdesc"
+                                       class="form-control bg-light"
+                                       value="{{ shortdesc if shortdesc is defined else "" }}"
+                                       placeholder="Enter a brief title for this achievement">
+                                <div class="form-text text-muted">
+                                    A concise title that summarizes your achievement (e.g., "President's Award for Innovation")
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ achievementid }}_longdesc" class="form-label fw-medium">
+                                    <i class="bi bi-card-text me-2"></i>Detailed Description
+                                </label>
+                                <div class="input-group">
+                                    <textarea
+                                        name="{{ achievementid }}_longdesc"
+                                        id="{{ achievementid }}_longdesc"
+                                        class="form-control bg-light"
+                                        rows="3"
+                                        placeholder="Describe your achievement, its significance, and your contribution"
+                                    >{{ longdesc if longdesc is defined else "" }}</textarea>
+                                    <div class="ai-improve-button input-group-text bg-light">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                onclick="openAiHelper('{{ achievementid }}_longdesc', 'List')">
+                                            <i class="bi bi-magic"></i> Improve
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-text text-muted">
+                                    Detailed explanation including metrics, scope, and impact when possible
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mt-3">
+                                <input
+                                    type="checkbox"
+                                    class="form-check-input"
+                                    role="switch"
+                                    id="{{ achievementid }}_longdesc_enabled"
+                                    name="{{ achievementid }}_longdesc_enabled"
+                                    {% if achievementstate %}checked{% endif %}
+                                >
+                                <label class="form-check-label" for="{{ achievementid }}_longdesc_enabled">
+                                    Include this achievement in your resume
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div class="row mt-3">
+                <div class="col-12 d-flex justify-content-end">
+                    <button class="btn btn-outline-danger" id="deleteRow" type="button">
+                        <i class="bi bi-trash"></i> Delete Achievement
                     </button>
-                </td>
-            </tr>
-        </table>
+                </div>
+            </div>
+        </div>
     </div>
 {%- endmacro %}

@@ -733,46 +733,96 @@ class Worker:
         :param ImmutableMultiDict form_data: Form data from template.
         :return None: None
         """
+        import re  # Add this import
 
-        # Transform from template.
-        transform_form_data: list[dict[str, str | bool]] = transform_get_id(form_data)
-        counter: str = ""
-        result: dict[str, str | int] = {}
+        # Debug: Print form data
+        print("Raw form data:")
+        for key, value in form_data.items():
+            print(f"  {key}: {value}")
+
+        # Transform from template
+        transform_form_data = transform_get_id(form_data)
+
+        # Debug: Print transformed data
+        print("Transformed form data:")
         for item in transform_form_data:
-            # Get ID from name.
-            if item["attr"] == "school":
-                item["value"] = str(self.query.query_id(item["value"], "school"))
-            if item["attr"] == "focus":
-                item["value"] = str(self.query.query_id(item["value"], "focus"))
-            if counter != str(item["id"]):
-                counter = str(item["id"])
-                result = {}
+            print(f"  {item}")
 
-            # Build attrs to expect per ID.
-            attrs_per_id = len(unique(transform_form_data))
+        # Group data by ID
+        items_by_id = {}
+        for item in transform_form_data:
+            item_id = item["id"]
+            if item_id not in items_by_id:
+                items_by_id[item_id] = {}
 
-            # Delete summary.
-            if "delete" in item["attr"]:
-                self.delete.delete_target(item["id"], "summary")
+            # Store the attribute and its value
+            items_by_id[item_id][item["attr"]] = item["value"]
+
+            # Store the state (enabled status)
+            if "state" not in items_by_id[item_id]:
+                items_by_id[item_id]["state"] = item["state"]
+
+        # Process each ID group
+        for item_id, data in items_by_id.items():
+            # Handle deletions
+            if any(attr.endswith("delete") for attr in data):
+                print(f"Deleting summary item: {item_id}")
+                self.delete.delete_target(item_id, "summary")
                 continue
 
-            # Create summary.
-            if "new" in item["id"]:
-                # Create result based on current attribute value.
-                match item["attr"]:
-                    case "shortdesc":
-                        result.update({"shortdesc": item["value"]})
-                    case "longdesc":
-                        result.update({"longdesc": item["value"]})
-                    case "summaryorder":
-                        result.update({"summaryorder": item["value"], "state": int(item["state"])})
-                # Detect last iteration.
-                if all(key in result for key in ["shortdesc", "longdesc", "summaryorder", "state"]):
-                    self.insert.multi_column("summary", **result)
+            # Handle new items
+            if "new" in item_id:
+                # Check if we have the required fields
+                if "shortdesc" in data and "longdesc" in data:
+                    print(f"Creating new summary item with data: {data}")
+                    # Create a clean data dictionary for the insert
 
-            # Update summary.
+                    # Check if the form checkbox was checked (enabled state)
+                    # The form input name is typically "item_id_longdesc_enabled"
+                    checkbox_name = f"{item_id}_longdesc_enabled"
+                    is_enabled = checkbox_name in form_data and form_data[checkbox_name] == 'on'
+
+                    insert_data = {
+                        "shortdesc": data.get("shortdesc", ""),
+                        "longdesc": data.get("longdesc", ""),
+                        "summaryorder": data.get("summaryorder", 99),  # Default order
+                        "state": 1  # Always set to active (1) for new entries
+                    }
+
+                    # Insert the new record
+                    try:
+                        self.insert.multi_column("summary", **insert_data)
+                        print(f"Successfully created new summary item with state=1")
+                    except Exception as e:
+                        print(f"Error creating summary item: {e}")
+                else:
+                    print(f"Skipping incomplete new item: {data}")
+
+            # Handle updates to existing items
             else:
-                self.update.single_item("summary", item)
+                # Update each attribute individually
+                try:
+                    item_id_int = int(item_id)
+
+                    if "shortdesc" in data:
+                        self.update.single_item("summary", {
+                            "id": item_id_int,
+                            "attr": "shortdesc",
+                            "value": data["shortdesc"],
+                            "state": data.get("state", False)
+                        })
+
+                    if "longdesc" in data:
+                        self.update.single_item("summary", {
+                            "id": item_id_int,
+                            "attr": "longdesc",
+                            "value": data["longdesc"],
+                            "state": data.get("state", False)
+                        })
+
+                    print(f"Updated summary item: {item_id}")
+                except Exception as e:
+                    print(f"Error updating summary item {item_id}: {e}")
 
         return
 

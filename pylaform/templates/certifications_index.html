@@ -1,40 +1,103 @@
 {% extends "base.html" %}
 {% from "certifications_iter.html" import form_group with context %}
 {% block content %}
-    <div class="lead d-flex align-items-bottom justify-content-center">
-        <form method="post">
-            <!-- Iterate payload -->
-        {% for i in payload %}
-            {% if i.get("id") is not none and i.get("id") != "None" and i.get("id")|string != "None" %}
-                {{ form_group(i["id"], i["certification"], i["year"], i["state"]) }}
-            {% endif %}
-        {% endfor %}
-        <div id="newinput"></div>
-        <button id="rowAdder" type="button" class="btn btn-dark">
-                        <span class="bi bi-plus-square-dotted">
-                        </span> ADD
-                    </button>
-        <button type="submit" class="btn btn-success">
-                        <span class="bi bi-plus-square-dotted">
-                        </span> SUBMIT
-                    </button>
-        </form>
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="section-header">Certifications & Credentials</h1>
+            <p class="lead text-muted">
+                List your professional certifications, licenses, and credentials that demonstrate your expertise and qualifications.
+            </p>
+        </div>
     </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="h5 mb-0 text-primary">
+                            <i class="bi bi-award me-2"></i>My Certifications
+                        </h2>
+                        <div class="text-muted small">
+                            <i class="bi bi-info-circle me-1"></i>List certifications in order of relevance or recency
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" id="certificationsForm">
+                        <!-- Iterate payload -->
+                        {% for i in payload %}
+                            {% if i.get("id") is not none and i.get("id") != "None" and i.get("id")|string != "None" %}
+                                {{ form_group(i["id"], i["certification"], i["year"], i["state"]) }}
+                            {% endif %}
+                        {% endfor %}
+
+                        <div id="newinput"></div>
+
+                        <!-- Action buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <button id="rowAdder" type="button" class="btn btn-outline-primary">
+                                <i class="bi bi-plus-circle me-2"></i>Add Certification
+                            </button>
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-check-circle me-2"></i>Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Tips card -->
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body p-4">
+                    <h3 class="h5 text-primary mb-3">
+                        <i class="bi bi-lightbulb me-2"></i>Certification Tips
+                    </h3>
+                    <ul class="mb-0">
+                        <li class="mb-2">Include the full, official name of each certification</li>
+                        <li class="mb-2">List the year obtained to show currency of your credentials</li>
+                        <li class="mb-2">Prioritize industry-recognized certifications relevant to your target roles</li>
+                        <li class="mb-2">Include certifications even if they're slightly older if they're still valuable</li>
+                        <li>Consider grouping related certifications together in your resume</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 {% block scripts %}
-    <script type="text/javascript">
-        clicks = 0;
-        $("#rowAdder").click(function () {
-            clicks += 1;
-            $("#newinput").append("<hr>");
-            newRowAdd = `{{ form_group("new", "", "", true) }}`;
-            $("#newinput").append(newRowAdd);
-        });
-        $("body").on("click", "#deleteRow", function () {
-            div_id = $(this).closest("div").attr("id");
-            $("#" + div_id).remove();
-            $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-        });
-    </script>
-    {% include "_scripts.html" %}
+<script type="text/javascript">
+    // Counter for new items
+    let clicks = 0;
+
+    // Add new certification
+    $("#rowAdder").click(function () {
+        clicks += 1;
+        newRowAdd = `{{ form_group("new", "", "", true) }}`;
+        $("#newinput").append(newRowAdd);
+
+        // Smooth scroll to the new element
+        const newestElement = $('#newinput').children().last()[0];
+        if (newestElement) {
+            newestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
+
+    // Handle delete button clicks
+    $("body").on("click", "#deleteRow", function () {
+        const div_id = $(this).closest("div.card").attr("id");
+
+        // Confirm deletion
+        if (confirm("Are you sure you want to delete this certification?")) {
+            // Fade out the element before removing
+            $("#" + div_id).fadeOut(300, function() {
+                $(this).remove();
+                $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
+            });
+        }
+    });
+</script>
+{% include "_scripts.html" %}
 {% endblock %}

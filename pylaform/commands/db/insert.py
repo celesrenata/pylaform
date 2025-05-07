@@ -21,6 +21,8 @@ class Inserts:
         self.query = query.Queries()
         self.delete = delete.Deletes()
 
+    # In insert.py - Replace the multi_column method with this version
+    @retry(stop=(stop_after_delay(10)))
     def multi_column(self, table: str, **kwargs) -> None:
         """
         Takes kwargs and injects them into the database, supports nesting automatically.
@@ -29,55 +31,38 @@ class Inserts:
         :return None: None
         """
 
-        # Build the query.
-        keys = "(`" + "`, `".join([key.split("_")[-1] for key in list(kwargs.keys()) if key != "id"]) + "`)"
-        values = "VALUES ("
-        for i, value in enumerate(kwargs.values()):
-            if list(kwargs.keys())[i] == "id":
-                continue
+        # Remove any values that are None to avoid insertion issues
+        filtered_kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
-            # Handle None values properly by using NULL in SQL
-            if value is None:
-                values = values + "NULL, "
-            else:
-                try:
-                    values = values + f"{int(value)}, "
-                except (ValueError, TypeError):
-                    values = values + f"'{value}', "
+        # Build the query parts
+        columns = []
+        params = []
+        values = []
 
-        print(
-            f"""
-            INSERT INTO `{table}`
-            {keys}
-            {values[:-2]});
-            """)
-        response: Cursor = self.cursor.execute(
-            f"""
-            INSERT INTO `{table}`
-            {keys}
-            {values[:-2]});
-            """)
+        for key, value in filtered_kwargs.items():
+            # Extract column name (handle nested keys)
+            col_name = key.split('_')[-1]
+            columns.append(f"`{col_name}`")
+            params.append("?")
+            values.append(value)
 
-        # Commit changes.
-        self.conn.commit()
-        return
+        # Create and execute the parameterized query
+        query = f"""
+        INSERT INTO `{table}` ({', '.join(columns)})
+        VALUES ({', '.join(params)})
+        """
 
-        print(
-            f"""
-            INSERT INTO `{table}`
-            {keys}
-            {values[:-2]});
-            """)
-        response: Cursor = self.cursor.execute(
-            f"""
-            INSERT INTO `{table}`
-            {keys}
-            {values[:-2]});
-            """)
+        print(f"Insert query: {query}")
+        print(f"Values: {values}")
 
-        # Commit changes.
-        self.conn.commit()
-        return
+        try:
+            response = self.cursor.execute(query, values)
+            self.conn.commit()
+            print(f"Successfully inserted into {table}. Last row ID: {self.cursor.lastrowid}")
+            return self.cursor.lastrowid
+        except Exception as e:
+            print(f"Error inserting into {table}: {e}")
+            raise
 
     def single_item(self, table: str, item: dict[str, str | int | bool], nested: bool = False) -> None:
         """

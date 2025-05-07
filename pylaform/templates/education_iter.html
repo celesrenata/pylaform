@@ -1,4 +1,5 @@
 {% from "_dropdown.html" import drop_down with context %}
+{% from "_date_picker.html" import date_picker with context %}
 {% macro form_group(payload, ddpayload, schoolid, schoolname, location, schoolstate, focusid, focusname, startdate, enddate, focusstate, hidden=True, school_dropdown_value=None, focus_dropdown_value=None) %}
     {# If adding a new row, allow for unique IDs #}
     {% if schoolid == "new" %}
@@ -6,86 +7,171 @@
         {% set focusid = "new" %}
     {% endif %}
 
-    <div id="{{ focusid }}" class="container align-items-center form-group">
-        <input type="hidden" name="{{ focusid }}_rowid" value="{{ schoolid }}">
-        <table>
-            <tr>
-                <td>
-                    {{ drop_down(
-                        focusid,
-                        payload,
-                        ddpayload,
-                        "school",
-                        primarybyname=True,
-                        selected_value=school_dropdown_value if school_dropdown_value is not none else schoolid
-                    ) }}
-                    <br>
-                    <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}"
-                         id="{{ focusid }}_school_div">
-                        <label for="{{ focusid }}_school_name">School Name:</label>
-                        <br>
-                        <input type="text" name="{{ focusid }}_school_name" id="{{ focusid }}_school_name"
-                               value="{{ schoolname if schoolname is defined else "" }}"
-                               onfocusout="commit_value('{{ focusid }}_school');"
-                               data-school-name="{{ schoolname if schoolname is defined else '' }}">
-                        <br>
-                        <label for="{{ focusid }}_school_location">School Location:</label>
-                        <br>
-                        <input type="text" name="{{ focusid }}_school_location" id="{{ focusid }}_school_location"
-                               value="{{ location if location is defined else "" }}"
-                               onfocusout="commit_value('{{ focusid }}_school_location');"
-                               data-school-location="{{ location if location is defined else '' }}">
+    <div id="{{ focusid }}" class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <input type="hidden" name="{{ focusid }}_rowid" value="{{ schoolid }}">
+
+            <div class="row g-4">
+                <!-- School Information Section -->
+                <div class="col-md-6">
+                    <div class="card h-100 bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-buildings me-2"></i>Institution
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                {{ drop_down(
+                                    focusid,
+                                    payload,
+                                    ddpayload,
+                                    "school",
+                                    primarybyname=True,
+                                    selected_value=school_dropdown_value if school_dropdown_value is not none else schoolid
+                                ) }}
+                            </div>
+
+                            <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}"
+                                 id="{{ focusid }}_school_div">
+                                <div class="mb-3">
+                                    <label for="{{ focusid }}_school_name" class="form-label fw-medium">
+                                        <i class="bi bi-mortarboard-fill me-2"></i>School Name
+                                    </label>
+                                    <input type="text"
+                                           name="{{ focusid }}_school_name"
+                                           id="{{ focusid }}_school_name"
+                                           class="form-control bg-white"
+                                           value="{{ schoolname if schoolname is defined else '' }}"
+                                           onfocusout="commit_value('{{ focusid }}_school');"
+                                           data-school-name="{{ schoolname if schoolname is defined else '' }}"
+                                           placeholder="Enter school or university name">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ focusid }}_school_location" class="form-label fw-medium">
+                                        <i class="bi bi-geo-alt-fill me-2"></i>Location
+                                    </label>
+                                    <input type="text"
+                                           name="{{ focusid }}_school_location"
+                                           id="{{ focusid }}_school_location"
+                                           class="form-control bg-white"
+                                           value="{{ location if location is defined else '' }}"
+                                           onfocusout="commit_value('{{ focusid }}_school_location');"
+                                           data-school-location="{{ location if location is defined else '' }}"
+                                           placeholder="City, State/Province, Country">
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mt-3">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       role="switch"
+                                       name="{{ focusid }}_school_enabled"
+                                       id="{{ focusid }}_school_enabled"
+                                       {{ "checked" if schoolstate }}
+                                       data-school-state="{{ schoolstate }}">
+                                <label class="form-check-label" for="{{ focusid }}_school_enabled">
+                                    Display this institution
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                    <label for="{{ focusid }}_school_enabled">Displayed:</label>
-                    <input type="checkbox" name="{{ focusid }}_school_enabled" id="{{ focusid }}_school_enabled"
-                            {{ "checked" if schoolstate }} data-school-state="{{ schoolstate }}">
-                </td>
-                <td class="align-items-center">
-                    {{ drop_down(
-                        focusid,
-                        payload,
-                        ddpayload,
-                        "school",
-                        secondary="focus",
-                        secondaryid=focusid,
-                        secondarybyname=True,
-                        selected_value=focus_dropdown_value if focus_dropdown_value is not none else focusid
-                    ) }}
-                    <br>
-                    <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ focusid }}_focus_div">
-                        <label for="{{ focusid }}_focus_name">Focus Name:</label>
-                        <br>
-                        <input type="text" name="{{ focusid }}_focus_name" id="{{ focusid }}_focus_name"
-                               value="{{ focusname if focusname is defined else "" }}"
-                               onfocusout="commit_value('{{ focusid }}_school');"
-                               data-focus-name="{{ focusname if focusname is defined else '' }}">
+                </div>
+
+                <!-- Degree/Focus Information Section -->
+                <div class="col-md-6">
+                    <div class="card h-100 bg-light border-0">
+                        <div class="card-header bg-primary bg-opacity-10 border-0">
+                            <h3 class="h6 mb-0 text-primary">
+                                <i class="bi bi-journal-text me-2"></i>Degree or Area of Study
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                {{ drop_down(
+                                    focusid,
+                                    payload,
+                                    ddpayload,
+                                    "school",
+                                    secondary="focus",
+                                    secondaryid=focusid,
+                                    secondarybyname=True,
+                                    selected_value=focus_dropdown_value if focus_dropdown_value is not none else focusid
+                                ) }}
+                            </div>
+
+                            <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ focusid }}_focus_div">
+                                <div class="mb-3">
+                                    <label for="{{ focusid }}_focus_name" class="form-label fw-medium">
+                                        <i class="bi bi-award me-2"></i>Degree/Major
+                                    </label>
+                                    <input type="text"
+                                           name="{{ focusid }}_focus_name"
+                                           id="{{ focusid }}_focus_name"
+                                           class="form-control bg-white"
+                                           value="{{ focusname if focusname is defined else '' }}"
+                                           onfocusout="commit_value('{{ focusid }}_school');"
+                                           data-focus-name="{{ focusname if focusname is defined else '' }}"
+                                           placeholder="Bachelor of Science in Computer Science">
+                                    <div class="form-text text-muted">
+                                        Include the full degree name and field of study
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    {{ date_picker(
+                                        focusid + "_focus_startdate",
+                                        "Start Date",
+                                        icon="calendar-event",
+                                        value=startdate if startdate is defined else "",
+                                        placeholder="MM/YYYY",
+                                        help_text="When you began this program"
+                                    ) }}
+                                </div>
+                                <div class="col-6">
+                                    {{ date_picker(
+                                        focusid + "_focus_enddate",
+                                        "End Date",
+                                        icon="calendar-check",
+                                        value=enddate if enddate is defined else "",
+                                        placeholder="MM/YYYY",
+                                        help_text="When you completed or expect to complete",
+                                        include_present=true
+                                    ) }}
+                                </div>
+                            </div>
+
+                            <div class="form-check form-switch mt-3">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       role="switch"
+                                       name="{{ focusid }}_focus_enabled"
+                                       id="{{ focusid }}_focus_enabled"
+                                       {{ "checked" if focusstate }}
+                                       data-focus-state="{{ focusstate }}">
+                                <label class="form-check-label" for="{{ focusid }}_focus_enabled">
+                                    Display this degree/major
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                    <label for="{{ focusid }}_focus_enabled">Displayed:</label>
-                    <input type="checkbox" name="{{ focusid }}_focus_enabled" id="{{ focusid }}_focus_enabled"
-                            {{ "checked" if focusstate }} data-focus-state="{{ focusstate }}">
-                </td>
-                <td>
-                    <label for="{{ focusid }}_startdate">Start Date:</label>
-                    <br>
-                    <input type="text" name="{{ focusid }}_focus_startdate" id="{{ focusid }}_focus_startdate"
-                           value="{{ startdate if startdate is defined else "" }}"
-                           data-start-date="{{ startdate if startdate is defined else '' }}">
-                    <br>
-                    <label for="{{ focusid }}_enddate">End Date:</label>
-                    <br>
-                    <input type="text" name="{{ focusid }}_focus_enddate" id="{{ focusid }}_focus_enddate"
-                           value="{{ enddate if enddate is defined else "" }}"
-                           data-end-date="{{ enddate if enddate is defined else '' }}">
-                </td>
-                <td>
-                    <button class="btn btn-danger"
-                            id="deleteRow"
-                            type="button">
-                        <i class="bi bi-trash"></i>
-                        Delete
+                </div>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div class="row mt-3">
+                <div class="col-12 d-flex justify-content-end">
+                    <button class="btn btn-outline-secondary me-2 rowEditor" type="button">
+                        <i class="bi bi-pencil-square"></i> Edit
                     </button>
-                </td>
-            </tr>
-        </table>
+                    <button class="btn btn-outline-danger" id="deleteRow" type="button">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 {%- endmacro %}

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="section-header">Customized Resume Preview</h1>
+            <p class="lead text-muted">Review and select the AI-generated content for your customized resume</p>
+        </div>
+    </div>
+
+    <!-- Job Analysis Card -->
+    {% if job_analysis and (job_analysis.skills or job_analysis.requirements or job_analysis.priorities) %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="h5 mb-0">
+                            <i class="bi bi-search me-2"></i>Job Analysis: {{ career_title }}
+                        </h2>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        {% if job_analysis.skills %}
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <h3 class="h6 text-primary mb-2">
+                                <i class="bi bi-check2-square me-2"></i>Key Skills
+                            </h3>
+                            <ul class="list-group list-group-flush bg-light">
+                                {% for skill in job_analysis.skills %}
+                                <li class="list-group-item bg-light px-0 py-1 border-0">
+                                    <small><i class="bi bi-chevron-right text-primary me-1"></i>{{ skill }}</small>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if job_analysis.requirements %}
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <h3 class="h6 text-primary mb-2">
+                                <i class="bi bi-clipboard-check me-2"></i>Requirements
+                            </h3>
+                            <ul class="list-group list-group-flush bg-light">
+                                {% for req in job_analysis.requirements %}
+                                <li class="list-group-item bg-light px-0 py-1 border-0">
+                                    <small><i class="bi bi-chevron-right text-primary me-1"></i>{{ req }}</small>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if job_analysis.priorities %}
+                        <div class="col-md-4">
+                            <h3 class="h6 text-primary mb-2">
+                                <i class="bi bi-star me-2"></i>Priorities
+                            </h3>
+                            <ul class="list-group list-group-flush bg-light">
+                                {% for priority in job_analysis.priorities %}
+                                <li class="list-group-item bg-light px-0 py-1 border-0">
+                                    <small><i class="bi bi-chevron-right text-primary me-1"></i>{{ priority }}</small>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>This analysis helps tailor your resume to highlight the most relevant qualifications.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="h5 mb-0 text-primary">
+                            <i class="bi bi-eye me-2"></i>Preview for: {{ career_title }}
+                        </h2>
+                        <div>
+                            <button id="acceptAllBtn" class="btn btn-sm btn-success me-2">
+                                <i class="bi bi-check-circle me-1"></i>Accept All
+                            </button>
+                            <button id="rejectAllBtn" class="btn btn-sm btn-danger">
+                                <i class="bi bi-x-circle me-1"></i>Reject All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" id="customizeApplyForm" action="/apply_customization">
+                        <input type="hidden" name="career_title" value="{{ career_title }}">
+
+                        {% if customized_sections.summary %}
+                        <div class="mb-5">
+                            <h3 class="h5 border-bottom pb-2 mb-3">Professional Summary</h3>
+
+                            {% for item in customized_sections.summary %}
+                            <div class="card mb-3 border-0 shadow-sm">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-5">
+                                            <h4 class="h6 mb-2">Original</h4>
+                                            <div class="bg-light p-3 rounded">
+                                                <p class="mb-1 fw-medium">{{ item.original.shortdesc }}</p>
+                                                <p class="mb-0 small">{{ item.original.longdesc }}</p>
+                                            </div>
+                                            <input type="hidden" name="summary_{{ item.id }}_original_id" value="{{ item.original.id }}">
+                                            <input type="hidden" name="summary_{{ item.id }}_original_shortdesc" value="{{ item.original.shortdesc }}">
+                                            <input type="hidden" name="summary_{{ item.id }}_original_longdesc" value="{{ item.original.longdesc }}">
+                                        </div>
+                                        <div class="col-md-5">
+                                            <h4 class="h6 mb-2">Customized</h4>
+                                            <div class="bg-primary bg-opacity-10 p-3 rounded">
+                                                <p class="mb-1 fw-medium">{{ item.customized.shortdesc }}</p>
+                                                <p class="mb-0 small">{{ item.customized.longdesc }}</p>
+                                            </div>
+                                            <input type="hidden" name="summary_{{ item.id }}_customized_shortdesc" value="{{ item.customized.shortdesc }}">
+                                            <input type="hidden" name="summary_{{ item.id }}_customized_longdesc" value="{{ item.customized.longdesc }}">
+                                        </div>
+                                        <div class="col-md-2 d-flex align-items-center justify-content-center">
+                                            <div class="btn-group" role="group">
+                                                <input type="radio" class="btn-check" name="summary_{{ item.id }}_action" id="summary_{{ item.id }}_accept" value="accept" autocomplete="off">
+                                                <label class="btn btn-outline-success" for="summary_{{ item.id }}_accept">
+                                                    <i class="bi bi-check"></i>
+                                                </label>
+
+                                                <input type="radio" class="btn-check" name="summary_{{ item.id }}_action" id="summary_{{ item.id }}_reject" value="reject" autocomplete="off" checked>
+                                                <label class="btn btn-outline-danger" for="summary_{{ item.id }}_reject">
+                                                    <i class="bi bi-x"></i>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Similar blocks for skills, employment, etc. would be here -->
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="/career_customize" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Back to Customization
+                            </a>
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-save me-2"></i>Apply Selected Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript">
+    $(function() {
+        // Accept all changes
+        $("#acceptAllBtn").click(function(e) {
+            e.preventDefault();
+            $("input[value='accept']").prop("checked", true);
+        });
+
+        // Reject all changes
+        $("#rejectAllBtn").click(function(e) {
+            e.preventDefault();
+            $("input[value='reject']").prop("checked", true);
+        });
+    });
+</script>
+{% include "_scripts.html" %}
+{% endblock %}
