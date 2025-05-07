@@ -1086,6 +1086,11 @@ class Common:
 
         # Add education entries to document
         for school_id, school in schools.items():
+            # Skip schools without focuses
+            if not school["focuses"]:
+                print(f"Skipping school {school_id} as it has no focuses")
+                continue
+
             schools_added += 1
             # Extract just the numeric part of the school_id if it's in the format "school_X"
             school_id_numeric = school_id.split('_')[1] if '_' in school_id else school_id
@@ -1106,49 +1111,46 @@ class Common:
             print(f"Added school to document: {school_name}")
 
             # Add focuses/majors without bullets and no indent
-            if school["focuses"]:
-                for focus in school["focuses"]:
-                    focuses_added += 1
-                    # Safely handle special characters in focus name
-                    focus_name = focus["name"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
+            for focus in school["focuses"]:
+                focuses_added += 1
+                # Safely handle special characters in focus name
+                focus_name = focus["name"].replace("&", r"\&").replace("_", r"\_").replace("%", r"\%")
 
-                    # Format date string with month names
-                    date_str = ""
-                    if focus["startdate"] or focus["enddate"]:
-                        if focus["startdate"]:
-                            try:
-                                formatted_start = self.cmd.format_date(focus["startdate"])
-                                date_str += formatted_start
-                            except:
-                                date_str += focus["startdate"]
+                # Format date string with month names
+                date_str = ""
+                if focus["startdate"] or focus["enddate"]:
+                    if focus["startdate"]:
+                        try:
+                            formatted_start = self.cmd.format_date(focus["startdate"])
+                            date_str += formatted_start
+                        except:
+                            date_str += focus["startdate"]
 
-                        date_str += " - "
+                    date_str += " - "
 
-                        if focus["enddate"]:
-                            try:
-                                formatted_end = self.cmd.format_date(focus["enddate"])
-                                date_str += formatted_end
-                            except:
-                                date_str += focus["enddate"]
-                        else:
-                            date_str += "Present"
-
-                    # Add focus with date - directly with no indentation or bullets
-                    if date_str:
-                        # Create a paragraph with the focus that ensures it's on a new line
-                        latex_line = r"{\em " + focus_name + r"}\hfill\textbf{" + date_str + r"}"
-                        doc.append(NoEscape(latex_line))
-                        # Add a line break after each focus
-                        doc.append(NoEscape(r"\\"))
-                        print(f"Added focus with formatted date: {focus_name} ({date_str})")
+                    if focus["enddate"]:
+                        try:
+                            formatted_end = self.cmd.format_date(focus["enddate"])
+                            date_str += formatted_end
+                        except:
+                            date_str += focus["enddate"]
                     else:
-                        latex_line = r"{\em " + focus_name + r"}"
-                        doc.append(NoEscape(latex_line))
-                        # Add a line break after each focus
-                        doc.append(NoEscape(r"\\"))
-                        print(f"Added focus without date: {focus_name}")
-            else:
-                print(f"WARNING: No focuses found for school {school_id}")
+                        date_str += "Present"
+
+                # Add focus with date - directly with no indentation or bullets
+                if date_str:
+                    # Create a paragraph with the focus that ensures it's on a new line
+                    latex_line = r"{\em " + focus_name + r"}\hfill\textbf{" + date_str + r"}"
+                    doc.append(NoEscape(latex_line))
+                    # Add a line break after each focus
+                    doc.append(NoEscape(r"\\"))
+                    print(f"Added focus with formatted date: {focus_name} ({date_str})")
+                else:
+                    latex_line = r"{\em " + focus_name + r"}"
+                    doc.append(NoEscape(latex_line))
+                    # Add a line break after each focus
+                    doc.append(NoEscape(r"\\"))
+                    print(f"Added focus without date: {focus_name}")
 
             # Add school achievements if any
             if school_id_numeric in school_achievements and school_achievements[school_id_numeric]:
