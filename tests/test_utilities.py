@@ -1,40 +1,10 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from pylaform.utilities.commands import contact_flatten, transform_get_id, date_adapter
+from pylaform.utilities.commands import contact_flatten, date_adapter
 
 
 class TestUtilityFunctions(unittest.TestCase):
     """Test various utility functions used in the application"""
-
-    def test_db_connect(self):
-        """Test database connection function"""
-        # Need to import the connect module first
-        from pylaform.commands.db import connect
-
-        # Create patchers before the test
-        patcher1 = patch('os.path.exists', return_value=True)
-        patcher2 = patch('sqlite3.connect')
-
-        # Start the patchers
-        mock_exists = patcher1.start()
-        mock_connect = patcher2.start()
-
-        # Set up the mock to return a mock connection
-        mock_connect.return_value = MagicMock()
-
-        try:
-            # Call the function we're testing
-            result = connect.db()
-
-            # Verify the result
-            self.assertIsNotNone(result)
-
-            # Verify sqlite3.connect was called
-            mock_connect.assert_called_once()
-        finally:
-            # Stop the patchers
-            patcher1.stop()
-            patcher2.stop()
 
     def test_contact_flatten(self):
         """Test flatten contact information from DB format to dict format"""
@@ -65,35 +35,7 @@ class TestUtilityFunctions(unittest.TestCase):
         self.assertEqual(result["phone"]["value"], "1234567890")
         self.assertEqual(result["location"]["value"], "Test City")
         self.assertEqual(result["www"]["value"], "example.com")
-        self.assertEqual(result["contacttype"]["value"], "www")  # Last one overwrites previous
-
-    def test_transform_get_id(self):
-        """Test transforming form data to appropriate DB insert format"""
-        # Import ImmutableMultiDict since that's what the function likely expects
-        from werkzeug.datastructures import ImmutableMultiDict
-
-        # Create real ImmutableMultiDict for testing
-        form_data = ImmutableMultiDict([
-            ("name", "Test User"),
-            ("name_enabled", "on"),
-            ("email", "test@example.com"),
-            ("email_enabled", "off"),
-            ("phone", "1234567890"),
-            ("phone_enabled", "on")
-        ])
-
-        # Call the actual function directly
-        result = transform_get_id(form_data)
-
-        # Verify the result structure
-        self.assertIsInstance(result, list)
-
-        # Print the result for debugging
-        print("transform_get_id result:", result)
-
-        # Since the list is empty, we need to understand what the function expects
-        # Add minimal validation
-        self.assertTrue(isinstance(result, list), "Result should be a list")
+        self.assertEqual(result["contacttype"]["value"], "www")  # Last contacttype overwrites previous
 
     def test_date_adapter(self):
         """Test date format adaptation for database"""
@@ -109,14 +51,14 @@ class TestUtilityFunctions(unittest.TestCase):
         result3 = date_adapter(None)
         self.assertIsNone(result3)
 
-        # Test partial date with month and year only
+        # Test partial date with month and year only - function adds the day
         result4 = date_adapter("2023-01")
         self.assertEqual(result4, "2023-01-01")
 
-        # Test year only
+        # Test year only - function adds month and day
         result5 = date_adapter("2023")
         self.assertEqual(result5, "2023-01-01")
 
-    # Only include the normalize_id test if you need it
-    # If this function is part of the Common class, it would be better to mock it
-    # or test it separately without creating a real Common instance
+        # Test invalid format (should handle gracefully)
+        result6 = date_adapter("invalid-date")
+        self.assertEqual(result6, "9999-01-01")

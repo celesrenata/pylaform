@@ -196,6 +196,7 @@ class PylaformTestCase(unittest.TestCase):
 
         # Check that it has the expected structure based on the actual API response
         self.assertIn('status', data)
+        # Models might be empty in testing, so we just check the field exists
         self.assertIn('models', data)
 
 

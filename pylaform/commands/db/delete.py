@@ -62,6 +62,27 @@ class Deletes:
         return
 
     @retry(stop=(stop_after_delay(10)))
+    def row(self, target_table: str, target_id: int) -> None:
+        """
+        Deletes a row from the specified table with the given ID.
+
+        :param target_table: The table to delete from
+        :param target_id: The ID of the row to delete
+        :return: None
+        """
+        self.cursor.execute(
+            f"""
+            DELETE FROM {target_table}
+            WHERE `id` = ?
+            """, (target_id,)
+        )
+
+        # Commit changes
+        self.conn.commit()
+
+        return None
+
+    @retry(stop=(stop_after_delay(10)))
     def delete_target(self, target_id: str, target_table: str) -> None:
         """
         Deletes target.

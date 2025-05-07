@@ -137,39 +137,65 @@ def transform_get_id(form_data: ImmutableMultiDict) -> list[dict[str, str | bool
     Transforms data by stripping id data and creating a new dictionary field for nested and regular items.
     Used for DB actions: INSERT INTO, DELETE FROM, UPDATE.
     :param ImmutableMultiDict form_data: Data response from templates.
-    :return list:
+    :return list: List of dictionaries with standardized structure.
     """
-
     result: list[dict[str, str | bool]] = []
     item_count = sum('_dropdown' in key for key in list(form_data))
 
+    # First pass: Process and transform each form item
     for item in form_data:
         item_split = str(item).split("_")
-        if "dropdown" in item_split[-1]:
-            result.append(
-                {"id": item_split[0], "attr": item_split[1] + "_dropdown", "value": form_data[item], "state": False})
-        elif "enabled" in item_split[-1]:
-            result.append(
-                {"id": item_split[0], "attr": item_split[1] + "_enabled", "value": bool(form_data[item]), "state": False})
-        elif len(item_split) < 3:
-            result.append({"id": item_split[0], "attr": item_split[1], "value": form_data[item], "state": False})
-        else:
-            result.append({"id": item_split[0], "attr": "_".join(item_split[-2:]), "value": form_data[item], "state": False})
 
+        # Handle keys with no underscore
+        if len(item_split) == 1:
+            result.append({
+                "id": "0",
+                "attr": item,
+                "value": form_data[item],
+                "state": False
+            })
+            continue
+
+        # Handle items with at least one underscore
+        if "dropdown" in item_split[-1]:
+            result.append({
+                "id": item_split[0],
+                "attr": item_split[1] + "_dropdown",
+                "value": form_data[item],
+                "state": False
+            })
+        elif "enabled" in item_split[-1]:
+            # For enabled items, use the first part as ID and full attr name
+            result.append({
+                "id": item_split[0],
+                "attr": "_".join(item_split[1:]),
+                "value": bool(form_data[item]),
+                "state": False
+            })
+        elif len(item_split) < 3:
+            result.append({
+                "id": item_split[0],
+                "attr": item_split[1],
+                "value": form_data[item],
+                "state": False
+            })
+        else:
+            result.append({
+                "id": item_split[0],
+                "attr": "_".join(item_split[1:]),
+                "value": form_data[item],
+                "state": False
+            })
+
+    # Second pass: Update state based on enabled flags
     for item in form_data:
         item_split = str(item).split("_")
-        if item_split[-1] == "enabled":
-            if item_count > 1:
-                indexes = find_nested_indexes(result, ['id', 'attr'], [item_split[0], item_split[1]])
-                if len(indexes) > 0:
-                    if item_split[0] + "_" + item_split[1] in item:
-                        for index in indexes:
-                            result[index].update({"state": True})
-            else:
-                indexes = find_nested_indexes(result, 'id', item_split[0])
-                if len(indexes) > 0:
-                    for index in indexes:
-                        result[index].update({"state": True})
+        if len(item_split) >= 2 and item_split[-1] == "enabled" and form_data[item]:
+            # If this is an enabled field and it's turned on
+            for entry in result:
+                # Match by id and update state
+                if entry["id"] == item_split[0]:
+                    entry["state"] = True
 
     return result
 
@@ -226,11 +252,24 @@ def date_adapter(value: str) -> str:
     :return str: YYYY-MM-DD only
     """
 
+    # Handle None value
+    if value is None:
+        return None
+
     # TODO: Add present checkbox to academic and employment templates.
     result: str = value
     if value == "":
         result = "9999-01-01"
-    if value == "hidden":
+    elif value == "hidden":
         result = "0001-01-01"
+    # Handle partial dates (YYYY-MM) - convert to expected format
+    elif len(value) == 7 and value[4] == '-':
+        result = f"{value}-01"
+    # Handle year only (YYYY)
+    elif len(value) == 4 and value.isdigit():
+        result = f"{value}-01-01"
+    # Handle invalid dates gracefully
+    elif not (len(value) == 10 and value[4] == '-' and value[7] == '-'):
+        result = "9999-01-01"  # Use same value as empty string for invalid input
 
     return result

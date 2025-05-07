@@ -13,6 +13,6 @@ def db() -> sqlite3.Connection:
         try:
             shutil.copyfile(os.path.join(path, 'pylaform/resources/resume.db'), os.path.join(path, 'data/resume.db'))
         except Exception as e:
-            raise f"Do you have write permissions for the container? Error: {e}"
+            raise RuntimeError(f"Do you have write permissions for the container? Error: {e}")
 
     return sqlite3.connect(os.path.join(path, "data/resume.db"), check_same_thread=False)
