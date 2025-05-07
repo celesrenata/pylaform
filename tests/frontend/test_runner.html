@@ -1,0 +1,86 @@
+<!-- tests/frontend/test.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Pylaform Frontend Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha/mocha.css" />
+</head>
+<body>
+    <div id="mocha"></div>
+
+    <!-- Load testing libraries -->
+    <script src="https://unpkg.com/chai/chai.js"></script>
+    <script src="https://unpkg.com/mocha/mocha.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- Load test fixtures -->
+    <div id="test-fixtures" style="display: none;">
+        <!-- AI Helper -->
+        <div class="ai-helper-fixture">
+            <div class="ai-helper-footer">
+                <div class="ai-helper-toggle">
+                    <div>
+                        <i class="bi bi-cpu ai-icon"></i>
+                        <span>AI Resume Helper</span>
+                    </div>
+                    <div class="arrow">
+                        <i class="bi bi-chevron-up"></i>
+                    </div>
+                </div>
+                <div class="ai-helper-content">
+                    <div class="ai-helper-options">
+                        <div class="ai-helper-option" data-type="tenet">Core Principle/Tenet</div>
+                        <div class="ai-helper-option" data-type="list">Convert to List</div>
+                        <div class="ai-helper-option" data-type="sentence_restructure">Restructure Sentence</div>
+                        <div class="ai-helper-option" data-type="sentence_summarization">Summarize</div>
+                    </div>
+                    <div class="form-group ai-helper-input">
+                        <textarea class="form-control" id="ai-text-input"></textarea>
+                    </div>
+                    <button id="ai-submit" class="btn btn-primary" disabled>Improve Text</button>
+                    <div class="ai-helper-loading" style="display: none;">Processing...</div>
+                    <div class="ai-helper-result" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Achievements -->
+        <div class="achievements-fixture">
+            <div id="test-row">
+                <select id="test-row_employer_dropdown">
+                    <option value="emp1" data-org-type="employer">Employer 1</option>
+                    <option value="emp2" data-org-type="employer">Employer 2</option>
+                    <option value="school1" data-org-type="school">School 1 (College)</option>
+                </select>
+                <input type="hidden" id="test-row_employer" value="">
+                <input type="hidden" id="test-row_employer_type" value="">
+
+                <select id="test-row_position_dropdown">
+                </select>
+                <input type="hidden" id="test-row_position" value="">
+                <input type="hidden" id="test-row_position_type" value="">
+
+                <button id="deleteRow">Delete</button>
+            </div>
+            <div id="newinput"></div>
+            <button id="rowAdder">ADD</button>
+        </div>
+    </div>
+
+    <!-- Initialize Mocha -->
+    <script>
+        mocha.setup('bdd');
+        const expect = chai.expect;
+    </script>
+
+    <!-- Load your test scripts -->
+    <script src="ai_helper.test.js"></script>
+    <script src="achievements.test.js"></script>
+
+    <!-- Run the tests -->
+    <script>
+        mocha.run();
+    </script>
+</body>
+</html>
