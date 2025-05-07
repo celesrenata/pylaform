@@ -72,20 +72,26 @@ def ai_status():
 @app.route('/api/test-ai-connection', methods=['POST'])
 def test_ai_connection():
     from pylaform.services.ai_service import OllamaService
+    import traceback
 
-    # Get request data
-    data = request.json
-    host = data.get('host', 'localhost')
-    port = data.get('port', '11434')
-    model = data.get('model', 'gemma3:1b')
+    try:
+        # Get request data
+        data = request.json
+        host = data.get('host', 'localhost')
+        port = data.get('port', '11434')
+        model = data.get('model', 'gemma3:1b')
 
-    # Create Ollama service with provided configuration
-    ollama_service = OllamaService(host=host, port=port, model=model)
+        # Create Ollama service with provided configuration
+        ollama_service = OllamaService(host=host, port=port, model=model)
 
-    # Test connection
-    result = ollama_service.test_connection()
+        # Test connection
+        result = ollama_service.test_connection()
 
-    return jsonify(result)
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error testing connection: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/download-model', methods=['POST'])
 def download_model():
@@ -725,4 +731,4 @@ def api_delete():
         return jsonify({"success": False, "error": "Failed to delete entry"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False)
+    app.run(debug=True, use_reloader=False, host='0.0.0.0')

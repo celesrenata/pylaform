@@ -12,7 +12,8 @@ class TestAIService(unittest.TestCase):
 
     def setUp(self):
         """Set up test environment"""
-        self.service = OllamaService(base_url="http://test-ollama-server:11434")
+        # Use host and port instead of base_url
+        self.service = OllamaService(host="test-ollama-server", port="11434")
         self.service.model = "test-model"
 
     @patch('requests.post')

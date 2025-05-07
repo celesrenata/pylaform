@@ -8,12 +8,6 @@ services:
       - "11434:11434"
     volumes:
       - ollama-data:/root/.ollama
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
     restart: unless-stopped
     networks:
       - resume-network
@@ -24,17 +18,17 @@ services:
       dockerfile: Dockerfile
     container_name: resume-service
     ports:
-      - "8080:5000"
+      - "5000:5000"
     environment:
       - FLASK_APP=app.py
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=llama3.2:1b
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
+      - OLLAMA_MODEL=gemma3:1b
     volumes:
       - ./data:/app/data
       - ./resources:/app/resources
     depends_on:
-      ollama:
-        condition: service_healthy
+      - ollama
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/ || exit 1"]
       interval: 30s
@@ -46,12 +40,12 @@ services:
     command: >
       sh -c "
         echo 'Waiting for Ollama to be ready...' &&
-        until curl -s http://ollama:11434/api/health > /dev/null 2>&1; do
+        until curl -s http://ollama:11434/api/tags > /dev/null 2>&1; do
           echo 'Waiting for Ollama...'
           sleep 5
         done &&
         echo 'Downloading model...' &&
-        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"llama3.2:1b\"}' &&
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"gemma3:1b\"}' &&
         echo 'Starting application...' &&
         python app.py
       "

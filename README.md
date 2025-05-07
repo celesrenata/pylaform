@@ -78,7 +78,7 @@ The AI resume helper is an optional feature that can improve your resume content
 3. Configure Ollama:
    - Enable AI Features toggle
    - Set Ollama Server URL (default: http://localhost:11434)
-   - Choose a model (e.g., llama3.2:1b)
+   - Choose a model (e.g., gemma3:1b)
    - Click "Save Settings"
 
 ### Setting up Ollama (optional)
