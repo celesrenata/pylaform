@@ -26,7 +26,6 @@ services:
       - OLLAMA_MODEL=gemma3:1b
     volumes:
       - ./data:/app/data
-      - ./resources:/app/resources
     depends_on:
       - ollama
     healthcheck:

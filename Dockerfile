@@ -15,7 +15,6 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p data resources pylaform
 
 # Copy application code (excluding requirements.txt for now)
-COPY resources resources
 COPY app.py app.py
 COPY pylaform pylaform
 
