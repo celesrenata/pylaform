@@ -1,5 +1,5 @@
 import os
-from flask import redirect, session, request, url_for, flash, render_template, Flask, jsonify
+from flask import redirect, session, request, url_for, flash, render_template, Flask, jsonify, send_file
 import requests
 import logging
 from pylaform.services.proxycurl_service import ProxycurlService
@@ -9,19 +9,14 @@ from pylaform.commands.templateWorker import Worker
 from pylaform.latex_templates import hybrid, onePage
 from pylaform.utilities.commands import fatten, listify, date_adapter
 from pylaform.services.ai_service import OllamaService
+from pylaform.services import ai_service
+from pylaform.services import config_service
 from pylaform.services.config_service import ConfigService
 from pylaform.routes.linkedin_routes import linkedin_bp
-
-# Add or update this near the top of app.py, before the Flask app is created
-import logging
 
 # Near the top of app.py, add import
 import sqlite3
 from flask import flash
-
-# After the imports and before creating app instance
-# Set up logging
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +31,7 @@ if not os.path.exists(data_dir):
     except Exception as e:
         logger.error(f"Failed to create data directory: {e}")
 
+uploads = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 # Create the Flask application
 app = Flask(__name__, template_folder='pylaform/templates', static_folder='pylaform/static')
@@ -102,17 +98,14 @@ def get_ollama_service():
 
 @app.route("/api/ai-status", methods=["GET"])
 def ai_status():
-    """Check if the Ollama service is available"""
     try:
-        # Simple health check
-        response = requests.get(f"{ai_service.base_url}/api/tags")
-        if response.status_code == 200:
-            return jsonify({"status": "ok", "models": response.json().get("models", [])})
-        else:
-            return jsonify({"status": "error", "message": f"Ollama returned status code {response.status_code}"})
+        # Create an instance of the OllamaService
+        ollama = ai_service.OllamaService()
+        # Get the status from the service
+        status = ollama.get_status()
+        return jsonify(status)
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
+        return jsonify({"status": "error", "models": [], "message": str(e)})
 
 @app.route('/api/test-ai-connection', methods=['POST'])
 def test_ai_connection():
@@ -182,32 +175,22 @@ def get_model_status():
 
     return jsonify(result)
 
+
 @app.route('/api/improve-text', methods=['POST'])
 def improve_text():
-    # Get AI configuration
-    ai_config = config_service.get_ai_config()
-
-    # Check if AI is enabled
-    if not ai_config.get('enabled', False):
-        return jsonify({"error": "AI features are not enabled. Please enable them in AI Configuration."})
-
-    # Get the Ollama service with current configuration
-    ollama_service = get_ollama_service()
-
-    # Process the improvement request
+    # Get the request data
     data = request.json
     text = data.get('text', '')
-    improvement_type = data.get('type', '')
+    improvement_type = data.get('type', 'general')
 
-    # Validate input
-    if not text or not improvement_type:
-        return jsonify({"error": "Missing text or improvement type"})
-
-    # Generate improvement
-    result = ollama_service.generate_improvement(text, improvement_type)
-
-    return jsonify(result)
-
+    try:
+        # Create an instance of the OllamaService
+        ollama_service = ai_service.OllamaService()
+        # Generate the improvement
+        result = ollama_service.generate_improvement(text, improvement_type)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/career_customize", methods=["GET", "POST"])
 def career_customize():
@@ -672,76 +655,71 @@ def glossary():
     return render_template("glossary_index.html", **fatten(query.get_glossary()))
 
 
-@app.route("/generate/one-page", methods=["GET"])
+# For the one_page_doc route in app.py
+@app.route('/generate/one-page')
 def one_page_doc():
-    # Import os at the function level to ensure it's available throughout the function
-    import os
-    import glob
-    import traceback  # Add this for better error tracking
-
-    # Get force parameter from URL
-    force = request.args.get('force', 'false').lower() == 'true'
-
-    # Delete existing files if force=true
-    if force:
-        # Remove all one-page.* files
-        for file_path in glob.glob(os.path.join(app.root_path, 'data', 'one-page.*')):
-            try:
-                os.remove(file_path)
-                print(f"Removed {file_path}")
-            except Exception as e:
-                print(f"Failed to remove {file_path}: {e}")
-
     try:
-        # Create and run the generator
         from pylaform.latex_templates.onePage import Generator
-        generator = Generator()
+        from pylaform.commands.latex import Commands
 
-        # Print the generator's methods to check for process_achievements
-        print("Method signatures:")
-        import inspect
-        for name, method in inspect.getmembers(generator, predicate=inspect.ismethod):
-            if name.startswith('process_'):
-                sig = inspect.signature(method)
-                print(f"{name}{sig}")
+        # Create data directory if it doesn't exist
+        data_dir = app.config.get('DATA_DIR', 'data')
+        os.makedirs(data_dir, exist_ok=True)
 
-        # Run the generator
-        generator.run()
+        # Clean up old files
+        Commands.cleanup_latex_files(data_dir)
 
-        # Check if the PDF was actually created, regardless of whether errors occurred
-        pdf_path = os.path.join(uploads, 'one-page.pdf')
+        # Generate PDF
+        gen = Generator()
+        gen.run()
 
-        # Additional validation to ensure the PDF exists and is valid
+        # Check if PDF was created
+        pdf_path = os.path.join(data_dir, 'one-page.pdf')
         if os.path.exists(pdf_path):
-            # Check the file size to ensure it's not empty
-            if os.path.getsize(pdf_path) > 0:
-                print(f"PDF found at {pdf_path} with size {os.path.getsize(pdf_path)} bytes")
-                return send_from_directory(uploads, 'one-page.pdf')
-            else:
-                return jsonify({"error": "PDF file exists but is empty"}), 500
+            return send_file(pdf_path, as_attachment=True, download_name='resume-one-page.pdf')
         else:
-            return jsonify({"error": "PDF file was not created"}), 500
+            flash("Unable to generate PDF. Please check your resume data and try again.", "danger")
+            return redirect(url_for('landing'))
 
-    except ImportError as e:
-        return jsonify({"error": f"Import error: {str(e)}"}), 500
     except Exception as e:
-        print(f"Exception in one_page_doc route: {str(e)}")
-        traceback.print_exc()  # Print the full traceback for better debugging
+        import traceback
+        logging.error(f"Error generating one-page document: {str(e)}")
+        logging.error(traceback.format_exc())
+        flash("An error occurred while generating your document. Please try again.", "danger")
+        return redirect(url_for('landing'))
 
-        # As a fallback, check if PDF exists anyway (it might have been created despite errors)
-        pdf_path = os.path.join(uploads, 'one-page.pdf')
-        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
-            print(f"Despite errors, PDF exists and will be served")
-            return send_from_directory(uploads, 'one-page.pdf')
-        else:
-            return jsonify({"error": f"Failed to generate PDF: {str(e)}"}), 500
 
-@app.route("/generate/hybrid", methods=["GET"])
+@app.route('/generate/hybrid')
 def hybrid_doc():
-    generator = hybrid.Generator()
-    generator.run()
-    return send_from_directory(uploads, 'hybrid.pdf')
+    try:
+        from pylaform.latex_templates.hybrid import Generator
+        from pylaform.commands.latex import Commands
 
+        # Create data directory if it doesn't exist
+        data_dir = app.config.get('DATA_DIR', 'data')
+        os.makedirs(data_dir, exist_ok=True)
+
+        # Clean up old files
+        Commands.cleanup_latex_files(data_dir)
+
+        # Generate PDF
+        gen = Generator()
+        gen.run()
+
+        # Check if PDF was created
+        pdf_path = os.path.join(data_dir, 'hybrid.pdf')
+        if os.path.exists(pdf_path):
+            return send_file(pdf_path, as_attachment=True, download_name='resume-hybrid.pdf')
+        else:
+            flash("Unable to generate PDF. Please check your resume data and try again.", "danger")
+            return redirect(url_for('landing'))
+
+    except Exception as e:
+        import traceback
+        logging.error(f"Error generating hybrid document: {str(e)}")
+        logging.error(traceback.format_exc())
+        flash("An error occurred while generating your document. Please try again.", "danger")
+        return redirect(url_for('landing'))
 
 @app.route("/api/delete", methods=["POST"])
 def api_delete():

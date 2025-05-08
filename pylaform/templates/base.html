@@ -116,6 +116,20 @@
         .set-present-btn {
             white-space: nowrap;
         }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -213,5 +227,65 @@
         });
     </script>
     <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
+    <script>
+      function generatePdfWithTimeout(url, timeout = 10000) {
+          // Show loading indicator
+          const loadingOverlay = document.createElement('div');
+          loadingOverlay.className = 'loading-overlay';
+
+          loadingOverlay.innerHTML = `
+            <div class="spinner-border text-light mb-3" style="width: 3rem; height: 3rem;" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Generating document...</p>
+          `;
+
+          document.body.appendChild(loadingOverlay);
+
+          // Set a timeout
+          const timeoutId = setTimeout(() => {
+            // The alert has been removed from here
+            // You can optionally update the loading message
+            const loadingMessage = loadingOverlay.querySelector('p');
+            if (loadingMessage) {
+              loadingMessage.textContent = 'Still working on your document...';
+            }
+          }, timeout);
+
+          // Fetch the PDF
+          fetch(url)
+            .then(response => {
+              if (!response.ok) {
+                throw new Error('Network response was not ok');
+              }
+              return response.blob();
+            })
+            .then(blob => {
+              // Clear the timeout
+              clearTimeout(timeoutId);
+
+              // Create URL for the PDF blob
+              const pdfUrl = URL.createObjectURL(blob);
+
+              // Open PDF in new tab
+              window.open(pdfUrl, '_blank');
+
+              // Remove loading overlay
+              document.body.removeChild(loadingOverlay);
+            })
+            .catch(error => {
+              // Clear the timeout
+              clearTimeout(timeoutId);
+
+              // Remove loading overlay
+              document.body.removeChild(loadingOverlay);
+
+              // Show error
+              console.error('Error fetching PDF:', error);
+              alert('Failed to generate document. Please try again.');
+            });
+        }
+    </script>
+
 </body>
 </html>

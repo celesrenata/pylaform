@@ -1162,95 +1162,217 @@ class Worker:
                 # Handle new achievement creation based on the types
                 if employer_type == "employer" and position_type == "position":
                     # This is a regular employer/position achievement
-                    position_id = self.query.query_id(position_value, "position")
-                    employer_id = self.query.query_id(employer_name, "employer")
+
+                    # VALIDATE EMPLOYER ID first - if invalid, skip completely
+                    if not employer_id or employer_id == "0":
+                        print(f"WARNING: Invalid employer value ({employer_id}). Skipping achievement creation.")
+                        continue  # Skip this achievement
+
+                    # Query the actual employer ID
+                    try:
+                        employer_id = int(self.query.query_id(employer_name, "employer"))
+                        # Validate the returned employer_id
+                        if employer_id <= 0:
+                            print(
+                                f"WARNING: Invalid queried employer ID ({employer_id}). Skipping achievement creation.")
+                            continue
+                    except (ValueError, TypeError) as e:
+                        print(f"ERROR: Invalid employer ID format: {e}. Skipping achievement creation.")
+                        continue
+
+                    # VALIDATE POSITION ID - Check if position_value is valid
+                    position_id = None  # Default to None (NULL in database)
+                    if position_value and position_value != "0":
+                        try:
+                            position_id = int(self.query.query_id(position_value, "position"))
+                            # Validate the returned position_id
+                            if position_id <= 0:
+                                print(f"WARNING: Invalid queried position ID ({position_id}). Setting to NULL.")
+                                position_id = None
+                        except (ValueError, TypeError) as e:
+                            print(f"ERROR: Invalid position ID format: {e}. Setting to NULL.")
+                            position_id = None
+                    else:
+                        print(f"WARNING: Empty position value. Setting to NULL.")
 
                     print(f"DEBUG - New achievement with employer ID: {employer_id}, position ID: {position_id}")
 
-                    self.insert.multi_column("achievement",
-                                             employer=employer_id,
-                                             position=position_id,
-                                             shortdesc=shortdesc,
-                                             longdesc=longdesc,
-                                             state=1 if longdesc_enabled else 0
-                                             )
+                    try:
+                        self.insert.multi_column("achievement",
+                                                 employer=employer_id,
+                                                 position=position_id,
+                                                 shortdesc=shortdesc,
+                                                 longdesc=longdesc,
+                                                 state=1 if longdesc_enabled else 0
+                                                 )
+                        print(f"SUCCESS: Created new achievement with employer={employer_id}, position={position_id}")
+                    except Exception as e:
+                        print(f"ERROR creating achievement: {e}")
+                        # Continue with other achievements rather than letting the error cascade
+                        continue
+
                 elif employer_type == "school" or is_school:
                     # This is a school/focus achievement
                     school_name = employer_name.replace(" (College)", "")
-                    school_id = self.query.query_id(school_name, "school")
+
+                    # Validate school ID
+                    try:
+                        school_id = int(self.query.query_id(school_name, "school"))
+                        if school_id <= 0:
+                            print(f"WARNING: Invalid school ID ({school_id}). Skipping achievement creation.")
+                            continue
+                    except (ValueError, TypeError) as e:
+                        print(f"ERROR: Invalid school ID format: {e}. Skipping achievement creation.")
+                        continue
 
                     # Handle focus vs position
+                    position_to_use = None  # Default to NULL
                     if position_type == "focus" or is_focus:
                         focus_name = position_name.replace(" (Focus)", "")
-                        focus_id = self.query.query_id(focus_name, "focus")
-                        print(f"DEBUG - New achievement with school ID: {school_id}, focus ID: {focus_id}")
-
-                        position_to_use = focus_id
+                        try:
+                            focus_id = int(self.query.query_id(focus_name, "focus"))
+                            if focus_id > 0:
+                                position_to_use = focus_id
+                            else:
+                                print(f"WARNING: Invalid focus ID ({focus_id}). Using NULL instead.")
+                        except (ValueError, TypeError) as e:
+                            print(f"ERROR: Invalid focus ID format: {e}. Using NULL instead.")
                     else:
-                        # Handle regular position with school
-                        position_to_use = int(position_value) if position_value else None
-                        print(f"DEBUG - New achievement with school ID: {school_id}, position ID: {position_to_use}")
+                        # VALIDATE POSITION VALUE
+                        if position_value and position_value != "0":
+                            try:
+                                position_to_use = int(position_value)
+                                if position_to_use <= 0:
+                                    print(f"WARNING: Invalid position value ({position_to_use}). Using NULL instead.")
+                                    position_to_use = None
+                            except (ValueError, TypeError):
+                                print(f"WARNING: Invalid position value format. Using NULL instead.")
+                                position_to_use = None
+                        else:
+                            print(f"INFO: No position specified. Using NULL.")
 
-                    # For school achievements, we use the school ID and focus/position ID
-                    self.insert.multi_column("achievement",
-                                             school=school_id,
-                                             employer=None,  # Make sure employer is NULL
-                                             position=position_to_use,
-                                             shortdesc=shortdesc,
-                                             longdesc=longdesc,
-                                             state=1 if longdesc_enabled else 0
-                                             )
+                    print(f"DEBUG - New achievement with school ID: {school_id}, position ID: {position_to_use}")
+
+                    try:
+                        # For school achievements, we use the school ID and focus/position ID
+                        self.insert.multi_column("achievement",
+                                                 school=school_id,
+                                                 employer=None,  # Make sure employer is NULL
+                                                 position=position_to_use,
+                                                 shortdesc=shortdesc,
+                                                 longdesc=longdesc,
+                                                 state=1 if longdesc_enabled else 0
+                                                 )
+                        print(f"SUCCESS: Created new achievement with school={school_id}, position={position_to_use}")
+                    except Exception as e:
+                        print(f"ERROR creating achievement: {e}")
+                        # Continue with other achievements rather than letting the error cascade
+                        continue
+                else:
+                    print(f"WARNING: Couldn't determine achievement type. Skipping.")
+                    continue
             else:
                 # Update existing achievement
-                update_data = {
-                    "id": achievement_id,
-                    "shortdesc": shortdesc,
-                    "longdesc": longdesc,
-                    "state": 1 if longdesc_enabled else 0
-                }
+                try:
+                    update_data = {
+                        "id": achievement_id,
+                        "shortdesc": shortdesc,
+                        "longdesc": longdesc,
+                        "state": 1 if longdesc_enabled else 0
+                    }
 
-                # Update employer/position references based on the types
-                if (employer_type == "school" or is_school) and employer_id:
-                    # Handle school case
-                    if is_school:
-                        # Extract school name and get ID
-                        school_name = employer_name.replace(" (College)", "")
-                        school_id = self.query.query_id(school_name, "school")
-                        update_data["school"] = school_id
-                    else:
-                        # Use the dropdown ID directly
-                        update_data["school"] = int(employer_id)
-
-                    # Clear employer when school is set
-                    update_data["employer"] = None
-
-                    print(f"DEBUG - Setting school ID: {update_data['school']}")
-                else:
-                    # Handle employer case
-                    if employer_id:
-                        update_data["employer"] = int(employer_id)
-                        # Clear school when employer is set
-                        update_data["school"] = None
-                        print(f"DEBUG - Setting employer ID: {update_data['employer']}")
-
-                # Update position/focus ID
-                if position_value:
-                    if position_type == "focus" or is_focus:
-                        # Handle focus type
-                        if is_focus:
-                            # Extract focus name and get ID
-                            focus_name = position_name.replace(" (Focus)", "")
-                            focus_id = self.query.query_id(focus_name, "focus")
-                            update_data["position"] = focus_id
+                    # Update employer/position references based on the types
+                    if (employer_type == "school" or is_school) and employer_id:
+                        # Handle school case
+                        school_id = None
+                        if is_school:
+                            # Extract school name and get ID
+                            school_name = employer_name.replace(" (College)", "")
+                            try:
+                                school_id = int(self.query.query_id(school_name, "school"))
+                                if school_id <= 0:
+                                    print(f"WARNING: Invalid school ID ({school_id}). Skipping school update.")
+                                    school_id = None
+                            except (ValueError, TypeError) as e:
+                                print(f"ERROR: Invalid school ID format: {e}. Skipping school update.")
                         else:
                             # Use the dropdown ID directly
-                            update_data["position"] = int(position_value)
+                            try:
+                                school_id = int(employer_id)
+                                if school_id <= 0:
+                                    print(
+                                        f"WARNING: Invalid school ID from dropdown ({school_id}). Skipping school update.")
+                                    school_id = None
+                            except (ValueError, TypeError) as e:
+                                print(f"ERROR: Invalid school ID from dropdown: {e}. Skipping school update.")
 
-                        print(f"DEBUG - Setting focus/position ID: {update_data['position']}")
+                        if school_id is not None:
+                            update_data["school"] = school_id
+                            # Clear employer when school is set
+                            update_data["employer"] = None
+                            print(f"DEBUG - Setting school ID: {update_data['school']}")
+
                     else:
-                        # Handle regular position
-                        update_data["position"] = int(position_value)
-                        print(f"DEBUG - Setting position ID: {update_data['position']}")
+                        # Handle employer case
+                        if employer_id:
+                            try:
+                                employer_id_int = int(employer_id)
+                                if employer_id_int > 0:
+                                    update_data["employer"] = employer_id_int
+                                    # Clear school when employer is set
+                                    update_data["school"] = None
+                                    print(f"DEBUG - Setting employer ID: {update_data['employer']}")
+                                else:
+                                    print(
+                                        f"WARNING: Invalid employer ID ({employer_id_int}). Skipping employer update.")
+                            except (ValueError, TypeError) as e:
+                                print(f"ERROR: Invalid employer ID format: {e}. Skipping employer update.")
 
-                print(f"DEBUG - Final update data: {update_data}")
-                self.update.multi_column("achievement", **update_data)
+                    # Update position/focus ID
+                    if position_value:
+                        position_id = None
+
+                        if position_type == "focus" or is_focus:
+                            # Handle focus type
+                            if is_focus:
+                                # Extract focus name and get ID
+                                focus_name = position_name.replace(" (Focus)", "")
+                                try:
+                                    focus_id = int(self.query.query_id(focus_name, "focus"))
+                                    if focus_id > 0:
+                                        position_id = focus_id
+                                    else:
+                                        print(f"WARNING: Invalid focus ID ({focus_id}). Skipping position update.")
+                                except (ValueError, TypeError) as e:
+                                    print(f"ERROR: Invalid focus ID format: {e}. Skipping position update.")
+                            else:
+                                # Use the dropdown ID directly
+                                try:
+                                    position_id = int(position_value)
+                                    if position_id <= 0:
+                                        print(
+                                            f"WARNING: Invalid position ID ({position_id}). Skipping position update.")
+                                        position_id = None
+                                except (ValueError, TypeError) as e:
+                                    print(f"ERROR: Invalid position ID format: {e}. Skipping position update.")
+                        else:
+                            # Handle regular position
+                            try:
+                                position_id = int(position_value)
+                                if position_id <= 0:
+                                    print(f"WARNING: Invalid position ID ({position_id}). Skipping position update.")
+                                    position_id = None
+                            except (ValueError, TypeError) as e:
+                                print(f"ERROR: Invalid position ID format: {e}. Skipping position update.")
+
+                        if position_id is not None:
+                            update_data["position"] = position_id
+                            print(f"DEBUG - Setting position ID: {update_data['position']}")
+
+                    print(f"DEBUG - Final update data: {update_data}")
+                    self.update.multi_column("achievement", **update_data)
+                    print(f"SUCCESS: Updated achievement {achievement_id}")
+                except Exception as e:
+                    print(f"ERROR updating achievement {achievement_id}: {e}")
+                    # Continue with other achievements rather than letting the error cascade
+                    continue

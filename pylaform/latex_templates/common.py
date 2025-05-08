@@ -180,46 +180,42 @@ class Common:
 
     def modern_skills(self, doc: Document) -> None:
         """
-        Print detailed modern professional_experience.
+        Print skills in a compact format with proper bullet rendering.
         :param Document doc: PyLatex document handler.
         :return None: None
         """
         try:
             # Start writing
             with doc.create(Section("Skills", False)):
-                # Get the skills data with error handling
-                skills_data = self.resume_data.get_skills()
+                # Get the skills data using the flattener
+                skills_data = self.cmd.skills_flatten()
                 if not skills_data:
                     # Handle empty skills gracefully
                     doc.append("No skills data available.")
                     return
 
-                categories = slim(skills_data)
-                skills = listify(skills_data)
-
-                # Get unique subcategories
-                subcategory_list = unique([skill["subcategory"] for skill in skills])
-                current_subcategory = ""
-
-                for subcategory in subcategory_list:
-                    relevant_skills = [skill for skill in skills if skill["subcategory"] == subcategory]
-
-                    if relevant_skills:
-                        category = relevant_skills[0]["category"]  # Get category from first skill in subcategory
-
+                # Iterate through categories and subcategories
+                for category, subcategories in skills_data.items():
+                    for subcategory, skills in subcategories.items():
                         with doc.create(Subsection(subcategory, False)) as skill_sub:
-                            skill_sub.append(NoEscape(r"\begin{itemize*}"))
+                            # Use a raw LaTeX command to create a compact bullet list
+                            # This avoids the need for NoEscape on individual items
+                            skill_sub.append(NoEscape(r"\begin{flushleft}"))
 
-                            for skill in relevant_skills:
-                                # Make sure shortdesc and longdesc exist before trying to use them
+                            # Get all skill descriptions
+                            skill_texts = []
+                            for skill in skills:
                                 shortdesc = skill.get("shortdesc", "")
-                                longdesc = skill.get("longdesc", "")
+                                if shortdesc:
+                                    skill_texts.append(shortdesc)
 
-                                if shortdesc and longdesc:
-                                    skill_sub.append(NoEscape(r"\item") +
-                                                     self.cmd.textbox(shortdesc, longdesc))
+                            # Join with a properly escaped bullet
+                            if skill_texts:
+                                # Create a raw LaTeX string with the joined skills
+                                skills_latex = r" $\bullet$ ".join(skill_texts)
+                                skill_sub.append(NoEscape(skills_latex))
 
-                            skill_sub.append(NoEscape(r"\end{itemize*}"))
+                            skill_sub.append(NoEscape(r"\end{flushleft}"))
         except Exception as e:
             # Log the error and provide a graceful fallback
             print(f"Error in modern_skills: {e}")
@@ -227,66 +223,51 @@ class Common:
 
     def retro_skills(self, doc: Document) -> None:
         """
-        Print detailed retro professional_experience.
+        Format skills section properly for the hybrid template
         :param Document doc: PyLatex document handler.
         :return None: None
         """
         try:
-            doc.append(NoEscape(r"\section{\sc Experience}"))
-
-            # Get the skills data with error handling
-            skills_data = self.resume_data.get_skills()
+            # Get skills data
+            skills_data = self.cmd.skills_flatten()
             if not skills_data:
-                # Handle empty skills gracefully
-                doc.append("No experience data available.")
                 return
 
-            skills = listify(skills_data)
+            # Add section header
+            doc.append(NoEscape(r"\section{\sc Skills}"))
 
-            # Safely extract categories - handle potential missing keys with .get()
-            categories = []
-            subcategories = []
+            # Process each subcategory
+            first_subcategory = True
 
-            for skill in skills:
-                if "category" in skill and skill.get("category") not in categories:
-                    categories.append(skill.get("category"))
+            for category, subcategories in skills_data.items():
+                for subcategory, skills in subcategories.items():
+                    if not skills:
+                        continue
 
-                if "category" in skill and "subcategory" in skill:
-                    sub_entry = {
-                        "category": skill.get("category"),
-                        "subcategory": skill.get("subcategory")
-                    }
-                    if sub_entry not in subcategories:
-                        subcategories.append(sub_entry)
+                    # For all but the first subcategory, add minimal spacing with negative adjustment
+                    if not first_subcategory:
+                        # Use negative spacing to pull content up
+                        doc.append(NoEscape(r"\par\vspace{-0.08in}"))
+                    else:
+                        first_subcategory = False
 
-            # Process each category
-            for category in categories:
-                doc.append(bold(category))
-                doc.append(NewLine())
+                    # Add subcategory title and line break
+                    doc.append(NoEscape(r"\textit{" + subcategory + r"}\newline"))
 
-                # Get subcategories for this category
-                category_subcategories = [sub for sub in subcategories if sub.get("category") == category]
-
-                for subcategory in category_subcategories:
-                    doc.append(NoEscape(r"{\textit {" + subcategory.get("subcategory", "") + r"}}"))
-                    doc.append(NoEscape(r"\begin{list2}"))
-
-                    # Get skills for this subcategory
+                    # Create comma-separated list of skills
+                    skill_names = []
                     for skill in skills:
-                        if (skill.get("category") == category and
-                                skill.get("subcategory") == subcategory.get("subcategory")):
-                            # Make sure longdesc exists before trying to use it
-                            longdesc = skill.get("longdesc", "")
-                            if longdesc:
-                                doc.append(NoEscape(
-                                    r"\item " + self.cmd.glossary_inject(longdesc, "retro")))
+                        name = skill.get("shortdesc", "")
+                        if name:
+                            escaped_name = name.replace("_", r"\_").replace("%", r"\%").replace("&", r"\&")
+                            skill_names.append(escaped_name)
 
-                    doc.append(NoEscape(r"\end{list2}"))
-
+                    # Add skills as a paragraph
+                    if skill_names:
+                        skill_text = ", ".join(skill_names)
+                        doc.append(NoEscape(skill_text))
         except Exception as e:
-            # Log the error and provide a graceful fallback
             print(f"Error in retro_skills: {e}")
-            doc.append("Error loading experience data.")
 
     def retro_work_history(self, doc):
         """
@@ -1664,3 +1645,65 @@ class Common:
                             employer_achievements.append(achievement)
 
         return employer_achievements
+
+    def debug_skills(self):
+        """
+        Debug function to analyze skills formatting in LaTeX
+        Returns a multi-format analysis of skills section
+        """
+        try:
+            # Get skills data
+            skills_data = self.cmd.skills_flatten()
+            if not skills_data:
+                return "No skills data available"
+
+            results = []
+
+            # Generate different percent variations
+            percent_variations = {
+                "single": "%",
+                "double": "%%",
+                "triple": "%%%"
+            }
+
+            # For each variation, generate the complete skills section LaTeX
+            for name, percent_suffix in percent_variations.items():
+                section_lines = []
+                section_lines.append(f"-- {name.upper()} PERCENT VARIATION --")
+                section_lines.append(f"\\section{{\\sc Skills}}{percent_suffix}")
+
+                # Process each subcategory
+                for category, subcategories in skills_data.items():
+                    for subcategory, skills in subcategories.items():
+                        if not skills:
+                            continue
+
+                        section_lines.append(f"\\textit{{{subcategory}}}{percent_suffix}")
+                        section_lines.append(f"\\\\{percent_suffix}")
+
+                        skill_names = []
+                        for skill in skills:
+                            name = skill.get("shortdesc", "")
+                            if name:
+                                escaped_name = name.replace("_", r"\_").replace("%", r"\%").replace("&", r"\&")
+                                skill_names.append(escaped_name)
+
+                        section_lines.append(f"{', '.join(skill_names)}{percent_suffix}")
+
+                        last_category = category == list(skills_data.keys())[-1]
+                        last_subcategory = subcategory == list(subcategories.keys())[-1]
+
+                        if not (last_category and last_subcategory):
+                            section_lines.append(f"\\vspace{{0.1in}}{percent_suffix}")
+
+                results.append("\n".join(section_lines))
+
+            # Add analysis of the original hybrid.tex file
+            results.append("\n-- ANALYSIS OF HYBRID.TEX --")
+            results.append("Skills section uses triple percent signs (%%%)")
+            results.append("Other sections use single percent signs (%)")
+            results.append("Triple percents may be needed to prevent unwanted whitespace")
+
+            return "\n\n".join(results)
+        except Exception as e:
+            return f"Error in debug_skills: {e}"
