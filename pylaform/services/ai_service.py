@@ -1,21 +1,39 @@
 import json
 import requests
 from flask import current_app
+from pylaform.services.config_service import ConfigService
 
 
 class OllamaService:
     """Service to interact with Ollama API for resume improvements"""
 
-    def __init__(self, host="localhost", port="11434", model="gemma3:1b"):
+    def __init__(self, host=None, port=None, model=None):
         """
-        Initialize the Ollama service with configurable parameters
+        Initialize the OllamaService with the specified configuration parameters
+        If parameters are not provided, they will be loaded from the config file
 
-        :param host: Ollama server hostname/IP (default: localhost)
-        :param port: Ollama server port (default: 11434)
-        :param model: Ollama model to use (default: gemma3:1b)
+        :param host: The host of the Ollama server
+        :param port: The port of the Ollama server
+        :param model: The name of the model to use
         """
-        self.base_url = f"http://{host}:{port}"
-        self.model = model
+        # Get config from ConfigService
+        config_service = ConfigService()
+        ai_config = config_service.get_ai_config()
+
+        # Use provided parameters or fall back to config values
+        self.host = host or ai_config.get('ollama', {}).get('host', 'localhost')
+        self.port = port or ai_config.get('ollama', {}).get('port', '11434')
+        self.model = model or ai_config.get('ollama', {}).get('model', 'gemma3:1b')
+
+        # Construct base URL
+        self.base_url = f"http://{self.host}:{self.port}"
+
+        # Add detailed logging on initialization
+        print(f"OllamaService initialized with:")
+        print(f"  - Host: {self.host}")
+        print(f"  - Port: {self.port}")
+        print(f"  - Model: {self.model}")
+        print(f"  - Base URL: {self.base_url}")
 
     def test_connection(self):
         """
@@ -423,13 +441,80 @@ class OllamaService:
     def generate(self, prompt):
         """
         Generate a response from the AI model using the given prompt
+        Tries both /api/generate and /api/chat endpoints to support different Ollama versions
 
         :param prompt: The prompt to send to the AI model
         :return: Dictionary with the response or error
         """
         try:
-            # Format the JSON payload
-            payload = {
+            # First try the /api/chat endpoint (newer versions)
+            chat_payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "max_tokens": 500
+                }
+            }
+
+            headers = {"Content-Type": "application/json"}
+
+            # Debug information
+            chat_url = f"{self.base_url}/api/chat"
+            generate_url = f"{self.base_url}/api/generate"
+
+            print(f"DEBUG: Ollama Configuration:")
+            print(f"DEBUG: Base URL: {self.base_url}")
+            print(f"DEBUG: Model: {self.model}")
+            print(f"DEBUG: Attempting to connect to chat endpoint: {chat_url}")
+            print(f"DEBUG: Headers: {headers}")
+            print(f"DEBUG: Payload (truncated): {str(chat_payload)[:200]}...")
+
+            # Try with /api/chat first
+            try:
+                chat_response = requests.post(
+                    chat_url,
+                    headers=headers,
+                    data=json.dumps(chat_payload),
+                    timeout=15  # Increase timeout for better diagnostics
+                )
+
+                print(f"DEBUG: Chat endpoint response status: {chat_response.status_code}")
+                print(f"DEBUG: Chat endpoint response headers: {dict(chat_response.headers)}")
+
+                # Print a portion of the response content for debugging
+                try:
+                    response_preview = chat_response.text[:500] if chat_response.text else "Empty response"
+                    print(f"DEBUG: Chat endpoint response preview: {response_preview}")
+                except:
+                    print("DEBUG: Unable to print response content")
+
+                # If chat endpoint works
+                if chat_response.status_code == 200:
+                    try:
+                        result = chat_response.json()
+                        # Extract content from message for chat endpoint
+                        message = result.get("message", {})
+                        content = message.get("content", "")
+                        print(f"DEBUG: Successfully processed chat response")
+                        return {"response": content}
+                    except json.JSONDecodeError as e:
+                        print(f"DEBUG: JSON decode error on chat response: {e}")
+                        pass  # Continue to try generate endpoint
+                else:
+                    print(f"DEBUG: Chat endpoint failed with status {chat_response.status_code}")
+
+            except requests.exceptions.RequestException as e:
+                print(f"DEBUG: Request exception on chat endpoint: {e}")
+                # Continue to try the generate endpoint
+                pass
+
+            # If chat didn't work, try the /api/generate endpoint (older versions)
+            generate_payload = {
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
@@ -440,35 +525,68 @@ class OllamaService:
                 }
             }
 
-            # Make sure our payload is valid JSON
-            headers = {
-                "Content-Type": "application/json"
+            print(f"DEBUG: Falling back to generate endpoint: {generate_url}")
+            print(f"DEBUG: Generate payload (truncated): {str(generate_payload)[:200]}...")
+
+            try:
+                generate_response = requests.post(
+                    generate_url,
+                    headers=headers,
+                    data=json.dumps(generate_payload),
+                    timeout=15
+                )
+
+                print(f"DEBUG: Generate endpoint response status: {generate_response.status_code}")
+                print(f"DEBUG: Generate endpoint response headers: {dict(generate_response.headers)}")
+
+                # Print a portion of the response content for debugging
+                try:
+                    response_preview = generate_response.text[:500] if generate_response.text else "Empty response"
+                    print(f"DEBUG: Generate endpoint response preview: {response_preview}")
+                except:
+                    print("DEBUG: Unable to print response content")
+
+                # Check if generate endpoint works
+                if generate_response.status_code == 200:
+                    try:
+                        result = generate_response.json()
+                        print(f"DEBUG: Successfully processed generate response")
+                        return {"response": result.get("response", "")}
+                    except json.JSONDecodeError as e:
+                        print(f"DEBUG: JSON decode error on generate response: {e}")
+                        return {"error": "Failed to parse JSON response from both endpoints"}
+                else:
+                    print(f"DEBUG: Generate endpoint failed with status {generate_response.status_code}")
+
+            except requests.exceptions.RequestException as e:
+                print(f"DEBUG: Request exception on generate endpoint: {e}")
+                # Fall through to the error handling below
+
+            # If both endpoints failed
+            chat_status = getattr(chat_response, 'status_code', 'N/A')
+            generate_status = getattr(generate_response, 'status_code', 'N/A')
+
+            error_msg = f"API Error: {generate_status}"
+            details_msg = f"Chat endpoint: {chat_status}, Generate endpoint: {generate_status}"
+
+            print(f"DEBUG: Both endpoints failed. Error: {error_msg}, Details: {details_msg}")
+
+            return {
+                "error": error_msg,
+                "details": details_msg
             }
 
-            # Send the request
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                headers=headers,
-                data=json.dumps(payload)
-            )
-
-            # Check for successful response
-            if response.status_code == 200:
-                try:
-                    result = response.json()
-                    return {"response": result.get("response", "")}
-                except json.JSONDecodeError as e:
-                    # Handle case where response isn't valid JSON
-                    return {"error": f"Invalid JSON response: {str(e)}", "raw_response": response.text}
-            else:
-                return {"error": f"API Error: {response.status_code}", "details": response.text}
-
         except Exception as e:
+            print(f"DEBUG: Unexpected exception in generate method: {str(e)}")
+            print(f"DEBUG: Exception type: {type(e).__name__}")
+            import traceback
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
             return {"error": f"Connection error: {str(e)}"}
 
     def generate_improvement(self, text, improvement_type):
         """
         Generate an improvement for the given text based on the specified type
+        Tries both /api/generate and /api/chat endpoints to support different Ollama versions
 
         :param text: Text to improve
         :param improvement_type: Type of improvement (tenet, list, sentence_restructure, sentence_summarization)
@@ -524,10 +642,13 @@ class OllamaService:
             return {"error": "Invalid improvement type"}
 
         try:
-            # Format the JSON payload
-            payload = {
+            # First try the /api/chat endpoint (newer versions)
+            chat_payload = {
                 "model": self.model,
-                "prompt": f"{system_instructions[improvement_type]}\n\nText to improve: {text}",
+                "messages": [
+                    {"role": "system", "content": system_instructions[improvement_type]},
+                    {"role": "user", "content": f"Text to improve: {text}"}
+                ],
                 "stream": False,
                 "options": {
                     "temperature": 0.7,
@@ -536,28 +657,60 @@ class OllamaService:
                 }
             }
 
-            # Make sure our payload is valid JSON
-            headers = {
-                "Content-Type": "application/json"
-            }
+            headers = {"Content-Type": "application/json"}
 
-            # Send the request
-            response = requests.post(
-                f"{self.base_url}/api/generate",
+            # Try with /api/chat first
+            chat_response = requests.post(
+                f"{self.base_url}/api/chat",
                 headers=headers,
-                data=json.dumps(payload)
+                data=json.dumps(chat_payload)
             )
 
-            # Check for successful response
-            if response.status_code == 200:
+            # If chat endpoint works
+            if chat_response.status_code == 200:
                 try:
-                    result = response.json()
+                    result = chat_response.json()
+                    # Extract content from message for chat endpoint
+                    message = result.get("message", {})
+                    content = message.get("content", "")
+                    return {"response": content}
+                except json.JSONDecodeError:
+                    pass  # Continue to try generate endpoint
+
+            # If chat didn't work, try the /api/generate endpoint (older versions)
+            # Combine instructions and text for the generate endpoint
+            prompt = f"{system_instructions[improvement_type]}\n\nText to improve: {text}"
+
+            generate_payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "max_tokens": 300
+                }
+            }
+
+            generate_response = requests.post(
+                f"{self.base_url}/api/generate",
+                headers=headers,
+                data=json.dumps(generate_payload)
+            )
+
+            # Check if generate endpoint works
+            if generate_response.status_code == 200:
+                try:
+                    result = generate_response.json()
                     return {"response": result.get("response", "")}
-                except json.JSONDecodeError as e:
-                    # Handle case where response isn't valid JSON
-                    return {"error": f"Invalid JSON response: {str(e)}", "raw_response": response.text}
-            else:
-                return {"error": f"API Error: {response.status_code}", "details": response.text}
+                except json.JSONDecodeError:
+                    return {"error": "Failed to parse JSON response from both endpoints"}
+
+            # If both endpoints failed, return the details of the last attempt
+            return {
+                "error": f"API Error: {generate_response.status_code}",
+                "details": generate_response.text
+            }
 
         except Exception as e:
             return {"error": f"Connection error: {str(e)}"}
