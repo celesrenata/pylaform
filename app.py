@@ -17,6 +17,7 @@ from pylaform.routes.linkedin_routes import linkedin_bp
 # Near the top of app.py, add import
 import sqlite3
 from flask import flash
+config_service = ConfigService()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
