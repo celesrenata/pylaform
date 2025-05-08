@@ -1,7 +1,7 @@
 # Pylaform - Modern Resume Generator
 
 ## Overview
-Pylaform is a dynamic, web-based resume generator that combines SQLite3, Python, PyLaTeX, and modern web technologies to create professional-looking resumes. With an AI-powered resume improvement helper and a clean, responsive UI, Pylaform makes the resume creation process efficient and enjoyable.
+Pylaform is a dynamic, web-based resume generator that combines Python, PyLaTeX, and modern web technologies to create professional-looking resumes. With an AI-powered resume improvement helper and a clean, responsive UI, Pylaform makes the resume creation process efficient and enjoyable.
 
 ## Features
 - **Web-based UI**: Clean, Bootstrap-powered interface for easy resume editing
@@ -20,14 +20,14 @@ Pylaform is a dynamic, web-based resume generator that combines SQLite3, Python,
 1. Clone the repository:
 ```
 git clone https://github.com/celesrenata/pylaform.git
-   cd pylaform
+cd pylaform
 ```
 
 
 2. Set up a virtual environment (recommended):
 ```
 python -m venv venv
-   source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+source venv/bin/activate  # On Windows, use: venv\Scripts\activate
 ```
 
 
@@ -45,7 +45,7 @@ pip install -r requirements.txt
 
 5. Run the application:
 ```
-python -m flask run
+python app.py
 ```
 
 
@@ -56,14 +56,13 @@ python -m flask run
 1. Clone the repository:
 ```
 git clone https://github.com/celesrenata/pylaform.git
-   cd pylaform
+cd pylaform
 ```
 
 
-2. Build and run the Docker container:
+2. Build and run using Docker Compose:
 ```
-docker build -t pylaform .
-   docker run -p 5000:5000 pylaform
+docker-compose up
 ```
 
 
@@ -71,23 +70,30 @@ docker build -t pylaform .
 
 ## AI Resume Helper Configuration
 
-The AI resume helper is an optional feature that can improve your resume content. To use it:
+The AI resume helper is an optional feature that can improve your resume content.
 
-1. Click the AI Resume Helper at the bottom of the screen
-2. Click the settings gear icon
-3. Configure Ollama:
+### When running directly on your machine:
+
+1. Install Ollama from [ollama.ai](https://ollama.ai/)
+2. Start the Ollama service on your computer
+3. In the Pylaform web interface:
+   - Click the AI Resume Helper at the bottom of the screen
+   - Click the settings gear icon
    - Enable AI Features toggle
-   - Set Ollama Server URL (default: http://localhost:11434)
+   - Set Ollama Server URL to: `http://localhost:11434`
    - Choose a model (e.g., gemma3:1b)
    - Click "Save Settings"
 
-### Setting up Ollama (optional)
+### When using Docker:
 
-To use the AI resume helper locally:
-
-1. Install Ollama from [ollama.ai](https://ollama.ai/)
-2. Start the Ollama service
-3. In Pylaform, configure the AI helper to use your local Ollama server
+1. No additional installation needed - Ollama is included in the docker-compose file
+2. In the Pylaform web interface:
+   - Click the AI Resume Helper at the bottom of the screen
+   - Click the settings gear icon
+   - Enable AI Features toggle
+   - Set Ollama Server URL to: `http://ollama:11434`
+   - Choose a model (e.g., gemma3:1b)
+   - Click "Save Settings"
 
 ## Usage
 
@@ -100,7 +106,7 @@ To use the AI resume helper locally:
 
 ## Development
 
-- Built with Python 3.10+, Flask, SQLite3, PyLaTeX, and Bootstrap 5
+- Built with Python 3.12, Flask, PyLaTeX, and Bootstrap 5
 - Uses modern JavaScript for the interactive components
 - Integrates with Ollama for local AI processing
 

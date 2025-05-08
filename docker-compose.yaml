@@ -26,8 +26,6 @@ services:
       - OLLAMA_MODEL=gemma3:1b
     volumes:
       - ./data:/app/data
-    depends_on:
-      - ollama
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/ || exit 1"]
       interval: 30s
