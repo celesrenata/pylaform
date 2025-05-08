@@ -120,6 +120,29 @@ class OllamaService:
         except Exception as e:
             return {"success": False, "error": f"Error: {str(e)}"}
 
+    def get_status(self):
+        """
+        Get the status of the Ollama service
+
+        :return: Dictionary with status information
+        """
+        model_status = self.get_model_status()
+
+        if model_status.get("success"):
+            # Connection successful, change the return format to match what frontend expects
+            return {
+                "status": "ok",
+                "models": model_status.get("models", []),
+                "message": "Connected to Ollama"
+            }
+        else:
+            # Connection failed
+            return {
+                "status": "error",
+                "models": [],
+                "message": model_status.get("error", "Unknown error connecting to Ollama")
+            }
+
     def get_model_status(self):
         """
         Get the status of available models
