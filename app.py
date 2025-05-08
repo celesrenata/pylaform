@@ -1,35 +1,80 @@
-from flask import Flask, render_template, request, send_from_directory, jsonify, redirect, url_for, flash, session
 import os
+from flask import redirect, session, request, url_for, flash, render_template, Flask, jsonify
 import requests
-import json
+import logging
+from pylaform.services.proxycurl_service import ProxycurlService
+from pylaform.services.import_service import ImportService
 from pylaform.commands.db.query import Queries
 from pylaform.commands.templateWorker import Worker
 from pylaform.latex_templates import hybrid, onePage
 from pylaform.utilities.commands import fatten, listify, date_adapter
 from pylaform.services.ai_service import OllamaService
 from pylaform.services.config_service import ConfigService
+from pylaform.routes.linkedin_routes import linkedin_bp
 
-# Initialize the AI service
-ai_service = OllamaService()
+# Add or update this near the top of app.py, before the Flask app is created
+import logging
 
-# Initialize the config service
-config_service = ConfigService()
+# Near the top of app.py, add import
+import sqlite3
+from flask import flash
+
+# After the imports and before creating app instance
+# Set up logging
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Check if data directory exists and is writable
+data_dir = os.path.join(os.path.abspath(os.curdir), "data")
+if not os.path.exists(data_dir):
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+        os.chmod(data_dir, 0o777)  # Full permissions for debugging
+        logger.info(f"Created data directory with full permissions")
+    except Exception as e:
+        logger.error(f"Failed to create data directory: {e}")
 
 
-app = Flask(__name__,
-            static_url_path="",
-            static_folder="pylaform/static",
-            template_folder="pylaform/templates")
+# Create the Flask application
+app = Flask(__name__, template_folder='pylaform/templates', static_folder='pylaform/static')
+app.config.from_pyfile('pylaform/config.py', silent=True)
+app.secret_key = "pylaformdb"  # Required for flashing messages
 
-# Set a secret key for the application (required for sessions)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'pylaform-dev-secret-key')
+# Initialize database connection with fallback to read-only mode
+read_only_mode = False
+try:
+    query = Queries()
+except sqlite3.OperationalError as e:
+    if "readonly database" in str(e):
+        logger.warning("Database is read-only. Trying to initialize in read-only mode.")
+        # Monkey patch the connect function to use read-only mode
+        from pylaform.commands.db import connect
 
-# Not currently used.
-app.jinja_env.add_extension('jinja2.ext.do')
+        original_db = connect.db
+        connect.db = lambda disable_cache=True: original_db(disable_cache, read_only=True)
 
-query = Queries()
-worker = Worker()
-uploads: str = os.path.join(app.root_path, 'data')
+        # Now try again with read-only mode
+        try:
+            query = Queries()
+            read_only_mode = True
+            logger.warning("Application running in READ-ONLY mode. Data modifications won't be saved.")
+        except Exception as e2:
+            logger.error(f"Failed to initialize database even in read-only mode: {e2}")
+            query = None
+    else:
+        logger.error(f"Failed to initialize database: {e}")
+        query = None
+
+# Initialize worker based on database connection status
+worker = Worker() if query else None
+
+# Display read-only warning if applicable
+if read_only_mode:
+    @app.before_request
+    def before_request():
+        flash("Application is running in READ-ONLY mode. Changes won't be saved to the database.", "warning")
 
 @app.route("/")
 def landing():
@@ -733,5 +778,384 @@ def api_delete():
     else:
         return jsonify({"success": False, "error": "Failed to delete entry"}), 500
 
+
+@app.route('/auth/linkedin/callback')
+def linkedin_callback():
+    """Handle LinkedIn OAuth callback"""
+    # Get code and state from request
+    code = request.args.get('code')
+    state = request.args.get('state')
+    error = request.args.get('error')
+
+    # Validate the state to prevent CSRF
+    if error or not code or state != session.get('linkedin_state'):
+        flash("Authentication failed or was cancelled", "danger")
+        return redirect(url_for('linkedin_import_page'))
+
+    # Clean up the state from session
+    session.pop('linkedin_state', None)
+
+    try:
+        # Exchange code for access token
+        linkedin = LinkedInService()
+        token_data = linkedin.exchange_code_for_token(code)
+
+        # Store token in session
+        session['linkedin_token'] = token_data
+
+        # Redirect to the import page
+        return redirect(url_for('linkedin_import_page'))
+    except Exception as e:
+        flash(f"Failed to complete authentication: {str(e)}", "danger")
+        return redirect(url_for('linkedin_import_page'))
+
+
+@app.route('/linkedin/import', methods=['POST'])
+def linkedin_import():
+    """Process the LinkedIn data import"""
+    # Check if we have an active token and profile data
+    token = session.get('linkedin_token')
+    profile_data = session.get('linkedin_profile_data')
+
+    if not token or not profile_data:
+        flash("LinkedIn data not available. Please reconnect your account.", "danger")
+        return redirect(url_for('linkedin_import_page'))
+
+    # Get selected sections to import
+    import_sections = request.form.getlist('import_sections')
+
+    if not import_sections:
+        flash("Please select at least one section to import", "warning")
+        return redirect(url_for('linkedin_import_page'))
+
+    try:
+        # Import basic information
+        if 'basic_info' in import_sections:
+            from pylaform.commands.db import update, query
+            updater = update.Updates()
+
+            # Create identification data packet
+            identification = []
+            if profile_data.get('firstName') and profile_data.get('lastName'):
+                identification.append({
+                    'attr': 'name',
+                    'value': f"{profile_data['firstName']} {profile_data['lastName']}",
+                    'state': 1
+                })
+
+            if profile_data.get('email'):
+                identification.append({
+                    'attr': 'email',
+                    'value': profile_data['email'],
+                    'state': 1
+                })
+
+            # Update identification data
+            for item in identification:
+                if item['value']:  # Only update if we have a value
+                    try:
+                        updater.inverted_single_item('identification', item)
+                    except Exception as e:
+                        app.logger.error(f"Error updating identification item {item['attr']}: {str(e)}")
+
+        # Import work experience
+        if 'experience' in import_sections and 'positions' in profile_data and profile_data['positions']:
+            from pylaform.commands.db import query, update, delete
+            updater = update.Updates()
+            deleter = delete.Deletes()
+
+            try:
+                # Get existing employment records
+                employment_data = query.Queries().get_positions()
+
+                # Delete existing records
+                for item in employment_data:
+                    deleter.single_row('positions', item['id'])
+            except Exception as e:
+                app.logger.error(f"Error clearing existing employment data: {str(e)}")
+
+            # Now add LinkedIn positions
+            for idx, position in enumerate(profile_data['positions']):
+                try:
+                    # Create position data
+                    position_data = {
+                        'id': idx + 1,  # Use index-based ID
+                        'company': position.get('company', {}).get('name', ''),
+                        'title': position.get('title', ''),
+                        'description': position.get('summary', ''),
+                        'startmonth': position.get('startDate', {}).get('month', ''),
+                        'startyear': position.get('startDate', {}).get('year', ''),
+                        'state': 1,
+                    }
+
+                    # Handle end date or current position
+                    if position.get('current', False):
+                        position_data['present'] = 1
+                    else:
+                        position_data['endmonth'] = position.get('endDate', {}).get('month', '')
+                        position_data['endyear'] = position.get('endDate', {}).get('year', '')
+
+                    # Insert new position
+                    updater.multi_column('positions', **position_data)
+                except Exception as e:
+                    app.logger.error(f"Error adding position {idx}: {str(e)}")
+
+        # Import education
+        if 'education' in import_sections and 'education' in profile_data and profile_data['education']:
+            from pylaform.commands.db import query, update, delete
+            updater = update.Updates()
+            deleter = delete.Deletes()
+
+            try:
+                # Get existing education records
+                education_data = query.Queries().get_education()
+
+                # Delete existing records
+                for item in education_data:
+                    deleter.single_row('education', item['id'])
+            except Exception as e:
+                app.logger.error(f"Error clearing existing education data: {str(e)}")
+
+            # Now add LinkedIn education
+            for idx, school in enumerate(profile_data['education']):
+                try:
+                    # Create education data
+                    education_data = {
+                        'id': idx + 1,  # Use index-based ID
+                        'school': school.get('schoolName', ''),
+                        'degree': school.get('degree', ''),
+                        'field': school.get('fieldOfStudy', ''),
+                        'startyear': school.get('startDate', {}).get('year', ''),
+                        'state': 1,
+                    }
+
+                    # Handle end date
+                    if 'endDate' in school and school['endDate']:
+                        education_data['endyear'] = school['endDate'].get('year', '')
+                    else:
+                        education_data['present'] = 1
+
+                    # Insert new education
+                    updater.multi_column('education', **education_data)
+                except Exception as e:
+                    app.logger.error(f"Error adding education {idx}: {str(e)}")
+
+        # Import skills
+        if 'skills' in import_sections and 'skills' in profile_data and profile_data['skills']:
+            from pylaform.commands.db import query, update, delete
+            updater = update.Updates()
+            deleter = delete.Deletes()
+
+            try:
+                # Get existing skills records
+                skills_data = query.Queries().get_skills()
+
+                # Delete existing records
+                for item in skills_data:
+                    deleter.single_row('skills', item['id'])
+            except Exception as e:
+                app.logger.error(f"Error clearing existing skills data: {str(e)}")
+
+            # Now add LinkedIn skills
+            for idx, skill in enumerate(profile_data['skills']):
+                try:
+                    # Create skill data
+                    skill_data = {
+                        'id': idx + 1,  # Use index-based ID
+                        'shortdesc': skill.get('name', ''),
+                        'longdesc': '',  # LinkedIn doesn't provide detailed skill descriptions
+                        'rating': 4,  # Default to high rating
+                        'state': 1,
+                    }
+
+                    # Insert new skill
+                    updater.multi_column('skills', **skill_data)
+                except Exception as e:
+                    app.logger.error(f"Error adding skill {idx}: {str(e)}")
+
+        flash("LinkedIn data successfully imported!", "success")
+
+        # Clear the session data to avoid duplicate imports
+        session.pop('linkedin_profile_data', None)
+
+        # Redirect to the main resume page
+        return redirect(url_for('landing'))
+
+    except Exception as e:
+        app.logger.error(f"Error importing LinkedIn data: {str(e)}")
+        flash(f"Error importing LinkedIn data: {str(e)}", "danger")
+        return redirect(url_for('linkedin_import_page'))
+
+
+@app.route('/linkedin/error')
+def linkedin_error():
+    """Display LinkedIn connection error page"""
+    error_title = request.args.get('title', 'Connection Error')
+    error_message = request.args.get('message', 'An error occurred while connecting to LinkedIn.')
+
+    return render_template(
+        'linkedin_error.html',
+        error_title=error_title,
+        error_message=error_message
+    )
+
+@app.route('/linkedin-import')
+def linkedin_import_page():
+    """LinkedIn import page"""
+    # Check if Proxycurl API key is configured
+    has_proxycurl = bool(os.environ.get('PROXYCURL_API_KEY', ''))
+    return render_template('linkedin_import.html', has_proxycurl=has_proxycurl)
+
+
+@app.route('/linkedin-import-with-proxycurl', methods=['POST'])
+def linkedin_import_with_proxycurl():
+    """Import LinkedIn data using Proxycurl API"""
+    logger.info("--- Starting LinkedIn import with Proxycurl ---")
+
+    # Get LinkedIn profile URL from form
+    linkedin_url = request.form.get('linkedin_profile_url', '')
+    logger.debug(f"LinkedIn URL submitted: {linkedin_url}")
+
+    if not linkedin_url:
+        logger.warning("No LinkedIn URL provided")
+        flash("Please provide your LinkedIn profile URL", "warning")
+        return redirect(url_for('linkedin_import_page'))
+
+    # Validate URL format
+    if not (linkedin_url.startswith('https://www.linkedin.com/') or
+            linkedin_url.startswith('https://linkedin.com/')):
+        logger.warning(f"Invalid LinkedIn URL format: {linkedin_url}")
+        flash("Please enter a valid LinkedIn profile URL", "warning")
+        return redirect(url_for('linkedin_import_page'))
+
+    # Initialize Proxycurl service
+    proxycurl_service = ProxycurlService()
+    logger.debug(f"Proxycurl API key configured: {bool(proxycurl_service.api_key)}")
+
+    # Check if API key is configured
+    if not proxycurl_service.api_key:
+        logger.warning("Proxycurl API key not configured")
+        flash("Proxycurl API key not configured. Please configure it in LinkedIn settings.", "warning")
+        return redirect(url_for('linkedin_config'))
+
+    # Fetch profile data
+    logger.info(f"Fetching LinkedIn profile data from {linkedin_url}")
+    profile_data = proxycurl_service.get_profile_data(linkedin_url)
+
+    if 'error' in profile_data:
+        logger.error(f"Error from Proxycurl API: {profile_data['error']}")
+        flash(f"Error fetching LinkedIn data: {profile_data['error']}", "danger")
+        return redirect(url_for('linkedin_import_page'))
+
+    # Log successful data retrieval
+    logger.info("Successfully retrieved LinkedIn profile data")
+    logger.debug(f"Profile data contains keys: {list(profile_data.keys())}")
+
+    # Get selected sections to import
+    import_sections = request.form.getlist('import_sections')
+    logger.debug(f"Selected sections to import: {import_sections}")
+
+    # If no sections selected, select all by default
+    if not import_sections:
+        import_sections = ['basic_info', 'experience', 'education', 'skills']
+        logger.debug(f"No sections selected, using defaults: {import_sections}")
+
+    # Process the import
+    try:
+        logger.info("Starting import processing")
+        import_service = ImportService()
+        result = import_service.process_linkedin_import(profile_data, import_sections)
+
+        if result['success']:
+            sections_imported = ', '.join(result['imported_sections'])
+            logger.info(f"LinkedIn import successful. Sections imported: {sections_imported}")
+            flash(f"Successfully imported LinkedIn data: {sections_imported}", "success")
+        else:
+            errors = ', '.join(result['errors'])
+            logger.warning(f"LinkedIn import completed with errors: {errors}")
+            flash(f"Errors during import: {errors}", "warning")
+
+        # Clear the session data
+        if 'linkedin_profile_data' in session:
+            logger.debug("Clearing LinkedIn profile data from session")
+            session.pop('linkedin_profile_data', None)
+
+        logger.info("LinkedIn import process completed, redirecting to landing page")
+        return redirect(url_for('landing'))
+
+    except Exception as e:
+        logger.exception(f"Unexpected error during LinkedIn import process: {str(e)}")
+        flash(f"Error importing LinkedIn data: {str(e)}", "danger")
+        return redirect(url_for('linkedin_import_page'))
+
+
+@app.route('/linkedin-settings', methods=['GET', 'POST'], endpoint='linkedin.settings')
+def linkedin_settings_redirect():
+
+    """LinkedIn settings page - configures Proxycurl API key"""
+    # Get current Proxycurl API key from config or environment
+    proxycurl_api_key = os.environ.get('PROXYCURL_API_KEY', '')
+
+    # Also try to get from config if using a config file
+    try:
+        if not proxycurl_api_key and query:
+            # Assuming you have a config table or method to retrieve settings
+            # Adjust this based on your actual configuration storage method
+            pass
+    except Exception as e:
+        logger.error(f"Error loading Proxycurl API key: {str(e)}")
+
+    # If it's a POST request, save the settings
+    if request.method == 'POST':
+        proxycurl_api_key = request.form.get('proxycurl_api_key', '')
+
+        # Save API key to environment variable
+        os.environ['PROXYCURL_API_KEY'] = proxycurl_api_key
+
+        # Also save to persistent storage if available
+        try:
+            if query:
+                # Example of how you might save to database
+                # Adjust this to match your actual storage method
+                # query.save_config('proxycurl_api_key', proxycurl_api_key)
+                pass
+
+            flash('LinkedIn API settings saved successfully', 'success')
+        except Exception as e:
+            flash(f'Error saving settings: {str(e)}', 'error')
+
+    # Render the template with current settings
+    return render_template(
+        'linkedin_settings.html',
+        proxycurl_api_key=proxycurl_api_key
+    )
+
+
+@app.route('/linkedin/config')
+def linkedin_config():
+    """Display LinkedIn configuration page"""
+    from pylaform.services.config_service import ConfigService
+    config_service = ConfigService()
+    config = config_service.get_config()
+    linkedin_config = config.get('linkedin', {})
+
+    proxycurl_api_key = linkedin_config.get('proxycurl_api_key', '')
+
+    return render_template(
+        'linkedin_config.html',
+        proxycurl_api_key=proxycurl_api_key
+    )
+
+# if __name__ == '__main__':
+#     app.run(debug=True, use_reloader=False, host='0.0.0.0')
+
 if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False, host='0.0.0.0')
+    # Check if Ollama environment variables are set
+    ollama_host = os.environ.get('OLLAMA_HOST', 'localhost')
+    ollama_port = os.environ.get('OLLAMA_PORT', '11434')
+
+    # Log application startup
+    logger.info(f"Starting application with Ollama at {ollama_host}:{ollama_port}")
+
+    # Run the Flask app
+    app.run(host='0.0.0.0', port=5000, debug=True)

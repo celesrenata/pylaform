@@ -1,9 +1,12 @@
 import sqlite3
+import time
 from sqlite3 import Cursor, Connection
-from tenacity import retry, stop_after_delay
+import logging
 
 from . import connect
 
+# Set up logger
+logger = logging.getLogger(__name__)
 
 class Queries:
     """
@@ -12,11 +15,10 @@ class Queries:
     :return None: None
     """
 
-    @retry(stop=(stop_after_delay(10)))
     def __init__(self) -> None:
+        """Initialize the query class with a fresh database connection."""
+        # Initialize cache variables first
         self.result_dropdown = []
-        self.conn: Connection = connect.db()
-        self.cursor: Cursor = self.conn.cursor()
         self.result_certifications: list[dict[str, str | int | bool]] = []
         self.result_education: list[dict[str, str | int | bool]] = []
         self.result_employers: list[dict[str, str | int | bool]] = []
@@ -26,6 +28,25 @@ class Queries:
         self.result_glossary: list[dict[str, str | int | bool]] = []
         self.result_positions: list[dict[str, str | int | bool]] = []
         self.result_summary: list[dict[str, str | int | bool]] = []
+        self.read_only = False
+
+        # Establish database connection
+        try:
+            self.conn: Connection = connect.db()
+            self.cursor: Cursor = self.conn.cursor()
+        except sqlite3.OperationalError as e:
+            if "readonly database" in str(e):
+                logger.warning("Opening database in read-only mode")
+                self.conn: Connection = connect.db(read_only=True)
+                self.cursor: Cursor = self.conn.cursor()
+                self.read_only = True
+            else:
+                logger.error(f"Failed to initialize database connection: {str(e)}")
+                # Initialize with None values to prevent attribute errors
+                self.conn = None
+                self.cursor = None
+                raise
+
 
     def purge_cache(self, table: str) -> None:
         """
@@ -54,20 +75,49 @@ class Queries:
             case "dropdown":
                 self.result_dropdown = []
 
-    @retry(stop=(stop_after_delay(10)))
     def query(self, query: str) -> sqlite3.Cursor:
         """
         Query worker that handles all main SELECT requests.
         :param str query: Query String.
         :return sqlite3.Cursor: Iterable cursor.
         """
+        max_attempts = 3
+        attempt = 0
+        last_error = None
 
-        try:
-            self.cursor.execute(query)
-        except sqlite3.Error as e:
-            print(f"Error querying database: {e}")
-            raise
-        return self.cursor
+        while attempt < max_attempts:
+            try:
+                # Ensure we have a valid connection
+                if not self.conn or not self.cursor:
+                    self.conn = connect.get_fresh_connection()
+                    self.cursor = self.conn.cursor()
+
+                # Execute the query
+                self.cursor.execute(query)
+                return self.cursor
+
+            except sqlite3.Error as e:
+                last_error = e
+                attempt += 1
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Database error (attempt {attempt}/{max_attempts}): {str(e)}")
+
+                # Brief delay before retry
+                time.sleep(0.5)
+
+                # Try to refresh the connection
+                try:
+                    if self.conn:
+                        self.conn.close()
+                    self.conn = connect.get_fresh_connection()
+                    self.cursor = self.conn.cursor()
+                except Exception as conn_error:
+                    logger.error(f"Failed to refresh connection: {str(conn_error)}")
+
+        # If we get here, all attempts failed
+        print(f"Error querying database after {max_attempts} attempts: {last_error}")
+        raise last_error if last_error else sqlite3.Error("Unknown database error")
 
     def query_id(self, value: str, attr: str) -> int:
         # TODO: Consider refactoring to use the attribute as the FROM/WHERE as "attr + 's'"

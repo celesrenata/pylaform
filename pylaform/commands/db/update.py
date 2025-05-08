@@ -109,74 +109,76 @@ class Updates:
         if "_dropdown" in item["attr"] or "_enabled" in item["attr"]:
             return
 
-        print(
-            f"""
-           UPDATE `{table}`
-           SET    `value` = {item["value"]},
-                  `state` = {int(item["state"])}
-           WHERE  `attr` = '{item["attr"]}';
-           """)
+        # No print statement - remove debugging output entirely
+
         try:
             value = int(item["value"])
             response: Cursor = self.cursor.execute(
                 f"""
-                       UPDATE `{table}`
-                       SET    `value` = {item["value"]},
-                              `state` = {int(item["state"])}
-                       WHERE  `attr` = '{item["attr"]}';
-                       """)
+                           UPDATE `{table}`
+                           SET    `value` = {item["value"]},
+                                  `state` = {int(item["state"])}
+                           WHERE  `attr` = '{item["attr"]}';
+                           """)
         except ValueError:
             response: Cursor = self.cursor.execute(
                 f"""
-                       UPDATE `{table}`
-                       SET    `value` = '{item["value"]}',
-                              `state` = {int(item["state"])}
-                       WHERE  `attr` = '{item["attr"]}';
-                       """)
+                           UPDATE `{table}`
+                           SET    `value` = '{item["value"]}',
+                                  `state` = {int(item["state"])}
+                           WHERE  `attr` = '{item["attr"]}';
+                           """)
 
-            # Commit changes.
+        # Commit changes
         self.conn.commit()
         return
 
-    @retry(stop=(stop_after_delay(10)))
     def multi_column(self, table: str, **kwargs) -> None:
         """
-        Takes kwargs and injects them into the database, supports nesting automatically.
-        :param str table: Table name.
-        :param kwargs: Key/Val pairs of column/values.
+        Updates multiple columns at once for a specific record.
+        Improved version that avoids repeated execution.
+
+        :param str table: Table to update.
+        :param kwargs: Column names and values to update.
         :return None: None
         """
+        # Extract ID from kwargs
+        record_id = kwargs.get('id')
+        if record_id is None:
+            print("Error: ID is required for multi_column update")
+            return
 
-        # Build the query.
-        set_group: str = ""
+        # Build SET clause and parameter list
+        set_parts = []
+        params = []
+
         for key, value in kwargs.items():
-            if value is None:
-                # For None/NULL values, use NULL directly in SQL
-                set_group = set_group + f"`{key.split('_')[-1]}` = NULL, "
-            else:
-                try:
-                    set_group = set_group + f"`{key.split('_')[-1]}` = {int(value)}, "
-                except ValueError:
-                    # Escape single quotes in string values by replacing ' with ''
-                    if isinstance(value, str):
-                        escaped_value = value.replace("'", "''")
-                        set_group = set_group + f"`{key.split('_')[-1]}` = '{escaped_value}', "
-                    else:
-                        set_group = set_group + f"`{key.split('_')[-1]}` = '{value}', "
+            if key != 'id':  # Skip ID for SET clause
+                if value is None:
+                    set_parts.append(f"`{key}` = NULL")
+                else:
+                    set_parts.append(f"`{key}` = ?")
+                    params.append(value)
 
-        print(
-            f"""
-            UPDATE `{table}`
-            SET    {set_group[:-2]}
-            WHERE  `id` = {kwargs["id"]};
-            """)
-        response: Cursor = self.cursor.execute(
-            f"""
-            UPDATE `{table}`
-            SET {set_group[:-2]}
-            WHERE `id` = {kwargs["id"]};
-            """)
+        # No columns to update
+        if not set_parts:
+            print(f"Warning: No columns to update for {table} with ID {record_id}")
+            return
 
-        # Commit changes.
-        self.conn.commit()
-        return
+        # Add ID to parameters for WHERE clause
+        params.append(record_id)
+
+        # Construct and execute the query
+        query = f"""
+            UPDATE `{table}`
+            SET    {", ".join(set_parts)}
+            WHERE  `id` = ?;
+        """
+
+        try:
+            # Execute the query once (no retry)
+            self.cursor.execute(query, params)
+            self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"SQLite error in multi_column update: {e}")
+            raise

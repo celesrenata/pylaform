@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-5">
+        <div class="col-12 text-center">
+            <h1 class="display-5 fw-bold text-primary mb-3">LinkedIn Integration Settings</h1>
+            <p class="lead">Configure your LinkedIn API credentials for profile import functionality</p>
+            <div class="d-flex justify-content-center">
+                <hr class="w-25">
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <h2 class="card-title h4 text-primary mb-3">
+                        <i class="bi bi-linkedin me-2"></i>Proxycurl API Configuration
+                    </h2>
+                    <p class="card-text mb-4">Proxycurl API is required for importing LinkedIn profiles. Your API key will be securely stored.</p>
+
+                    <form method="POST" action="{{ url_for('linkedin_config') }}">
+                        <div class="mb-4">
+                            <label for="proxycurlApiKey" class="form-label">Proxycurl API Key</label>
+                            <input type="text" class="form-control" id="proxycurlApiKey" name="proxycurlApiKey"
+                                   value="{{ proxycurl_api_key }}" placeholder="Enter your Proxycurl API key">
+                            <div class="form-text">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Get your API key from <a href="https://nubela.co/proxycurl/" target="_blank">Proxycurl</a>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-2"></i>Save Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-body p-4">
+                    <h3 class="h5 text-primary mb-3">
+                        <i class="bi bi-question-circle me-2"></i>How LinkedIn Import Works
+                    </h3>
+                    <p>The LinkedIn import feature allows you to:</p>
+                    <ul class="list-group list-group-flush mb-3">
+                        <li class="list-group-item bg-transparent border-0 ps-0">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            Import your profile data directly from LinkedIn
+                        </li>
+                        <li class="list-group-item bg-transparent border-0 ps-0">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            Automatically fill in your employment history, education, and skills
+                        </li>
+                        <li class="list-group-item bg-transparent border-0 ps-0">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            Save time by avoiding manual data entry
+                        </li>
+                    </ul>
+                    <div class="alert alert-info" role="alert">
+                        <i class="bi bi-shield-check me-2"></i>
+                        Your API key is stored securely and used only for LinkedIn profile imports.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

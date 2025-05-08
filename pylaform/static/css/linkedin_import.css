@@ -1,0 +1,85 @@
+/* pylaform/static/css/linkedin_import.css */
+
+.linkedin-profile-card {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+    border-left: 4px solid #0077b5;
+}
+
+.linkedin-profile-card .profile-picture {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.linkedin-profile-card .profile-placeholder {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background-color: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.section-card {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.section-card .card-header {
+    background-color: #f8f9fa;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.section-card .card-body {
+    padding: 16px;
+}
+
+.section-card .form-check-input:checked + .form-check-label {
+    color: #0077b5;
+}
+
+.btn-linkedin {
+    background-color: #0077b5;
+    border-color: #0077b5;
+    color: #ffffff;
+}
+
+.btn-linkedin:hover, .btn-linkedin:focus {
+    background-color: #005e93;
+    border-color: #005e93;
+    color: #ffffff;
+}
+
+.section-entry {
+    padding: 12px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.section-entry:last-child {
+    border-bottom: none;
+}
+
+.skills-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.skill-tag {
+    background-color: #e9ecef;
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 14px;
+}

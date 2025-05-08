@@ -6,6 +6,7 @@
         <div>
             <i class="bi bi-cpu ai-icon"></i>
             <span>AI Resume Helper</span>
+            <span class="ai-status-indicator" title="Checking AI connection...">●</span>
         </div>
         <div class="ai-helper-actions">
             <a href="/ai-config" class="ai-settings-link" title="AI Settings">
@@ -53,8 +54,36 @@
         const aiSubmitBtn = document.getElementById('ai-submit');
         const aiResultDiv = document.querySelector('.ai-helper-result');
         const aiLoadingDiv = document.querySelector('.ai-helper-loading');
+        const aiStatusIndicator = document.querySelector('.ai-status-indicator');
 
         let selectedImprovement = null;
+
+        // Check AI connection status periodically
+        function checkAiStatus() {
+            fetch('/api/ai-status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        aiStatusIndicator.classList.remove('status-amber');
+                        aiStatusIndicator.classList.add('status-green');
+                        aiStatusIndicator.title = 'Connected to Ollama';
+                    } else {
+                        aiStatusIndicator.classList.remove('status-green');
+                        aiStatusIndicator.classList.add('status-amber');
+                        aiStatusIndicator.title = data.message || 'Not connected to Ollama';
+                    }
+                })
+                .catch(error => {
+                    aiStatusIndicator.classList.remove('status-green');
+                    aiStatusIndicator.classList.add('status-amber');
+                    aiStatusIndicator.title = 'Failed to check Ollama connection';
+                    console.error('AI status check error:', error);
+                });
+        }
+
+        // Check status immediately and then every 30 seconds
+        checkAiStatus();
+        setInterval(checkAiStatus, 30000);
 
         aiToggle.addEventListener('click', function(e) {
             // Don't toggle if clicking the settings gear

@@ -60,6 +60,22 @@
     font-size: 1.2em;
 }
 
+/* AI Status Indicator */
+.ai-status-indicator {
+    margin-left: 10px;
+    font-size: 0.8em;
+    transition: color 0.3s ease;
+    color: #eeeeee; /* Default color (light gray) */
+}
+
+.ai-status-indicator.status-green {
+    color: #5cb85c; /* Green for connected */
+}
+
+.ai-status-indicator.status-amber {
+    color: #f0ad4e; /* Amber for not connected */
+}
+
 .arrow {
     transition: transform 0.3s ease;
 }

@@ -1,0 +1,50 @@
+<!-- pylaform/templates/linkedin_error.html -->
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="section-header">
+                <i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>LinkedIn Connection Error
+            </h1>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4 text-center">
+                    <div class="mb-4">
+                        <i class="bi bi-linkedin text-muted" style="font-size: 3rem;"></i>
+                    </div>
+
+                    <h3 class="h4 mb-3">{{ error_title }}</h3>
+                    <p class="mb-4">{{ error_message }}</p>
+
+                    <div class="mb-4">
+                        <div class="alert alert-info">
+                            <h5 class="h6 mb-2">Possible solutions:</h5>
+                            <ul class="text-start mb-0">
+                                <li>Make sure you've granted the necessary permissions</li>
+                                <li>Try logging out from LinkedIn and logging in again</li>
+                                <li>Check your LinkedIn profile settings for data visibility</li>
+                                <li>If problems persist, try importing your data manually</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <a href="{{ url_for('linkedin_import_page') }}" class="btn btn-outline-primary me-2">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Try Again
+                        </a>
+                        <a href="{{ url_for('landing') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-house-door me-1"></i>Return to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

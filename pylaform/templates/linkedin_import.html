@@ -1,0 +1,100 @@
+<!-- linkedin_import.html -->
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="h3 mb-4">Import from LinkedIn</h1>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">LinkedIn Profile Import</h5>
+
+                    {% if has_proxycurl %}
+                    <!-- Proxycurl Import Method -->
+                    <div class="mb-4">
+                        <h6><i class="bi bi-cloud-arrow-down"></i> Import with Profile URL</h6>
+                        <p class="text-muted">Import your LinkedIn profile data directly using your profile URL</p>
+
+                        <form method="POST" action="{{ url_for('linkedin_import_with_proxycurl') }}">
+                            <div class="mb-3">
+                                <label for="linkedin_profile_url" class="form-label">Your LinkedIn Profile URL</label>
+                                <input type="url" class="form-control" id="linkedin_profile_url"
+                                       name="linkedin_profile_url" required
+                                       placeholder="https://www.linkedin.com/in/your-profile-name">
+                                <div class="form-text">Enter the full URL to your LinkedIn profile</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Select sections to import:</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="basic_info"
+                                           id="import_basic_info" name="import_sections" checked>
+                                    <label class="form-check-label" for="import_basic_info">
+                                        Basic Information (Name, Headline)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="experience"
+                                           id="import_experience" name="import_sections" checked>
+                                    <label class="form-check-label" for="import_experience">
+                                        Work Experience
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="education"
+                                           id="import_education" name="import_sections" checked>
+                                    <label class="form-check-label" for="import_education">
+                                        Education
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="skills"
+                                           id="import_skills" name="import_sections" checked>
+                                    <label class="form-check-label" for="import_skills">
+                                        Skills
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-linkedin me-2"></i>Import Profile Data
+                            </button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <!-- No Proxycurl API Key -->
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Proxycurl API key not configured.</strong>
+                        Please <a href="{{ url_for('linkedin.settings') }}">configure LinkedIn settings</a>
+                        with a Proxycurl API key to enable LinkedIn import.
+                    </div>
+                    {% endif %}
+
+                    <hr class="my-4">
+
+                    <!-- Instructions -->
+                    <div class="mt-4">
+                        <h6><i class="bi bi-info-circle"></i> How to get started with LinkedIn Import:</h6>
+                        <ol>
+                            <li>Go to your LinkedIn profile</li>
+                            <li>Copy your profile URL from the browser address bar</li>
+                            <li>Paste it in the form above</li>
+                            <li>Select which sections you want to import</li>
+                            <li>Click "Import Profile Data" button</li>
+                        </ol>
+
+                        <div class="alert alert-info">
+                            <p><i class="bi bi-lightbulb"></i> <strong>Pro Tip:</strong>
+                            If this is your first time using LinkedIn import, you'll need to configure your
+                            <a href="{{ url_for('linkedin.settings') }}">LinkedIn settings</a> with a Proxycurl API key first.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

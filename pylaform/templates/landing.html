@@ -100,6 +100,27 @@
                 </div>
             </div>
         </div>
+        <!-- LinkedIn Import Feature Card -->
+        <div class="col-md-4 mb-4">
+            <div class="card border-0 shadow-sm h-100 text-center">
+                <div class="card-body p-4">
+                    <div class="rounded-circle bg-light p-3 d-inline-flex mb-3">
+                        <i class="bi bi-linkedin text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="h5 mb-3">LinkedIn Import</h3>
+                    <p class="card-text">Import your professional details directly from your LinkedIn profile</p>
+                    <div class="row mb-5">
+                        <div class="col-12 text-center">
+                            <a href="{{ url_for('linkedin_import_page') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-linkedin me-2"></i>Import from LinkedIn
+                            </a>
+                            <p class="small text-muted mt-2">Connect your LinkedIn account to automatically import your professional information</p>
+                            <a href="{{ url_for('linkedin_config') }}">LinkedIn Settings</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

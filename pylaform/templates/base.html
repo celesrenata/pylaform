@@ -13,9 +13,11 @@
 <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
     <!-- Date picker dependencies -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/linkedin_import.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/yearSelectPlugin.js"></script>
     <script src="{{ url_for('static', filename='js/datepicker.js') }}"></script>
+
 
     {% set ns = namespace(title="Welcome") %}
     {% for item in payload %}
@@ -169,6 +171,11 @@
                         <li class="nav-item w-100">
                             <a href="/glossary" class="nav-link px-3 py-2">
                                 <i class="bi bi-bookmark-star me-2"></i> <span class="ms-1 d-none d-sm-inline">Highlighted Terms</span>
+                            </a>
+                        </li>
+                        <li class="nav-item w-100">
+                            <a href="/linkedin-settings" class="nav-link px-3 py-2">
+                                <i class="bi bi-linkedin me-2"></i> <span class="ms-1 d-none d-sm-inline">LinkedIn Settings</span>
                             </a>
                         </li>
                     </ul>

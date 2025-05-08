@@ -55,6 +55,23 @@ class ConfigService:
         except IOError:
             return False
 
+    def save_linkedin_config(self, proxycurl_api_key):
+        """
+        Save LinkedIn configuration
+
+        :param proxycurl_api_key: API key for Proxycurl
+        :return: Success status
+        """
+        if 'linkedin' not in self.config:
+            self.config['linkedin'] = {}
+
+        self.config['linkedin']['proxycurl_api_key'] = proxycurl_api_key
+
+        # Also set in environment for immediate use
+        os.environ['PROXYCURL_API_KEY'] = proxycurl_api_key
+
+        return self._save_config(self.config)
+
     def _get_default_config(self):
         """
         Get default configuration
@@ -99,3 +116,16 @@ class ConfigService:
             }
         }
         return self._save_config(self.config)
+
+    # LinkedIn API settings
+    LINKEDIN_CONFIG = {
+        'CLIENT_ID': os.environ.get('LINKEDIN_CLIENT_ID', ''),
+        'CLIENT_SECRET': os.environ.get('LINKEDIN_CLIENT_SECRET', ''),
+        'REDIRECT_URI': os.environ.get('LINKEDIN_REDIRECT_URI', 'http://localhost:5000/auth/linkedin/callback'),
+        'SCOPES': 'r_liteprofile r_emailaddress r_basicprofile'
+    }
+
+    @classmethod
+    def get_linkedin_config(cls):
+        """Get LinkedIn API configuration settings"""
+        return cls.LINKEDIN_CONFIG
