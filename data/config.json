@@ -1,0 +1,13 @@
+{
+  "ai": {
+    "enabled": false,
+    "service_type": "AMAZON_Q",
+    "amazon_q": {
+      "region": "us-west-2",
+      "application_id": "6acc65fb-390b-4d8d-a10b-05bea5265fd8"
+    }
+  },
+  "linkedin": {
+    "proxycurl_api_key": ""
+  }
+}

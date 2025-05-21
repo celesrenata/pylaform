@@ -1,174 +1,124 @@
-{% from "_dropdown.html" import drop_down with context %}
-{% from "_date_picker.html" import date_picker with context %}
-{% macro form_group(payload, ddpayload, schoolid, schoolname, location, schoolstate, focusid, focusname, startdate, enddate, focusstate, hidden=True, school_dropdown_value=None, focus_dropdown_value=None) %}
-    {# If adding a new row, allow for unique IDs #}
-    {% if schoolid == "new" %}
-        {% set schoolid = "new" %}
-        {% set focusid = "new" %}
+{% macro form_group(id, name, location, degree, graddate, state, achievements=[]) %}
+    <!-- Handle new elements -->
+    {% if id == "new" %}
+        {% set id = "new" %}
     {% endif %}
-
-    <div id="{{ focusid }}" class="card border-0 shadow-sm mb-4">
+    <div id="{{ id }}" class="card border-0 shadow-sm mb-4">
         <div class="card-body p-4">
-            <input type="hidden" name="{{ focusid }}_rowid" value="{{ schoolid }}">
-
-            <div class="row g-4">
-                <!-- School Information Section -->
-                <div class="col-md-6">
-                    <div class="card h-100 bg-light border-0">
-                        <div class="card-header bg-primary bg-opacity-10 border-0">
-                            <h3 class="h6 mb-0 text-primary">
-                                <i class="bi bi-buildings me-2"></i>Institution
-                            </h3>
+            <div class="row">
+                <div class="col-md-11">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ id }}_name" class="form-label fw-medium">
+                                <i class="bi bi-building me-2"></i>School Name
+                            </label>
+                            <input
+                                type="text"
+                                name="{{ id }}_name"
+                                id="{{ id }}_name"
+                                class="form-control bg-light"
+                                value="{{ name if name is defined else "" }}"
+                                placeholder="e.g., Stanford University"
+                            >
+                            <div class="form-text text-muted">Name of the educational institution</div>
                         </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                {{ drop_down(
-                                    focusid,
-                                    payload,
-                                    ddpayload,
-                                    "school",
-                                    primarybyname=True,
-                                    selected_value=school_dropdown_value if school_dropdown_value is not none else schoolid
-                                ) }}
-                            </div>
-
-                            <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}"
-                                 id="{{ focusid }}_school_div">
-                                <div class="mb-3">
-                                    <label for="{{ focusid }}_school_name" class="form-label fw-medium">
-                                        <i class="bi bi-mortarboard-fill me-2"></i>School Name
-                                    </label>
-                                    <input type="text"
-                                           name="{{ focusid }}_school_name"
-                                           id="{{ focusid }}_school_name"
-                                           class="form-control bg-white"
-                                           value="{{ schoolname if schoolname is defined else '' }}"
-                                           onfocusout="commit_value('{{ focusid }}_school');"
-                                           data-school-name="{{ schoolname if schoolname is defined else '' }}"
-                                           placeholder="Enter school or university name">
-                                </div>
-
-                                <div class="mb-3">
-                                    <label for="{{ focusid }}_school_location" class="form-label fw-medium">
-                                        <i class="bi bi-geo-alt-fill me-2"></i>Location
-                                    </label>
-                                    <input type="text"
-                                           name="{{ focusid }}_school_location"
-                                           id="{{ focusid }}_school_location"
-                                           class="form-control bg-white"
-                                           value="{{ location if location is defined else '' }}"
-                                           onfocusout="commit_value('{{ focusid }}_school_location');"
-                                           data-school-location="{{ location if location is defined else '' }}"
-                                           placeholder="City, State/Province, Country">
-                                </div>
-                            </div>
-
-                            <div class="form-check form-switch mt-3">
-                                <input type="checkbox"
-                                       class="form-check-input"
-                                       role="switch"
-                                       name="{{ focusid }}_school_enabled"
-                                       id="{{ focusid }}_school_enabled"
-                                       {{ "checked" if schoolstate }}
-                                       data-school-state="{{ schoolstate }}">
-                                <label class="form-check-label" for="{{ focusid }}_school_enabled">
-                                    Display this institution
-                                </label>
-                            </div>
+                        <div class="col-md-6">
+                            <label for="{{ id }}_location" class="form-label fw-medium">
+                                <i class="bi bi-geo-alt me-2"></i>Location
+                            </label>
+                            <input
+                                type="text"
+                                name="{{ id }}_location"
+                                id="{{ id }}_location"
+                                class="form-control bg-light"
+                                value="{{ location if location is defined else '' }}"
+                                placeholder="e.g., Stanford, CA"
+                            >
+                            <div class="form-text text-muted">City and state/country of the institution</div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Degree/Focus Information Section -->
-                <div class="col-md-6">
-                    <div class="card h-100 bg-light border-0">
-                        <div class="card-header bg-primary bg-opacity-10 border-0">
-                            <h3 class="h6 mb-0 text-primary">
-                                <i class="bi bi-journal-text me-2"></i>Degree or Area of Study
-                            </h3>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ id }}_degree" class="form-label fw-medium">
+                                <i class="bi bi-mortarboard me-2"></i>Degree
+                            </label>
+                            <input
+                                type="text"
+                                name="{{ id }}_degree"
+                                id="{{ id }}_degree"
+                                class="form-control bg-light"
+                                value="{{ degree if degree is defined else "" }}"
+                                placeholder="e.g., Bachelor of Science in Computer Science"
+                            >
+                            <div class="form-text text-muted">Degree, certificate, or program name</div>
                         </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                {{ drop_down(
-                                    focusid,
-                                    payload,
-                                    ddpayload,
-                                    "school",
-                                    secondary="focus",
-                                    secondaryid=focusid,
-                                    secondarybyname=True,
-                                    selected_value=focus_dropdown_value if focus_dropdown_value is not none else focusid
-                                ) }}
+                        <div class="col-md-6">
+                            <label for="{{ id }}_graddate" class="form-label fw-medium">
+                                <i class="bi bi-calendar-event me-2"></i>Graduation Date
+                            </label>
+                            <div class="position-relative">
+                                <input
+                                    type="text"
+                                    name="{{ id }}_graddate"
+                                    id="{{ id }}_graddate"
+                                    class="form-control dateInput bg-light"
+                                    value="{{ graddate if graddate is defined else '' }}"
+                                    placeholder="MM/YYYY"
+                                    aria-label="Graduation date"
+                                    aria-describedby="{{ id }}_graddate_help"
+                                    autocomplete="off"
+                                >
                             </div>
+                            <div id="{{ id }}_graddate_help" class="form-text text-muted">Graduation date (month and year)</div>
+                        </div>
+                    </div>
 
-                            <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ focusid }}_focus_div">
-                                <div class="mb-3">
-                                    <label for="{{ focusid }}_focus_name" class="form-label fw-medium">
-                                        <i class="bi bi-award me-2"></i>Degree/Major
-                                    </label>
-                                    <input type="text"
-                                           name="{{ focusid }}_focus_name"
-                                           id="{{ focusid }}_focus_name"
-                                           class="form-control bg-white"
-                                           value="{{ focusname if focusname is defined else '' }}"
-                                           onfocusout="commit_value('{{ focusid }}_school');"
-                                           data-focus-name="{{ focusname if focusname is defined else '' }}"
-                                           placeholder="Bachelor of Science in Computer Science">
-                                    <div class="form-text text-muted">
-                                        Include the full degree name and field of study
+                    <!-- Achievements Section -->
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">
+                            <i class="bi bi-trophy me-2"></i>Achievements
+                        </label>
+                        <div class="achievements" id="{{ id }}_achievements">
+                            {% if achievements %}
+                                {% for achievement in achievements %}
+                                    <div class="achievement-item card bg-light mb-2 p-2">
+                                        <div class="d-flex">
+                                            <input type="text"
+                                                class="form-control me-2"
+                                                name="{{ id }}_achievement_{{ loop.index }}"
+                                                value="{{ achievement.description }}"
+                                                placeholder="e.g., Dean's List, Scholarship Award">
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-achievement">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-
-                            <div class="row mb-3">
-                                <div class="col-6">
-                                    {{ date_picker(
-                                        focusid + "_focus_startdate",
-                                        "Start Date",
-                                        icon="calendar-event",
-                                        value=startdate if startdate is defined else "",
-                                        placeholder="MM/YYYY",
-                                        help_text="When you began this program"
-                                    ) }}
-                                </div>
-                                <div class="col-6">
-                                    {{ date_picker(
-                                        focusid + "_focus_enddate",
-                                        "End Date",
-                                        icon="calendar-check",
-                                        value=enddate if enddate is defined else "",
-                                        placeholder="MM/YYYY",
-                                        help_text="When you completed or expect to complete",
-                                        include_present=true
-                                    ) }}
-                                </div>
-                            </div>
-
-                            <div class="form-check form-switch mt-3">
-                                <input type="checkbox"
-                                       class="form-check-input"
-                                       role="switch"
-                                       name="{{ focusid }}_focus_enabled"
-                                       id="{{ focusid }}_focus_enabled"
-                                       {{ "checked" if focusstate }}
-                                       data-focus-state="{{ focusstate }}">
-                                <label class="form-check-label" for="{{ focusid }}_focus_enabled">
-                                    Display this degree/major
-                                </label>
-                            </div>
+                                {% endfor %}
+                            {% endif %}
                         </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-achievement-button" data-school-id="{{ id }}">
+                            <i class="bi bi-plus-lg me-1"></i>Add Achievement
+                        </button>
+                        <div class="form-text text-muted">Awards, honors, or recognitions</div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Action Buttons Row -->
-            <div class="row mt-3">
-                <div class="col-12 d-flex justify-content-end">
-                    <button class="btn btn-outline-secondary me-2 rowEditor" type="button">
-                        <i class="bi bi-pencil-square"></i> Edit
-                    </button>
-                    <button class="btn btn-outline-danger" id="deleteRow" type="button">
-                        <i class="bi bi-trash"></i> Delete
+                    <div class="form-check form-switch mt-3">
+                        <input
+                            type="checkbox"
+                            class="form-check-input"
+                            role="switch"
+                            id="{{ id }}_enabled"
+                            name="{{ id }}_enabled"
+                            {% if state %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="{{ id }}_enabled">Include this education entry</label>
+                    </div>
+                    <input type="hidden" id="{{ id }}_rowid" name="{{ id }}_rowid" value="{{ id }}">
+                </div>
+                <div class="col-md-1 d-flex align-items-center justify-content-end">
+                    <button type="button" class="btn btn-outline-danger delete-school" data-school-id="{{ id }}">
+                        <i class="bi bi-trash"></i>
                     </button>
                 </div>
             </div>

@@ -32,7 +32,7 @@
         <div class="form-group ai-helper-input">
             <label for="ai-text-input">Your Text:</label>
             <textarea class="form-control" id="ai-text-input" rows="3" placeholder="Enter text to improve..."></textarea>
-        </div>
+                </div>
 
         <button id="ai-submit" class="btn btn-primary" disabled>Improve Text</button>
 
@@ -41,199 +41,221 @@
         </div>
 
         <div class="ai-helper-result" style="display: none;"></div>
+
+        <!-- Add the new Apply button -->
+        <button id="ai-apply" class="btn btn-success mt-2" style="display: none;">Apply Improvement</button>
     </div>
 </div>
-
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Toggle the AI helper footer
-        const aiHelper = document.querySelector('.ai-helper-footer');
-        const aiToggle = document.querySelector('.ai-helper-toggle');
-        const aiOptions = document.querySelectorAll('.ai-helper-option');
-        const aiTextInput = document.getElementById('ai-text-input');
-        const aiSubmitBtn = document.getElementById('ai-submit');
-        const aiResultDiv = document.querySelector('.ai-helper-result');
-        const aiLoadingDiv = document.querySelector('.ai-helper-loading');
-        const aiStatusIndicator = document.querySelector('.ai-status-indicator');
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM fully loaded and parsed');
 
-        let selectedImprovement = null;
+    const aiHelper = document.querySelector('.ai-helper-footer');
+    const aiToggle = document.querySelector('.ai-helper-toggle');
+    const aiOptions = document.querySelectorAll('.ai-helper-option');
+    const aiTextInput = document.getElementById('ai-text-input');
+    const aiApplyBtn = document.getElementById('ai-apply');
+    const aiSubmitBtn = document.getElementById('ai-submit');
+    const aiResultDiv = document.querySelector('.ai-helper-result');
+    const aiLoadingDiv = document.querySelector('.ai-helper-loading');
+    const aiStatusIndicator = document.querySelector('.ai-status-indicator');
 
-        // Check AI connection status periodically
-        function checkAiStatus() {
-            fetch('/api/ai-status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        aiStatusIndicator.classList.remove('status-amber');
-                        aiStatusIndicator.classList.add('status-green');
-                        aiStatusIndicator.title = 'Connected to Ollama';
-                    } else {
-                        aiStatusIndicator.classList.remove('status-green');
-                        aiStatusIndicator.classList.add('status-amber');
-                        aiStatusIndicator.title = data.message || 'Not connected to Ollama';
-                    }
-                })
-                .catch(error => {
+    let selectedImprovement = null;
+
+    console.log('AI Helper elements initialized');
+
+    function checkAiStatus() {
+        console.log('Checking AI status');
+        fetch('/api/ai-status')
+            .then(response => response.json())
+            .then(data => {
+                console.log('AI status response:', data);
+                if (data.status === 'ok') {
+                    aiStatusIndicator.classList.remove('status-amber');
+                    aiStatusIndicator.classList.add('status-green');
+                    aiStatusIndicator.title = 'Connected to Amazon Q';
+                } else {
                     aiStatusIndicator.classList.remove('status-green');
                     aiStatusIndicator.classList.add('status-amber');
-                    aiStatusIndicator.title = 'Failed to check Ollama connection';
-                    console.error('AI status check error:', error);
-                });
-        }
-
-        // Check status immediately and then every 30 seconds
-        checkAiStatus();
-        setInterval(checkAiStatus, 30000);
-
-        aiToggle.addEventListener('click', function(e) {
-            // Don't toggle if clicking the settings gear
-            if (e.target.classList.contains('bi-gear') ||
-                e.target.classList.contains('ai-settings-link')) {
-                return;
-            }
-            aiHelper.classList.toggle('expanded');
-        });
-
-        // Handle option selection
-        aiOptions.forEach(option => {
-            option.addEventListener('click', function() {
-                // Remove active class from all options
-                aiOptions.forEach(o => o.classList.remove('active'));
-
-                // Add active class to the clicked option
-                this.classList.add('active');
-
-                // Store the selected improvement type
-                selectedImprovement = this.dataset.type;
-
-                // Enable submit button if text is available
-                if (aiTextInput.value.trim()) {
-                    aiSubmitBtn.disabled = false;
+                    aiStatusIndicator.title = data.message || 'Not connected to Amazon Q';
                 }
-            });
-        });
-
-        // Handle text input
-        aiTextInput.addEventListener('input', function() {
-            // Enable submit button if text is available and an improvement type is selected
-            aiSubmitBtn.disabled = !(this.value.trim() && selectedImprovement);
-        });
-
-        // Handle submission
-        aiSubmitBtn.addEventListener('click', function() {
-            const text = aiTextInput.value.trim();
-
-            if (!text || !selectedImprovement) {
-                return;
-            }
-
-            // Show loading
-            aiResultDiv.style.display = 'none';
-            aiLoadingDiv.style.display = 'block';
-            aiSubmitBtn.disabled = true;
-
-            // Make API request
-            fetch('/api/improve-text', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    text: text,
-                    type: selectedImprovement
-                })
             })
+            .catch(error => {
+                console.error('AI status check error:', error);
+                aiStatusIndicator.classList.remove('status-green');
+                aiStatusIndicator.classList.add('status-amber');
+                aiStatusIndicator.title = 'Failed to check Amazon Q connection';
+            });
+    }
+
+    checkAiStatus();
+    setInterval(checkAiStatus, 30000);
+
+    aiToggle.addEventListener('click', function (e) {
+        console.log('AI Helper toggle clicked');
+        if (!e.target.classList.contains('bi-gear') && !e.target.classList.contains('ai-settings-link')) {
+            aiHelper.classList.toggle('expanded');
+            console.log('AI Helper expanded state:', aiHelper.classList.contains('expanded'));
+        }
+    });
+
+    aiOptions.forEach(option => {
+        option.addEventListener('click', function () {
+            console.log('AI option clicked:', this.dataset.type);
+            aiOptions.forEach(o => o.classList.remove('active'));
+            this.classList.add('active');
+            selectedImprovement = this.dataset.type;
+            aiSubmitBtn.disabled = !aiTextInput.value.trim();
+        });
+    });
+
+    aiTextInput.addEventListener('input', function () {
+        console.log('AI text input changed');
+        aiSubmitBtn.disabled = !(this.value.trim() && selectedImprovement);
+    });
+
+    aiSubmitBtn.addEventListener('click', function () {
+        console.log('AI submit button clicked');
+        const text = aiTextInput.value.trim();
+        if (!text || !selectedImprovement) return;
+
+        console.log('Submitting text for improvement:', text);
+        console.log('Improvement type:', selectedImprovement);
+
+        aiResultDiv.style.display = 'none';
+        aiLoadingDiv.style.display = 'block';
+        aiSubmitBtn.disabled = true;
+        aiApplyBtn.style.display = 'none';
+
+        fetch('/api/improve-text', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text: text, type: selectedImprovement})
+        })
             .then(response => {
-                // Check if the response can be parsed as JSON
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`Server error: ${response.status}`);
                 return response.json();
             })
             .then(data => {
-                // Hide loading
+                console.log('AI improvement response:', data);
                 aiLoadingDiv.style.display = 'none';
-
                 if (data.error) {
                     aiResultDiv.textContent = `Error: ${data.error}`;
+                    aiApplyBtn.style.display = 'none';
                 } else {
                     aiResultDiv.textContent = data.response;
+                    aiApplyBtn.style.display = 'block';
                 }
-
                 aiResultDiv.style.display = 'block';
                 aiSubmitBtn.disabled = false;
             })
             .catch(error => {
-                // Hide loading
+                console.error('API request error:', error);
                 aiLoadingDiv.style.display = 'none';
                 aiResultDiv.textContent = `Error: ${error}`;
                 aiResultDiv.style.display = 'block';
                 aiSubmitBtn.disabled = false;
-
-                console.error('API request error:', error);
+                aiApplyBtn.style.display = 'none';
             });
-        });
-
-        // Add a click-to-copy feature for the result
-        aiResultDiv.addEventListener('click', function() {
-            const text = this.textContent;
-            if (text.startsWith('Error:')) {
-                return; // Don't copy error messages
-            }
-
-            navigator.clipboard.writeText(text)
-                .then(() => {
-                    const originalText = this.textContent;
-                    this.textContent = "Copied to clipboard!";
-                    setTimeout(() => {
-                        this.textContent = originalText;
-                    }, 1500);
-                })
-                .catch(err => {
-                    console.error('Could not copy text: ', err);
-                });
-        });
-
-        // Function to open AI helper with specific text and improvement type
-        window.openAiHelper = function(fieldId, improvementType) {
-            const textField = document.getElementById(fieldId);
-            if (!textField) return;
-
-            const text = textField.value;
-
-            // Set the text in the AI helper
-            aiTextInput.value = text;
-
-            // Select the appropriate improvement type
-            let matchingOption = null;
-            aiOptions.forEach(option => {
-                if (option.textContent === improvementType) {
-                    matchingOption = option;
-                } else if (option.dataset.type === improvementType.toLowerCase()) {
-                    matchingOption = option;
-                }
-            });
-
-            if (matchingOption) {
-                // Simulate a click on the matching option
-                matchingOption.click();
-            }
-
-            // Show the AI helper if it's not already visible
-            if (!aiHelper.classList.contains('expanded')) {
-                aiHelper.classList.add('expanded');
-            }
-
-            // Focus on the text input
-            aiTextInput.focus();
-
-            // Store the source field ID for updating after improvement
-            aiTextInput.dataset.sourceFieldId = fieldId;
-
-            // Enable the submit button
-            if (text.trim() && selectedImprovement) {
-                aiSubmitBtn.disabled = false;
-            }
-        };
     });
+
+    aiApplyBtn.addEventListener('click', function () {
+        console.log('AI apply button clicked');
+        const sourceFieldId = aiTextInput.dataset.sourceFieldId;
+        console.log('Source field ID:', sourceFieldId);
+        const sourceField = document.getElementById(sourceFieldId);
+        if (sourceField && aiResultDiv.textContent) {
+            sourceField.value = aiResultDiv.textContent;
+            console.log('Applied text:', aiResultDiv.textContent);
+            aiHelper.classList.remove('expanded');
+            aiResultDiv.textContent = '';
+            aiApplyBtn.style.display = 'none';
+        }
+    });
+
+    aiResultDiv.addEventListener('click', function () {
+        console.log('AI result div clicked');
+        const text = this.textContent;
+        if (text.startsWith('Error:')) return;
+        navigator.clipboard.writeText(text)
+            .then(() => {
+                console.log('Text copied to clipboard');
+                const originalText = this.textContent;
+                this.textContent = "Copied to clipboard!";
+                setTimeout(() => {
+                    this.textContent = originalText;
+                }, 1500);
+            })
+            .catch(err => console.error('Could not copy text: ', err));
+    });
+
+    window.openAiHelper = function (fieldId, improvementType, textContent) {
+        console.log('Opening AI Helper for:', fieldId);
+
+        const textField = document.getElementById(fieldId);
+        let text = '';
+
+        // Get the parent container of the current field
+        const parentContainer = textField.closest('.summary-item');
+
+        if (parentContainer) {
+            // Find both shortdesc and longdesc within the parent container
+            const shortDescField = parentContainer.querySelector('[id$="_shortdesc"]');
+            const longDescField = parentContainer.querySelector('[id$="_longdesc"]');
+
+            // Combine shortdesc and longdesc
+            let shortDesc = shortDescField ? shortDescField.value : '';
+            let longDesc = longDescField ? longDescField.value : '';
+
+            // Trim each and handle null/undefined to avoid "null" or "undefined" strings
+            shortDesc = shortDesc ? shortDesc.trim() : '';
+            longDesc = longDesc ? longDesc.trim() : '';
+
+            // Combine, ensuring no extra whitespace if one is empty
+            if (shortDesc && longDesc) {
+                text = `${shortDesc}\n\n${longDesc}`;
+            } else {
+                text = shortDesc || longDesc || ''; // Use whichever is available, or empty string if both are empty
+            }
+
+            text = text.trim();
+        } else {
+            // Fallback to using the provided textContent if we can't find the parent container
+            text = textContent || (textField ? textField.value : '');
+        }
+
+        console.log('Text to improve:', text);
+
+        // Set the text in the AI helper input
+        const aiTextInput = document.getElementById('ai-text-input');
+        aiTextInput.value = text;
+        aiTextInput.dataset.sourceFieldId = fieldId;
+
+        // Expand the AI helper
+        const aiHelper = document.querySelector('.ai-helper-footer');
+        aiHelper.classList.add('expanded');
+        console.log('AI Helper expanded:', aiHelper.classList.contains('expanded'));
+
+        // Select the appropriate improvement type
+        const aiOptions = document.querySelectorAll('.ai-helper-option');
+        let matchingOption = Array.from(aiOptions).find(option =>
+            option.textContent.toLowerCase() === improvementType.toLowerCase() ||
+            option.dataset.type.toLowerCase() === improvementType.toLowerCase()
+        );
+
+        if (matchingOption) {
+            matchingOption.click();
+            console.log('Selected improvement type:', matchingOption.dataset.type);
+        } else {
+            console.log('No matching improvement type found for:', improvementType);
+        }
+
+        // Focus on the input
+        aiTextInput.focus();
+
+        // Ensure the AI helper is visible
+        aiHelper.style.display = 'block';
+        console.log('AI Helper display style:', aiHelper.style.display);
+    }
+});
 </script>

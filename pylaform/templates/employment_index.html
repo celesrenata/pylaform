@@ -1,13 +1,12 @@
 {% extends "base.html" %}
-{% from "employment_iter.html" import form_group with context %}
+{% from "employment_iter.html" import employer_form with context %}
+
 {% block content %}
 <div class="container py-4">
     <div class="row mb-4">
         <div class="col-12">
             <h1 class="section-header">Employment History</h1>
-            <p class="lead text-muted">
-                Record your professional work experience, including positions, companies, and employment dates.
-            </p>
+            <p class="lead text-muted">Add your professional experience, positions, and key achievements.</p>
         </div>
     </div>
 
@@ -17,54 +16,27 @@
                 <div class="card-header bg-light border-0 py-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <h2 class="h5 mb-0 text-primary">
-                            <i class="bi bi-briefcase me-2"></i>Work Experience
+                            <i class="bi bi-building me-2"></i>Professional Experience
                         </h2>
                         <div class="text-muted small">
-                            <i class="bi bi-info-circle me-1"></i>List your employment history in reverse chronological order
+                            <i class="bi bi-info-circle me-1"></i>Add your work history in chronological order
                         </div>
                     </div>
                 </div>
                 <div class="card-body p-4">
                     <form method="post" id="employmentForm">
-                        <!-- Iterate payload -->
-                        {% for i in payload %}
-                            {% if i|length > 0 and i.get("position") is not none and i.get("position") != "None" and i.get("position")|string != "None" %}
-                                {# Find selected_position in the raw payload #}
-                                {% set position_id = i["position"]|string %}
-                                {% set selected_position = None %}
-                                {% set found = false %}
-
-                                {# Directly search through payload items for the selected_position #}
-                                {% for item in payload %}
-                                    {% if not found and item.get("id") == "position_" + position_id and item.get("attr") == "selected_position" %}
-                                        {% set selected_position = item.get("value") %}
-                                        {% set found = true %}
-                                    {% endif %}
-                                {% endfor %}
-
-                                {{ form_group(
-                                    payload,
-                                    ddpayload,
-                                    i["employer"],
-                                    i["employername"],
-                                    i["location"],
-                                    i["employerstate"],
-                                    i["position"],
-                                    i["positionname"],
-                                    i["startdate"],
-                                    i["enddate"],
-                                    i["positionstate"],
-                                    selected_position
-                                ) }}
-                            {% endif %}
+                        <!-- Iterate through existing employers -->
+                        {% for employer in payload %}
+                            {{ employer_form(employer.SK, employer.name, employer.location, employer.state, employer.positions) }}
                         {% endfor %}
 
+                        <!-- Container for new input fields -->
                         <div id="newinput"></div>
 
                         <!-- Action buttons -->
                         <div class="d-flex justify-content-between mt-4">
                             <button id="rowAdder" type="button" class="btn btn-outline-primary">
-                                <i class="bi bi-plus-circle me-2"></i>Add Employment
+                                <i class="bi bi-plus-circle me-2"></i>Add Employer
                             </button>
                             <button type="submit" class="btn btn-primary px-4">
                                 <i class="bi bi-check-circle me-2"></i>Save Changes
@@ -78,67 +50,580 @@
             <div class="card border-0 shadow-sm bg-light">
                 <div class="card-body p-4">
                     <h3 class="h5 text-primary mb-3">
-                        <i class="bi bi-lightbulb me-2"></i>Employment History Tips
+                        <i class="bi bi-lightbulb me-2"></i>Employment Tips
                     </h3>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h4 class="h6 mb-2">Formatting Guidelines:</h4>
-                            <ul class="mb-0">
-                                <li class="mb-2">List most recent positions first</li>
-                                <li class="mb-2">Use MM/YYYY format for dates (e.g., 06/2019)</li>
-                                <li class="mb-2">Use "Present" for current positions</li>
-                                <li class="mb-2">Include company locations when possible</li>
-                                <li>Use official job titles for consistency</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-6">
-                            <h4 class="h6 mb-2">Best Practices:</h4>
-                            <ul class="mb-0">
-                                <li class="mb-2">Focus on relevant positions for your target role</li>
-                                <li class="mb-2">Add achievements for each position to highlight impact</li>
-                                <li class="mb-2">Include measurable results whenever possible</li>
-                                <li class="mb-2">For current positions, describe ongoing responsibilities</li>
-                                <li>After saving, use the "Manage Achievements" button to add accomplishments</li>
-                            </ul>
-                        </div>
-                    </div>
+                    <ul class="mb-0">
+                        <li class="mb-2">List your work experience in reverse chronological order (most recent first)</li>
+                        <li class="mb-2">Include relevant positions that showcase your skills and progression</li>
+                        <li class="mb-2">Use specific, quantifiable achievements rather than general job duties</li>
+                        <li class="mb-2">Be consistent with date formats throughout your resume</li>
+                        <li>Focus on accomplishments that are most relevant to your target position</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script type="text/javascript">
-    // Counter for new items
-    let clicks = 0;
+    // Global counters for generating unique IDs
+    var newPositionCounter = 0;
 
-    // Add new employment entry
-    $("#rowAdder").click(function () {
-        clicks += 1;
-        newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", true, "new", "", "", "", true, None, false) }}`;
-        $('#newinput').append(newRowAdd);
-
-        // Smooth scroll to the new element
-        const newestElement = $('#newinput').children().last()[0];
-        if (newestElement) {
-            newestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+    $(function() {
+        // Your existing code...
     });
 
-    // Handle delete button clicks
-    $("body").on("click", "#deleteRow", function () {
-        const div_id = $(this).closest("div.card").attr("id");
+    $(document).on("click", ".add-position-button", function() {
+        // Get the employer ID from the data attribute
+        const employerId = $(this).data("employer-id");
+        console.log("Adding position for employer:", employerId);
 
-        // Confirm deletion
-        if (confirm("Are you sure you want to delete this position? Any associated achievements will also be deleted.")) {
-            // Fade out the element before removing
-            $("#" + div_id).fadeOut(300, function() {
-                $(this).remove();
-                $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-            });
+        // Find the positions container relative to the button
+        const button = $(this);
+        const employerCard = button.closest('.card');
+        const positionsContainer = employerCard.find('.positions-container');
+
+        console.log("Employer card found:", employerCard.length > 0);
+        console.log("Positions container found:", positionsContainer.length > 0);
+
+        if (positionsContainer.length === 0) {
+            console.error("Could not find positions container!");
+            return;
         }
+
+        // Increment the position counter for unique IDs
+        var newPositionCounter = 1;
+        if (window.newPositionCounter) {
+            window.newPositionCounter++;
+            newPositionCounter = window.newPositionCounter;
+        } else {
+            window.newPositionCounter = 1;
+        }
+
+        // Generate a unique ID for the new position
+        const tempPositionId = `new-position-${Date.now()}`;
+        console.log("Creating position with ID:", tempPositionId);
+
+        // Full position template with highlight styling
+        const positionTemplate = `
+            <div class="position-item card bg-light mb-2 p-2" id="position_${tempPositionId}" style="border: 2px solid #4a6baf; background-color: #f8f9fa;">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="${tempPositionId}_title" class="form-label">Job Title</label>
+                            <input
+                                type="text"
+                                name="${tempPositionId}_title"
+                                id="${tempPositionId}_title"
+                                class="form-control"
+                                value=""
+                                placeholder="e.g., Senior Software Engineer"
+                            >
+                        </div>
+                        <div class="col-md-3">
+                            <label for="${tempPositionId}_startdate" class="form-label">Start Date</label>
+                            <input
+                                type="text"
+                                name="${tempPositionId}_startdate"
+                                id="${tempPositionId}_startdate"
+                                class="form-control dateInput"
+                                value=""
+                                placeholder="MM/YYYY"
+                            >
+                        </div>
+                        <div class="col-md-3">
+                            <label for="${tempPositionId}_enddate" class="form-label">End Date</label>
+                            <input
+                                type="text"
+                                name="${tempPositionId}_enddate"
+                                id="${tempPositionId}_enddate"
+                                class="form-control dateInput"
+                                value=""
+                                placeholder="MM/YYYY"
+                            >
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <div class="form-check form-switch mb-3">
+                            <input
+                                type="checkbox"
+                                class="form-check-input current-position"
+                                role="switch"
+                                id="${tempPositionId}_current"
+                                name="${tempPositionId}_current"
+                                value="1"
+                                data-enddate-id="${tempPositionId}_enddate"
+                            >
+                            <label class="form-check-label" for="${tempPositionId}_current">
+                                I currently work here
+                            </label>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-position" data-position-id="${tempPositionId}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input
+                            type="checkbox"
+                            class="form-check-input"
+                            role="switch"
+                            id="${tempPositionId}_enabled"
+                            name="${tempPositionId}_enabled"
+                            value="1"
+                            checked
+                        >
+                        <label class="form-check-label" for="${tempPositionId}_enabled">
+                            Include this position
+                        </label>
+                    </div>
+
+                    <!-- Achievements section -->
+                    <div class="mt-3">
+                        <h6 class="fw-medium">Key Achievements</h6>
+                        <div class="achievements-container" id="${tempPositionId}_achievements">
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-achievement-button" data-position-id="${tempPositionId}">
+                            <i class="bi bi-plus-lg me-1"></i>Add Achievement
+                        </button>
+                    </div>
+
+                    <!-- Store the employer ID as a hidden field -->
+                    <input type="hidden" name="${tempPositionId}_employer_id" value="${employerId}">
+                </div>
+            </div>
+        `;
+
+        // Append to the positions container
+        positionsContainer.append(positionTemplate);
+
+        console.log("Position added, container now has:", positionsContainer.children().length, "positions");
+
+        // Initialize datepickers for the new date fields
+        // Use a more reliable initialization method for the datepickers
+        setTimeout(function() {
+            console.log("Initializing datepickers for new fields");
+            try {
+                // Try to initialize using Bootstrap Datepicker
+                $(`#${tempPositionId}_startdate, #${tempPositionId}_enddate`).datepicker({
+                    format: "mm/yyyy",
+                    startView: "months",
+                    minViewMode: "months",
+                    autoclose: true,
+                    clearBtn: true
+                });
+            } catch (e) {
+                console.error("Error initializing datepicker:", e);
+                // Fallback to a basic datepicker if available
+                try {
+                    $(`#${tempPositionId}_startdate, #${tempPositionId}_enddate`).flatpickr({
+                        dateFormat: "m/Y",
+                        plugins: [new monthSelectPlugin()]
+                    });
+                } catch (e2) {
+                    console.error("Could not initialize any datepicker:", e2);
+                }
+            }
+        }, 100);
+
+        // Handle the "current position" checkbox
+        $(`#${tempPositionId}_current`).change(function() {
+            const endDateId = $(this).data("enddate-id");
+            const endDateField = $(`#${endDateId}`);
+
+            if ($(this).is(":checked")) {
+                endDateField.prop("disabled", true);
+                endDateField.val("");
+            } else {
+                endDateField.prop("disabled", false);
+            }
+        });
+
+        // Scroll to the new element with delay to ensure it's rendered
+        setTimeout(function() {
+            console.log("Scrolling to new position");
+            const elem = document.getElementById(`position_${tempPositionId}`);
+            if (elem) {
+                // Scroll to the element
+                elem.scrollIntoView({behavior: "smooth", block: "center"});
+
+                // Add a visual highlight that fades out
+                $(elem).css('background-color', '#e6f7ff');
+                setTimeout(function() {
+                    $(elem).css('transition', 'background-color 1s ease');
+                    $(elem).css('background-color', '');
+                }, 1000);
+            } else {
+                console.error("Could not find element to scroll to:", `position_${tempPositionId}`);
+            }
+        }, 200);
     });
 </script>
-{% include "_scripts.html" %}
+<script type="text/javascript">
+    $(function() {
+        // Counter for new items
+        var newItemCounter = 0;
+        var newPositionCounter = 0;
+        var newAchievementCounter = 0;
+
+        // Add new employer when the "Add Employer" button is clicked
+
+    // Function to add new achievement to a position
+    $(document).on("click", ".add-achievement-button", function() {
+        // Get the position ID from the data attribute
+        const positionId = $(this).data("position-id");
+
+        // Find the achievements container within this position
+        const achievementsContainer = $(this).closest('.position-item').find('.achievements-container');
+
+        console.log("Adding achievement for position:", positionId);
+        console.log("Target container:", achievementsContainer.length > 0 ? "found" : "not found");
+
+        if (achievementsContainer.length === 0) {
+            console.error("Could not find achievements container!");
+            return;
+        }
+
+        // Increment the achievement counter
+        newAchievementCounter++;
+
+        // Generate a unique ID for the new achievement
+        const achievementId = `new-achievement-${newAchievementCounter}`;
+
+
+        // Append the achievement to the container
+        achievementsContainer.append(achievementTemplate);
+
+        // Scroll to the new element
+        const newAchievement = achievementsContainer.children().last()[0];
+        if (newAchievement) {
+            newAchievement.scrollIntoView({behavior: "smooth"});
+        }
+    });
+
+    // Employer deletion handler - updated to avoid prefixing IDs
+    $(document).on("click", ".delete-employer", function() {
+        console.log("Delete employer button clicked");
+
+        // Get the employer ID without adding prefix
+        const employerId = $(this).data("employer-id");
+        console.log("Employer ID to delete:", employerId);
+
+        // Confirm deletion with warning about positions
+        if (confirm("Are you sure you want to delete this employer? This will also delete all associated positions.")) {
+            // If it's a new employer (not yet in database), just remove it from DOM
+            if (employerId.startsWith("new")) {
+                console.log("Removing temporary employer from DOM");
+                $(this).closest(".employer-card").remove();
+            } else {
+                // For existing employers, submit form with delete parameter
+                console.log("Submitting form to delete employer from database");
+
+                // Create a form and submit it
+                const form = $("<form>")
+                    .attr("method", "post")
+                    .attr("action", "/employment");
+
+                // Add employer ID as _delete_employer field - don't prefix with "employer_"
+                $("<input>")
+                    .attr("type", "hidden")
+                    .attr("name", "_delete_employer")
+                    .attr("value", employerId)
+                    .appendTo(form);
+
+                // Add to DOM and submit
+                form.appendTo("body").submit();
+            }
+        }
+    });
+
+    // Position deletion handler
+    $(document).on("click", ".delete-position", function() {
+        console.log("Delete position button clicked");
+
+        // Get the position ID
+        const positionId = $(this).data("position-id");
+        console.log("Position ID to delete:", positionId);
+
+        // Confirm deletion
+        if (confirm("Are you sure you want to delete this position?")) {
+            // If it's a new position (not yet in database), just remove it from DOM
+            if (positionId.startsWith("new-position-")) {
+                console.log("Removing temporary position from DOM");
+                $(this).closest(".position-item").remove();
+            } else {
+                // For existing positions, submit form with delete parameter
+                console.log("Submitting form to delete position from database");
+
+                // Create a form and submit it
+                const form = $("<form>")
+                    .attr("method", "post")
+                    .attr("action", "/employment");
+
+                // Add position ID as _delete_position field
+                $("<input>")
+                    .attr("type", "hidden")
+                    .attr("name", "_delete_position")
+                    .attr("value", positionId)
+                    .appendTo(form);
+
+                // Add to DOM and submit
+                form.appendTo("body").submit();
+            }
+        }
+    });
+
+        // Delete achievement
+        $(document).on("click", ".delete-achievement", function() {
+            const achievementId = $(this).data("achievement-id");
+            if (confirm("Are you sure you want to delete this achievement?")) {
+                // Add a hidden field to indicate deletion in the form submission
+                $("#employmentForm").append(`<input type="hidden" name="_delete_achievement" value="${achievementId.replace('achievement_', '')}">`);
+                // Either submit the form or remove it from the DOM
+                $(`#${achievementId}`).remove();
+            }
+        });
+
+        // Handle "Current position" checkbox
+        $(document).on("change", ".current-position", function() {
+            const endDateId = $(this).data("enddate-id");
+            if ($(this).is(":checked")) {
+                $(`#${endDateId}`).prop("disabled", true).val("");
+            } else {
+                $(`#${endDateId}`).prop("disabled", false);
+            }
+        });
+
+        // Initialize datepickers for existing date fields
+        $('.datepicker, .dateInput').datepicker({
+            format: "mm/yyyy",
+            startView: "months",
+            minViewMode: "months",
+            autoclose: true
+        });
+   });
+
+    // Handle current position checkboxes for existing positions
+    $(".current-position").change(function() {
+        const endDateId = $(this).data("enddate-id");
+        const endDateField = $(`#${endDateId}`);
+
+        if ($(this).is(":checked")) {
+            endDateField.prop("disabled", true);
+            endDateField.val("");
+        } else {
+            endDateField.prop("disabled", false);
+        }
+    });
+    $(document).ready(function() {
+        // Add achievement button handler
+        $('.add-achievement-btn').on('click', function() {
+            console.log("Add achievement button clicked");
+
+            // Get the position ID
+            const positionId = $(this).data('position-id');
+            console.log("Adding achievement for position:", positionId);
+
+            // Get the achievements container for this position
+            const achievementsContainer = $(this).closest('.position-item').find('.achievements-container');
+
+            // Add a new achievement form
+            addAchievementForm(positionId, achievementsContainer);
+        });
+
+        // Achievement deletion handler
+        $(document).on('click', '.delete-achievement', function() {
+            console.log("Delete achievement button clicked");
+
+            // Get the achievement ID
+            const achievementId = $(this).data('achievement-id');
+            console.log("Achievement ID to delete:", achievementId);
+
+            // Confirm deletion
+            if (confirm("Are you sure you want to delete this achievement?")) {
+                // If it's a new achievement (not yet in database), just remove it from DOM
+                if (achievementId.startsWith("new-achievement-")) {
+                    console.log("Removing temporary achievement from DOM");
+                    $(this).closest(".achievement-item").remove();
+                } else {
+                    // For existing achievements, submit form with delete parameter
+                    console.log("Submitting form to delete achievement from database");
+
+                    // Create a form and submit it
+                    const form = $("<form>")
+                        .attr("method", "post")
+                        .attr("action", "/employment");
+
+                    // Add achievement ID as _delete_achievement field
+                    $("<input>")
+                        .attr("type", "hidden")
+                        .attr("name", "_delete_achievement")
+                        .attr("value", achievementId)
+                        .appendTo(form);
+
+                    // Add to DOM and submit
+                    form.appendTo("body").submit();
+                }
+            }
+        });
+
+        // Function to add new achievement form
+        function addAchievementForm(positionId, container) {
+            const newAchievementId = "new-achievement-" + Math.floor(Math.random() * 1000000);
+
+            const achievementHtml = `
+            <div class="achievement-item mb-3 border-start border-3 border-info ps-3" data-achievement-id="${newAchievementId}">
+                <div class="d-flex align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="form-group mb-2">
+                            <input type="hidden" name="${newAchievementId}_position_id" value="${positionId}" />
+                            <textarea name="${newAchievementId}_description"
+                                    class="form-control"
+                                    placeholder="Describe your achievement..."
+                                    rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="ms-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
+                                data-achievement-id="${newAchievementId}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+
+            container.append(achievementHtml);
+        }
+    });
+    $(function() {
+    // Function to generate UUID
+    function generateUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0,
+                v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    // Add new employer
+    $("#rowAdder").click(function () {
+        console.group('Adding New School');
+
+        // Generate a unique ID for this new item
+        const newId = generateUUID();
+
+        // Create a unique prefix for form fields
+        newItemCounter++;
+        const newPrefix = `new${newItemCounter}`;
+
+        // Get the template and replace the placeholder ID with our new ID
+        const template = `{{ school_form(id="new", name="", location="", degree="", graddate="", achievements=[])|safe }}`;
+        let newContent = template.replace(/"new"/g, `"${newPrefix}"`);
+
+        // Add the new item to the DOM
+        $('#newinput').append(newContent);
+
+        // Initialize datepicker for the new school entry
+        initializeDatepicker(`#${newPrefix}_graddate`);
+
+        // Focus on the new school name field
+        const newSchoolName = document.querySelector(`#${newPrefix}_name`);
+        if (newSchoolName) {
+            newSchoolName.focus();
+        }
+
+        console.groupEnd();
+    });
+
+    // Delete position
+    $(document).on('click', '.delete-position', function() {
+        const positionId = $(this).data('position-id');
+        $(`#${positionId}`).remove();
+    });
+
+    // Delete employer
+    $(document).on('click', '.delete-employer', function() {
+        const employerId = $(this).data('employer-id');
+        $(`#${employerId}`).remove();
+    });
+
+    // Handle current position checkbox
+    $(document).on('change', '.current-position', function() {
+        const endDateId = $(this).data('enddate-id');
+        const endDateInput = $(`#${endDateId}`);
+
+        if ($(this).is(':checked')) {
+            endDateInput.val('Present').prop('disabled', true);
+        } else {
+            endDateInput.val('').prop('disabled', false);
+        }
+    });
+
+    // Add new achievement
+    $(document).on('click', '.add-achievement-btn', function() {
+        const positionId = $(this).data('position-id');
+        const achievementId = generateUUID();
+        const achievementTemplate = `
+            <div class="achievement-item mb-3 border-start border-3 border-info ps-3" data-achievement-id="achievement_${achievementId}">
+                <div class="d-flex align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="form-group mb-2">
+                            <input type="hidden" name="achievement_${achievementId}_position_id" value="position_${positionId}">
+                            <textarea name="achievement_${achievementId}_description" class="form-control" rows="2"></textarea>
+                        </div>
+                        <div class="form-check form-switch small">
+                            <input type="checkbox" class="form-check-input" id="achievement_${achievementId}_enabled"
+                                   name="achievement_${achievementId}_enabled" checked>
+                            <label class="form-check-label" for="achievement_${achievementId}_enabled">Display in resume</label>
+                        </div>
+                    </div>
+                    <div class="ms-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
+                                data-achievement-id="achievement_${achievementId}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $(this).closest('.mt-3').find('.achievements-container').append(achievementTemplate);
+    });
+
+    // Delete achievement
+    $(document).on('click', '.delete-achievement', function() {
+        const achievementId = $(this).data('achievement-id');
+        $(`[data-achievement-id="${achievementId}"]`).remove();
+    });
+
+    // Initialize date inputs function
+    function initializeDateInputs() {
+        $('.dateInput').each(function() {
+            // Initialize datepicker
+            $(this).datepicker({
+                format: "mm/yyyy",
+                startView: "months",
+                minViewMode: "months",
+                autoclose: true,
+                clearBtn: true
+            });
+
+            // Initialize inputmask
+            $(this).inputmask("99/9999", {
+                placeholder: "MM/YYYY",
+                clearIncomplete: true
+            });
+        });
+    }
+
+    $(document).ready(function() {
+        // Initialize existing date inputs
+        initializeDateInputs();
+    });
+
+});
+
+</script>
 {% endblock %}

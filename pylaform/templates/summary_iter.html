@@ -1,68 +1,86 @@
-{% macro form_group(id, shortdesc, longdesc, state) %}
-    <!-- Test if new template element -->
-    {% if id == "new" %}
-        {% set id = "new` + clicks + `"|safe %}
-    {% endif %}
-    <div id="{{ id }}" class="card border-0 shadow-sm mb-4">
-        <div class="card-body p-4">
-            <div class="row">
-                <div class="col-md-11">
-                    <div class="mb-3">
-                        <label for="{{ id }}_shortdesc" class="form-label fw-medium">
-                            <i class="bi bi-tag me-2"></i>Short Description
-                        </label>
-                        <textarea
-                            name="{{ id }}_shortdesc"
-                            id="{{ id }}_shortdesc"
-                            class="form-control bg-light"
-                            rows="1"
-                            placeholder="Enter a brief title or headline for this summary point"
-                        >{{ shortdesc if shortdesc is defined else "" }}</textarea>
-                        <div class="form-text text-muted">A concise headline for this summary point (e.g., "Project Management")</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="{{ id }}_longdesc" class="form-label fw-medium">
-                            <i class="bi bi-card-text me-2"></i>Long Description
-                        </label>
-                        <div class="input-group">
-                            <textarea
-                                name="{{ id }}_longdesc"
-                                id="{{ id }}_longdesc"
-                                class="form-control bg-light"
-                                rows="3"
-                                placeholder="Describe your skills, expertise, or experience in this area"
-                            >{{ longdesc if longdesc is defined else "" }}</textarea>
-                            <div class="ai-improve-button input-group-text bg-light">
-                                <button type="button" class="btn btn-sm btn-outline-secondary"
-                                        onclick="openAiHelper('{{ id }}_longdesc', 'Core Principle')">
-                                    <i class="bi bi-magic"></i> Improve
-                                </button>
-                            </div>
-                        </div>
-                        <div class="form-text text-muted">Detailed explanation of your expertise in this area</div>
-                    </div>
-
-                    <div class="form-check form-switch">
-                        <input
-                            type="checkbox"
-                            class="form-check-input"
-                            role="switch"
-                            id="{{ id }}_longdesc_enabled"
-                            name="{{ id }}_longdesc_enabled"
-                            {% if state %}checked{% endif %}
-                        >
-                        <label class="form-check-label" for="{{ id }}_longdesc_enabled">Display this summary point</label>
-                    </div>
-                    <input type="hidden" id="{{ id }}_rowid" name="{{ id }}_rowid" value="{{ id }}">
-                </div>
-                <div class="col-md-1 d-flex align-items-center justify-content-end">
-                    <button class="btn btn-outline-danger deleteRow"
-                            type="button">
-                        <i class="bi bi-trash"></i>
+{% macro form_group(id, shortdesc, longdesc, state, summaryorder) %}
+<div class="card border-0 shadow-sm mb-3 summary-item" id="{{ id }}_container" data-id="{{ id }}">
+    <div class="card-body p-4">
+        <div class="row">
+            <div class="col-md-1">
+                <div class="d-flex flex-column align-items-center">
+                    <button type="button" class="btn btn-outline-secondary mb-2 move-up" title="Move Up">
+                        <i class="bi bi-arrow-up"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary move-down" title="Move Down">
+                        <i class="bi bi-arrow-down"></i>
                     </button>
                 </div>
             </div>
+            <div class="col-md-10">
+                <!-- Existing input fields -->
+                <div class="mb-3">
+                    <label for="{{ id }}_shortdesc" class="form-label fw-medium">
+                        <i class="bi bi-card-heading me-2"></i>Short Description
+                    </label>
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            class="form-control bg-light"
+                            id="{{ id }}_shortdesc"
+                            name="{{ id }}_shortdesc"
+                            value="{{ shortdesc }}"
+                            required
+                        >
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="openAiHelper('{{ id }}_shortdesc', 'tenet', document.getElementById('{{ id }}_shortdesc').value)">
+                                <i class="bi bi-magic"></i> Improve
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-text text-muted">A concise title for this summary point</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="{{ id }}_longdesc" class="form-label fw-medium">
+                        <i class="bi bi-card-text me-2"></i>Detailed Description
+                    </label>
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            class="form-control bg-light"
+                            id="{{ id }}_longdesc"
+                            name="{{ id }}_longdesc"
+                            value="{{ longdesc }}"
+                            required
+                        >
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="openAiHelper('{{ id }}_longdesc', 'sentence_restructure', document.getElementById('{{ id }}_longdesc').value)">
+                                <i class="bi bi-magic"></i> Improve
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-text text-muted">Elaborate on this point with specific details or achievements</div>
+                </div>
+
+                <div class="form-check form-switch">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        id="{{ id }}_state"
+                        name="{{ id }}_state"
+                        value="1"
+                        {% if state %}checked{% endif %}
+                    >
+                    <label class="form-check-label" for="{{ id }}_state">Display this summary point</label>
+                </div>
+
+                <input type="hidden" id="{{ id }}_summaryorder" name="{{ id }}_summaryorder" value="{{ summaryorder if summaryorder is defined else 99 }}">
+            </div>
+            <div class="col-md-1 d-flex align-items-center justify-content-end">
+                <button type="button" class="btn btn-outline-danger delete-summary" data-id="{{ id }}" title="Delete this summary point">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
         </div>
     </div>
-{%- endmacro %}
+</div>
+{% endmacro %}

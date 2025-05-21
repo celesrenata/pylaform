@@ -12,15 +12,19 @@ class TestUtilityFunctions(unittest.TestCase):
         from pylaform.commands.db import connect
 
         # Create patchers before the test
-        patcher1 = patch('os.path.exists', return_value=True)
-        patcher2 = patch('sqlite3.connect')
+        patcher1 = patch('boto3.resource')
 
         # Start the patchers
-        mock_exists = patcher1.start()
-        mock_connect = patcher2.start()
+        mock_boto3_resource = patcher1.start()
 
-        # Set up the mock to return a mock connection
-        mock_connect.return_value = MagicMock()
+        # Set up the mock to return mock resources
+        mock_table = MagicMock()
+        mock_dynamodb = MagicMock()
+        mock_dynamodb.Table.return_value = mock_table
+        mock_boto3_resource.return_value = mock_dynamodb
+
+        # Mock the table.load() to simulate the table existing
+        mock_table.load.return_value = None
 
         try:
             # Call the function we're testing
@@ -29,12 +33,14 @@ class TestUtilityFunctions(unittest.TestCase):
             # Verify the result
             self.assertIsNotNone(result)
 
-            # Verify sqlite3.connect was called
-            mock_connect.assert_called_once()
+            # Verify boto3.resource was called
+            mock_boto3_resource.assert_called_once()
+
+            # Verify Table was called with the correct table name
+            mock_dynamodb.Table.assert_called_once_with('pylaform-data')
         finally:
             # Stop the patchers
             patcher1.stop()
-            patcher2.stop()
 
     def test_contact_flatten(self):
         """Test flatten contact information from DB format to dict format"""

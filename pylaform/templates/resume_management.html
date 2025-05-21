@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="section-header">Resume Management</h1>
+            <p class="lead text-muted">Create, edit, and manage your resumes</p>
+        </div>
+    </div>
+
+    <!-- Resume List -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="h5 mb-0 text-primary">
+                            <i class="bi bi-file-earmark-text me-2"></i>Your Resumes
+                        </h2>
+                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createResumeModal">
+                            <i class="bi bi-plus-lg me-1"></i>New Resume
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    {% if resumes %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Created</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for resume in resumes %}
+                                <tr>
+                                    <td>
+                                        <span class="fw-medium">{{ resume.name }}</span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ resume.created_at }}</small>
+                                    </td>
+                                    <td>
+                                        {% if resume.id == active_resume_id %}
+                                        <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                        <span class="badge bg-light text-dark">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group">
+                                            {% if resume.id != active_resume_id %}
+                                            <form method="post" action="{{ url_for('resume.set_active_resume') }}" class="d-inline">
+                                                <input type="hidden" name="resume_id" value="{{ resume.id }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-success" title="Set as active">
+                                                    <i class="bi bi-check-circle"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+
+                                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#renameResumeModal"
+                                                data-resume-id="{{ resume.id }}"
+                                                data-resume-name="{{ resume.name }}">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+
+                                            <button type="button" class="btn btn-sm btn-outline-info"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#copyResumeModal"
+                                                data-resume-id="{{ resume.id }}"
+                                                data-resume-name="{{ resume.name }}">
+                                                <i class="bi bi-files"></i>
+                                            </button>
+
+                                            {% if resume.id != active_resume_id %}
+                                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteResumeModal"
+                                                data-resume-id="{{ resume.id }}"
+                                                data-resume-name="{{ resume.name }}">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <div class="mb-3">
+                            <i class="bi bi-file-earmark-x text-muted" style="font-size: 3rem;"></i>
+                        </div>
+                        <h3 class="h5 text-muted">No Resumes Yet</h3>
+                        <p class="text-muted">Create your first resume to get started</p>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createResumeModal">
+                            <i class="bi bi-plus-lg me-1"></i>Create Resume
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Resume Modal -->
+<div class="modal fade" id="createResumeModal" tabindex="-1" aria-labelledby="createResumeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('resume.create_resume') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createResumeModalLabel">Create New Resume</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="resume_name" class="form-label">Resume Name</label>
+                        <input type="text" class="form-control" id="resume_name" name="resume_name" required>
+                        <div class="form-text">Give your resume a descriptive name (e.g., "Software Developer Resume")</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Resume</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Rename Resume Modal -->
+<div class="modal fade" id="renameResumeModal" tabindex="-1" aria-labelledby="renameResumeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('resume.rename_resume') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="renameResumeModalLabel">Rename Resume</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="rename_resume_id" name="resume_id">
+                    <div class="mb-3">
+                        <label for="rename_resume_name" class="form-label">New Name</label>
+                        <input type="text" class="form-control" id="rename_resume_name" name="resume_name" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Rename</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Copy Resume Modal -->
+<div class="modal fade" id="copyResumeModal" tabindex="-1" aria-labelledby="copyResumeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('resume.copy_resume') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="copyResumeModalLabel">Copy Resume</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="copy_resume_id" name="resume_id">
+                    <div class="mb-3">
+                        <label for="copy_resume_name" class="form-label">New Resume Name</label>
+                        <input type="text" class="form-control" id="copy_resume_name" name="resume_name" required>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="make_active" name="make_active">
+                        <label class="form-check-label" for="make_active">
+                            Set as active resume
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Copy Resume</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Resume Modal -->
+<div class="modal fade" id="deleteResumeModal" tabindex="-1" aria-labelledby="deleteResumeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('resume.delete_resume') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteResumeModalLabel">Delete Resume</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="delete_resume_id" name="resume_id">
+                    <p>Are you sure you want to delete the resume "<span id="delete_resume_name"></span>"?</p>
+                    <p class="text-danger"><strong>This action cannot be undone.</strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete Resume</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+    // Function to set the active resume
+    function setActiveResume(resumeId) {
+        document.getElementById('activeResume').value = resumeId;
+        document.getElementById('selectResumeForm').submit();
+    }
+
+    function openRenameModal(resumeId, resumeName) {
+        document.getElementById('renameResumeId').value = resumeId;
+        document.getElementById('renameResumeName').value = resumeName;
+        new bootstrap.Modal(document.getElementById('renameResumeModal')).show();
+    }
+
+    // Function to open the copy modal with the correct resume ID
+    function openCopyModal(resumeId, resumeName) {
+        document.getElementById('copyResumeId').value = resumeId;
+        document.getElementById('copyResumeName').value = resumeName + ' (Copy)';
+        var copyModal = new bootstrap.Modal(document.getElementById('copyResumeModal'));
+        copyModal.show();
+    }
+
+    function openDeleteModal(resumeId, resumeName) {
+        document.getElementById('deleteResumeId').value = resumeId;
+        document.getElementById('deleteResumeName').textContent = resumeName;
+        new bootstrap.Modal(document.getElementById('deleteResumeModal')).show();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle modal data passing
+        const renameModal = document.getElementById('renameResumeModal');
+        if (renameModal) {
+            renameModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const resumeId = button.getAttribute('data-resume-id');
+                const resumeName = button.getAttribute('data-resume-name');
+
+                document.getElementById('rename_resume_id').value = resumeId;
+                document.getElementById('rename_resume_name').value = resumeName;
+            });
+        }
+
+        const copyModal = document.getElementById('copyResumeModal');
+        if (copyModal) {
+            copyModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const resumeId = button.getAttribute('data-resume-id');
+                const resumeName = button.getAttribute('data-resume-name');
+
+                document.getElementById('copy_resume_id').value = resumeId;
+                document.getElementById('copy_resume_name').value = resumeName + ' (Copy)';
+            });
+        }
+
+        const deleteModal = document.getElementById('deleteResumeModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const resumeId = button.getAttribute('data-resume-id');
+                const resumeName = button.getAttribute('data-resume-name');
+
+                document.getElementById('delete_resume_id').value = resumeId;
+                document.getElementById('delete_resume_name').textContent = resumeName;
+            });
+        }
+    });
+</script>
+{% endblock %}

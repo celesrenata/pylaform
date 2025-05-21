@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Hero Section -->
+    <div class="row align-items-center mb-5">
+        <div class="col-lg-6">
+            <h1 class="display-5 fw-bold mb-3">Build Your Professional Resume</h1>
+            <p class="lead text-muted mb-4">
+                Create a compelling resume that showcases your skills and experience. Our AI-powered platform helps you craft the perfect professional narrative.
+            </p>
+            {% if not session.get('user_id') %}
+            <div class="d-grid gap-2 d-md-flex">
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg px-4 me-md-2">Get Started</a>
+                <a href="{{ url_for('login') }}" class="btn btn-outline-secondary btn-lg px-4">Sign In</a>
+            </div>
+            {% else %}
+            <div class="d-grid gap-2 d-md-flex">
+                <a href="{{ url_for('resume.summary') }}" class="btn btn-primary btn-lg px-4 me-md-2">Continue Building</a>
+            </div>
+            {% endif %}
+        </div>
+        <div class="col-lg-6">
+            <div class="p-4 text-center">
+                <img src="{{ url_for('static', filename='images/resume-builder.svg') }}" alt="Resume Builder Illustration" class="img-fluid" style="max-height: 400px;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="row g-4 py-5">
+        <div class="col-12">
+            <h2 class="h3 text-center mb-4">Build Your Professional Story</h2>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="feature-icon mb-3">
+                        <i class="bi bi-file-earmark-text text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="h5 mb-3">Professional Summary</h3>
+                    <p class="text-muted mb-0">
+                        Craft a compelling professional summary with AI-powered suggestions to highlight your key strengths and career achievements.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="feature-icon mb-3">
+                        <i class="bi bi-briefcase text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="h5 mb-3">Work Experience</h3>
+                    <p class="text-muted mb-0">
+                        Document your professional journey with detailed work experience entries, highlighting your roles and accomplishments.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="feature-icon mb-3">
+                        <i class="bi bi-magic text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="h5 mb-3">AI Enhancement</h3>
+                    <p class="text-muted mb-0">
+                        Let our AI assistant help you improve your descriptions and make your experience stand out to potential employers.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <div class="row py-5">
+        <div class="col-12">
+            <h2 class="h3 text-center mb-4">How It Works</h2>
+        </div>
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        <div class="col-md-3 text-center">
+                            <div class="step-circle mb-3">1</div>
+                            <h4 class="h6">Create Account</h4>
+                            <p class="text-muted small">Sign up and start building your professional profile</p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <div class="step-circle mb-3">2</div>
+                            <h4 class="h6">Add Information</h4>
+                            <p class="text-muted small">Input your experience and professional summary</p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <div class="step-circle mb-3">3</div>
+                            <h4 class="h6">Enhance Content</h4>
+                            <p class="text-muted small">Use AI to improve your descriptions</p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <div class="step-circle mb-3">4</div>
+                            <h4 class="h6">Generate Resume</h4>
+                            <p class="text-muted small">Download your professionally formatted resume</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call to Action -->
+    {% if not session.get('user_id') %}
+    <div class="row py-5">
+        <div class="col-12 text-center">
+            <div class="card border-0 shadow-sm bg-primary text-white">
+                <div class="card-body p-5">
+                    <h2 class="h3 mb-3">Ready to Build Your Professional Resume?</h2>
+                    <p class="mb-4">Join now and create a resume that gets you noticed.</p>
+                    <a href="{{ url_for('register') }}" class="btn btn-light btn-lg px-4">Get Started</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add this CSS to your stylesheet or in a style tag -->
+<style>
+.step-circle {
+    width: 40px;
+    height: 40px;
+    background-color: var(--bs-primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    font-weight: bold;
+}
+
+.feature-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: var(--bs-primary-bg-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+</style>
+{% endblock %}

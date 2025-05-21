@@ -1,7 +1,21 @@
-
 {% extends "base.html" %}
 {% from "skills_iter.html" import form_group with context %}
 {% block content %}
+<style>
+    .form-control,
+    .form-control:focus,
+    input.form-control[type="text"],
+    input.form-control[type="text"]:focus {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+
+    /* If you're using Select2, you might also want to style those inputs */
+    .select2-container--default .select2-selection--single {
+        background-color: #ffffff !important;
+    }
+</style>
+
 <div class="container py-4">
     <div class="row mb-4">
         <div class="col-12">
@@ -11,6 +25,13 @@
             </p>
         </div>
     </div>
+    <div class="d-none">
+        <h3>Debugging Information</h3>
+        <pre>{{ ddpayload.get('employers')|tojson(indent=2) }}</pre>
+        <h4>Positions:</h4>
+        <pre>{{ ddpayload.get('positions')|tojson(indent=2) }}</pre>
+    </div>
+
 
     <div class="row">
         <div class="col-12">
@@ -26,7 +47,7 @@
                     </div>
                 </div>
                 <div class="card-body p-4">
-                    <form method="post" id="skillsForm">
+                    <form method="post" id="skillsForm" novalidate>
                         <!-- Iterate payload -->
                         {% for i in payload %}
                             {{ form_group(
@@ -44,8 +65,157 @@
                                 i["state"]
                             ) }}
                         {% endfor %}
+<div id="newinput"></div>
 
-                        <div id="newinput"></div>
+<script type="text/template" id="skill-template">
+    {{ form_group(payload, ddpayload, generate_uuid(), "", "", "", "", "", "", "", "", true, hidden=False)|safe }}
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ddpayload = {{ ddpayload|tojson|safe }};
+
+    document.getElementById("rowAdder").addEventListener("click", () => {
+        const template = document.getElementById("skill-template");
+        let newContent = template.innerHTML;
+
+        // Generate a new UUID for this skill
+        const newId = generateUUID();
+
+        // Replace "new" with the generated UUID
+        newContent = newContent.replace(/("new")/g, `"${newId}"`);
+
+        document.getElementById("newinput").insertAdjacentHTML('beforeend', newContent);
+
+        // Re-initialize any dynamic dropdowns or handlers for the new form
+        const newForm = document.getElementById("newinput").lastElementChild;
+        initializeFormHandlers(newForm, ddpayload);
+    });
+});
+
+
+
+function initializeFormHandlers(formElement, ddpayload) {
+    // Get all form elements
+    const categorySelect = formElement.querySelector('[id$="_category_dropdown"]');
+    const subcategorySelect = formElement.querySelector('[id$="_subcategory_dropdown"]');
+    const employerSelect = formElement.querySelector('[id$="_employer_dropdown"]');
+    const positionSelect = formElement.querySelector('[id$="_position_dropdown"]');
+    const categoryInput = formElement.querySelector('[id$="_category"]');
+    const subcategoryInput = formElement.querySelector('[id$="_subcategory"]');
+
+    // Populate category dropdown
+    if (categorySelect) {
+        categorySelect.innerHTML = '<option value="">Select Category</option>';
+        if (ddpayload.categories) {
+            ddpayload.categories.forEach(category => {
+                const option = new Option(category, category);
+                categorySelect.add(option);
+            });
+        }
+
+        // Add change handler for category dropdown
+        categorySelect.addEventListener('change', function() {
+            const selectedCategory = this.value;
+
+            // Update hidden category input
+            if (categoryInput) {
+                categoryInput.value = selectedCategory;
+            }
+
+            // Update subcategory dropdown
+            if (subcategorySelect) {
+                // Clear existing options
+                subcategorySelect.innerHTML = '';
+
+                // Add default option
+                subcategorySelect.add(new Option('Select Subcategory', ''));
+
+                // Add subcategories if they exist for this category
+                if (selectedCategory && ddpayload.subcategories && ddpayload.subcategories[selectedCategory]) {
+                    ddpayload.subcategories[selectedCategory].forEach(subcategory => {
+                        const option = new Option(subcategory, subcategory);
+                        subcategorySelect.add(option);
+                    });
+                }
+
+                // Always add "Custom" option at the end
+                subcategorySelect.add(new Option('Custom', 'custom'));
+
+                // Enable the dropdown
+                subcategorySelect.disabled = false;
+            }
+        });
+    }
+
+    // Add change handler for subcategory dropdown
+    if (subcategorySelect) {
+        subcategorySelect.addEventListener('change', function() {
+            const selectedValue = this.value;
+
+            if (selectedValue === 'custom') {
+                // If "Custom" is selected, prompt for new subcategory
+                const customValue = prompt('Enter custom subcategory:');
+                if (customValue) {
+                    // Add the new option and select it
+                    const newOption = new Option(customValue, customValue);
+                    subcategorySelect.add(newOption);
+                    subcategorySelect.value = customValue;
+
+                    // Update the hidden input
+                    if (subcategoryInput) {
+                        subcategoryInput.value = customValue;
+                    }
+
+                    // Add to ddpayload for future use
+                    const category = categorySelect.value;
+                    if (category) {
+                        if (!ddpayload.subcategories[category]) {
+                            ddpayload.subcategories[category] = [];
+                        }
+                        if (!ddpayload.subcategories[category].includes(customValue)) {
+                            ddpayload.subcategories[category].push(customValue);
+                        }
+                    }
+                } else {
+                    // If they cancel the prompt, reset to first option
+                    this.selectedIndex = 0;
+                }
+            } else {
+                // Update hidden input with selected value
+                if (subcategoryInput) {
+                    subcategoryInput.value = selectedValue;
+                }
+            }
+        });
+    }
+
+    // Rest of your existing code for employer/position handling...
+
+    // Set initial values if they exist
+    if (categoryInput && categoryInput.value) {
+        if (categorySelect) {
+            categorySelect.value = categoryInput.value;
+            // Trigger change event to populate subcategories
+            categorySelect.dispatchEvent(new Event('change'));
+        }
+    }
+
+    if (subcategoryInput && subcategoryInput.value) {
+        setTimeout(() => {
+            if (subcategorySelect) {
+                // If the value doesn't exist in the dropdown, add it
+                if (!Array.from(subcategorySelect.options).some(opt => opt.value === subcategoryInput.value)) {
+                    subcategorySelect.add(new Option(subcategoryInput.value, subcategoryInput.value));
+                }
+                subcategorySelect.value = subcategoryInput.value;
+            }
+        }, 0);
+    }
+}
+
+</script>
+
 
                         <!-- Action buttons -->
                         <div class="d-flex justify-content-between mt-4">
@@ -96,187 +266,263 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="text/javascript">
-    // Create a map of employer IDs to position IDs for client-side filtering
-    const employerPositionsMap = {{ ddpayload.get("employer_positions", {})|tojson|safe }};
+<script>
+// Utility Functions
+function generateUUID() {
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
+}
 
-    // Track the number of added rows
-    let clicks = 0;
+// Form Field Handlers
+class SkillFormHandler {
+    static initializeDropdowns(skillId) {
+        // Initialize category dropdown
+        const categoryDropdown = document.getElementById(`${skillId}_category_dropdown`);
+        const subcategoryDropdown = document.getElementById(`${skillId}_subcategory_dropdown`);
+        const employerDropdown = document.getElementById(`${skillId}_employer_dropdown`);
+        const positionDropdown = document.getElementById(`${skillId}_position_dropdown`);
 
-    // Add a new row when the ADD button is clicked
-    $("#rowAdder").click(function () {
-        clicks += 1;
-        newRowAdd = `{{ form_group(payload, ddpayload, "new", "", "", "", "", "", "", "", "", true, hidden=False) }}`;
-        $('#newinput').append(newRowAdd);
-
-        // Initialize dropdowns for the new row
-        const newRowEmployerDropdown = $("#newinput").find("[id$='_employer_dropdown']").last();
-        if (newRowEmployerDropdown.length) {
-            newRowEmployerDropdown.trigger("change");
+        if (categoryDropdown) {
+            categoryDropdown.addEventListener('change', (e) =>
+                this.handleCategoryChange(skillId, e.target.value));
         }
+    }
 
-        // Smooth scroll to the new element
-        const newestElement = $('#newinput').children().last()[0];
-        if (newestElement) {
-            newestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    });
-
-    // Handle category dropdown changes to show/hide the text input
-    $("body").on("change", "[id$='_category_dropdown']", function() {
-        const selectedValue = $(this).val();
-        const rowId = this.id.split('_')[0];
-        const categoryDiv = $(`#${rowId}_category_div`);
+    static handleCategoryChange(skillId, selectedValue) {
+        const categoryDiv = document.getElementById(`${skillId}_category_div`);
+        const categoryInput = document.getElementById(`${skillId}_category`);
 
         if (selectedValue === 'EDIT' || selectedValue === 'ADD') {
-            categoryDiv.removeClass('d-none');
+            categoryDiv.classList.remove('d-none');
         } else {
-            categoryDiv.addClass('d-none');
+            categoryDiv.classList.add('d-none');
+            if (categoryInput) {
+                categoryInput.value = selectedValue;
+            }
         }
-    });
+    }
 
-    // Handle subcategory dropdown changes to show/hide the text input
-    $("body").on("change", "[id$='_subcategory_dropdown']", function() {
-        const selectedValue = $(this).val();
-        const rowId = this.id.split('_')[0];
-        const subcategoryDiv = $(`#${rowId}_subcategory_div`);
+    static handleSubcategoryChange(skillId, selectedValue) {
+        const subcategoryDiv = document.getElementById(`${skillId}_subcategory_div`);
+        const subcategoryInput = document.getElementById(`${skillId}_subcategory`);
 
         if (selectedValue === 'EDIT' || selectedValue === 'ADD') {
-            subcategoryDiv.removeClass('d-none');
+            subcategoryDiv.classList.remove('d-none');
         } else {
-            subcategoryDiv.addClass('d-none');
+            subcategoryDiv.classList.add('d-none');
+            if (subcategoryInput) {
+                subcategoryInput.value = selectedValue;
+            }
         }
-    });
+    }
 
-    // Handle employer dropdown changes to filter position options
-    $("body").on("change", "[id$='_employer_dropdown']", function() {
-        const employerId = $(this).val();
-        const rowId = this.id.split('_')[0];
-        const positionDropdown = $(`#${rowId}_position_dropdown`);
+    static handleEmployerChange(skillId, employerId) {
+        const positionDropdown = document.getElementById(`${skillId}_position_dropdown`);
+        if (!positionDropdown) return;
 
-        // Store the selected employer in the hidden field
-        $(`#${rowId}_employer`).val($(this).find("option:selected").text());
+        const validPositions = employerPositionsMap[employerId] || [];
 
-        // Filter positions based on the employer-position mapping
-        const validPositionIds = employerPositionsMap[employerId] || [];
-
-        positionDropdown.find("option").each(function() {
-            const positionId = $(this).val();
-
-            // Always show EDIT/ADD options
-            if(positionId === 'EDIT' || positionId === 'ADD') {
-                $(this).show();
-                return;
-            }
-
-            // Only show positions that belong to the selected employer
-            if (validPositionIds.includes(parseInt(positionId))) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
+        // Filter positions based on employer
+        Array.from(positionDropdown.options).forEach(option => {
+            if (option.value === "") return; // Skip placeholder
+            option.style.display = validPositions.includes(option.value) ? '' : 'none';
         });
 
-        // If current selection is not valid for this employer, reset it
-        const currentPositionId = positionDropdown.val();
-        if (currentPositionId &&
-            currentPositionId !== 'EDIT' &&
-            currentPositionId !== 'ADD' &&
-            !validPositionIds.includes(parseInt(currentPositionId))) {
-            // Find the first visible option and select it
-            const firstVisibleOption = positionDropdown.find("option:visible:first");
-            if (firstVisibleOption.length) {
-                positionDropdown.val(firstVisibleOption.val());
-            } else {
-                positionDropdown.val("");
-            }
-            // Trigger change to update hidden fields
-            positionDropdown.trigger("change");
+        // Reset position if current selection is invalid
+        if (!validPositions.includes(positionDropdown.value)) {
+            positionDropdown.value = '';
+        }
+    }
+
+    static createNewSkillHTML(newId) {
+        return `
+            <div class="skill-group mb-4" data-skill-id="${newId}">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Category</label>
+                        <select id="${newId}_category_dropdown" name="category_${newId}" class="form-select" required>
+                            <option value="">Select Category</option>
+                            {% for category in ddpayload.get('categories', []) %}
+                                <option value="{{ category }}">{{ category }}</option>
+                            {% endfor %}
+                            <option value="ADD">Add New Category</option>
+                        </select>
+                        <div id="${newId}_category_div" class="mt-2 d-none">
+                            <input type="text" id="${newId}_category" name="new_category_${newId}"
+                                   class="form-control" placeholder="Enter new category">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Subcategory</label>
+                        <select id="${newId}_subcategory_dropdown" name="subcategory_${newId}" class="form-select" required>
+                            <option value="">Select Subcategory</option>
+                            {% for subcategory in ddpayload.get('subcategories', []) %}
+                                <option value="{{ subcategory }}">{{ subcategory }}</option>
+                            {% endfor %}
+                            <option value="ADD">Add New Subcategory</option>
+                        </select>
+                        <div id="${newId}_subcategory_div" class="mt-2 d-none">
+                            <input type="text" id="${newId}_subcategory" name="new_subcategory_${newId}"
+                                   class="form-control" placeholder="Enter new subcategory">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Employer</label>
+                        <select id="${newId}_employer_dropdown" name="employer_${newId}" class="form-select" required>
+                            <option value="">Select Employer</option>
+                            {% for employer in ddpayload.get('employers', []) %}
+                                <option value="{{ employer.id }}">{{ employer.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Position</label>
+                        <select id="${newId}_position_dropdown" name="position_${newId}" class="form-select" required>
+                            <option value="">Select Position</option>
+                            {% for position in ddpayload.get('positions', []) %}
+                                <option value="{{ position.id }}">{{ position.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Short Description</label>
+                        <input type="text" name="shortdesc_${newId}" class="form-control" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Long Description</label>
+                        <textarea name="longdesc_${newId}" class="form-control" rows="3" required></textarea>
+                    </div>
+                    <div class="col-12">
+                        <button type="button" class="btn btn-outline-danger btn-sm remove-skill">
+                            <i class="bi bi-trash"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize existing skill rows
+    document.querySelectorAll('.skill-group').forEach(skillGroup => {
+        const skillId = skillGroup.dataset.skillId;
+        if (skillId) {
+            SkillFormHandler.initializeDropdowns(skillId);
         }
     });
 
-    // Handle position dropdown changes
-    $("body").on("change", "[id$='_position_dropdown']", function() {
-        const rowId = this.id.split('_')[0];
-        // Store the selected position in the hidden field
-        $(`#${rowId}_position`).val($(this).find("option:selected").text());
-    });
-
-    // Handle deletions
-    $("body").on("click", "#deleteRow", function () {
+    // Handle deletions for both existing and new skills
+    $("body").on("click", "#deleteRow", function() {
         const div_id = $(this).closest("div.card").attr("id");
 
-        // Confirm deletion
         if (confirm("Are you sure you want to delete this skill?")) {
-            // Fade out the element before removing
             $("#" + div_id).fadeOut(300, function() {
                 $(this).remove();
-                $("#newinput").append(`<input type="hidden" id="${div_id}_delete" name="${div_id}_delete" value="True">`);
+                $("#skillsForm").append(`<input type="hidden" name="_delete" value="${div_id}">`);
             });
         }
     });
 
-    // Initialize all dropdowns when the page loads
-    $(document).ready(function() {
-        // Initialize category and subcategory dropdowns to show/hide text inputs
-        $("[id$='_category_dropdown']").each(function() {
-            const selectedValue = $(this).val();
-            const rowId = this.id.split('_')[0];
-            const categoryDiv = $(`#${rowId}_category_div`);
-
-            if (selectedValue === 'EDIT' || selectedValue === 'ADD') {
-                categoryDiv.removeClass('d-none');
-            } else {
-                categoryDiv.addClass('d-none');
-            }
-        });
-
-        $("[id$='_subcategory_dropdown']").each(function() {
-            const selectedValue = $(this).val();
-            const rowId = this.id.split('_')[0];
-            const subcategoryDiv = $(`#${rowId}_subcategory_div`);
-
-            if (selectedValue === 'EDIT' || selectedValue === 'ADD') {
-                subcategoryDiv.removeClass('d-none');
-            } else {
-                subcategoryDiv.addClass('d-none');
-            }
-        });
-
-        // Initialize employer-position relationships
-        $("[id$='_employer_dropdown']").each(function() {
-            $(this).trigger("change");
-        });
+    // Handle removal of newly added skills
+    $("body").on("click", ".remove-skill", function() {
+        const skillGroup = $(this).closest(".skill-group");
+        if (skillGroup.length) {
+            skillGroup.fadeOut(300, function() {
+                $(this).remove();
+            });
+        }
     });
 
-    // Function to open AI helper with the text from a specific field
-    function openAiHelper(fieldId, improvementType) {
-        const text = document.getElementById(fieldId).value;
-        const aiHelperTextarea = document.getElementById('aiHelperText');
-        const aiTypeSelect = document.getElementById('improvementType');
+// Form submission handler
+$("#skillsForm").on("submit", function(e) {
+    e.preventDefault();
 
-        // Set text and improvement type
-        if (aiHelperTextarea && aiTypeSelect) {
-            aiHelperTextarea.value = text;
+    // Convert FormData to an object
+    const formData = new FormData(this);
+    const formObject = {};
 
-            // Find and select the option that matches improvementType
-            for (let i = 0; i < aiTypeSelect.options.length; i++) {
-                if (aiTypeSelect.options[i].text === improvementType) {
-                    aiTypeSelect.selectedIndex = i;
-                    break;
-                }
-            }
+    // Handle multiple values for _delete if needed
+    const deleteIds = [];
 
-            // Open the AI helper
-            const aiHelper = document.getElementById('aiHelperPanel');
-            if (aiHelper) {
-                aiHelper.classList.add('show');
-
-                // Store the source field ID so we can update it when improvement is done
-                aiHelperTextarea.dataset.sourceFieldId = fieldId;
+    formData.forEach((value, key) => {
+        if (key === '_delete') {
+            deleteIds.push(value);
+        } else {
+            // If this is a new skill's ID, generate a UUID
+            if (key.endsWith('_id') && value === 'new') {
+                formObject[key] = generateUUID();
+            } else {
+                formObject[key] = value;
             }
         }
+    });
+
+    if (deleteIds.length > 0) {
+        formObject._delete = deleteIds;
     }
+
+
+    // Send the AJAX request
+    $.ajax({
+        url: window.location.href,
+        type: 'POST',
+        data: JSON.stringify(formObject),
+        contentType: 'application/json',
+        dataType: 'json',
+        success: function(response) {
+            if (response.success) {
+                window.location.reload();
+            } else {
+                alert('Error saving skills: ' + (response.message || 'Please try again.'));
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Server Response:', xhr.responseText);
+            console.error('Status:', status);
+            console.error('Error:', error);
+
+            try {
+                const errorResponse = JSON.parse(xhr.responseText);
+                alert('Error saving skills: ' + (errorResponse.message || 'Please try again.'));
+            } catch (e) {
+                alert('Error saving skills. Please try again.');
+            }
+        }
+    });
+});
+
+// Add delete handler
+$(document).on("click", ".delete-skill-btn", function() {
+    const skillGroup = $(this).closest(".skill-form-group"); // Make sure this matches your form group class
+    const skillId = $(this).data("skill-id"); // Make sure your delete button has data-skill-id attribute
+
+    if (confirm("Are you sure you want to delete this skill?")) {
+        if (!skillId || skillId === "new") {
+            // For new, unsaved skills, just remove the form
+            skillGroup.remove();
+        } else {
+            // For existing skills, mark for deletion and hide
+            skillGroup.hide();
+            // Remove any existing delete inputs for this skill
+            $(`input[name="_delete"][value="${skillId}"]`).remove();
+            // Add the new delete marker
+            $("#skillsForm").append(`<input type="hidden" name="_delete" value="${skillId}">`);
+
+            // Submit the form automatically to process the deletion
+            $("#skillsForm").submit();
+        }
+    }
+});
+
+    // Initialize employer-position relationships
+    $("[id$='_employer_dropdown']").each(function() {
+        $(this).trigger("change");
+    });
+});
 </script>
+
 {% include "_scripts.html" %}
 {% endblock %}

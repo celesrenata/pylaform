@@ -12,11 +12,22 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
     <!-- Date picker dependencies -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/linkedin_import.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/yearSelectPlugin.js"></script>
-    <script src="{{ url_for('static', filename='js/datepicker.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/datepicker.js') }}"></script>
+    <!-- Bootstrap Datepicker CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/css/bootstrap-datepicker.min.css">
+    <!-- Bootstrap Datepicker JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.inputmask/5.0.8/jquery.inputmask.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+
+
+
 
 
     {% set ns = namespace(title="Welcome") %}
@@ -46,6 +57,7 @@
             background: linear-gradient(135deg, var(--dark-color), #1a1e23);
             box-shadow: 0 0 15px rgba(0,0,0,0.1);
             transition: all 0.3s;
+            padding-bottom: 60px; /* Add this to ensure content doesn't overlap */
         }
 
         .sidebar .nav-link {
@@ -84,6 +96,9 @@
         .footer {
             padding: 1rem;
             font-size: 0.9rem;
+            position: relative;  /* Add this */
+            z-index: 1030;      /* Add this - higher than default Bootstrap z-index */
+            margin-bottom: 60px; /* Add this - provide space for AI helper */
         }
 
         .btn-primary {
@@ -148,17 +163,22 @@
                             </a>
                         </li>
                         <li class="nav-item w-100">
-                            <a href="/information" class="nav-link px-3 py-2">
+                            <a href="/resume/resume-management" class="nav-link px-3 py-2">
+                                <i class="bi bi-file-earmark-text me-2"></i> <span class="ms-1 d-none d-sm-inline">Resume Management</span>
+                            </a>
+                        </li>
+                        <li class="nav-item w-100">
+                            <a href="/resume/information" class="nav-link px-3 py-2">
                                 <i class="bi bi-person-vcard me-2"></i> <span class="ms-1 d-none d-sm-inline">Contact Information</span>
                             </a>
                         </li>
                         <li class="nav-item w-100">
-                            <a href="/summary" class="nav-link px-3 py-2">
+                            <a href="/resume/summary" class="nav-link px-3 py-2">
                                 <i class="bi bi-card-text me-2"></i> <span class="ms-1 d-none d-sm-inline">Summary</span>
                             </a>
                         </li>
                         <li class="nav-item w-100">
-                            <a href="/education" class="nav-link px-3 py-2">
+                            <a href="/resume/education" class="nav-link px-3 py-2">
                                 <i class="bi bi-mortarboard me-2"></i> <span class="ms-1 d-none d-sm-inline">Education</span>
                             </a>
                         </li>
@@ -193,6 +213,17 @@
                             </a>
                         </li>
                     </ul>
+                    <div class="nav-item w-100 mt-auto">
+                        {% if session.get('user_id') %}
+                            <a href="{{ url_for('logout') }}" class="nav-link px-3 py-2">
+                                <i class="bi bi-box-arrow-right me-2"></i> <span class="ms-1 d-none d-sm-inline">Logout</span>
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('login') }}" class="nav-link px-3 py-2">
+                                <i class="bi bi-box-arrow-in-right me-2"></i> <span class="ms-1 d-none d-sm-inline">Login</span>
+                            </a>
+                        {% endif %}
+                    </div>
                     <div class="footer mt-auto mb-3 text-center">
                         <p class="small mb-0">Created by Celes Hillyerd&nbsp;&nbsp;
                             <a href="https://github.com/celesrenata" class="text-light">

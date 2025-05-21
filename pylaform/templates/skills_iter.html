@@ -1,9 +1,16 @@
-{% from "_dropdown.html" import drop_down with context %}
 {% macro form_group(payload, ddpayload, id, category, subcategory, employer, employername, position, positionname, shortdesc, longdesc, state, hidden=True) %}
     <!-- Test if new template element -->
+    {% set original_id = id %}
     {% if id == "new" %}
-        {% set id = "new` + clicks + `"|safe %}
+        {% set id = "new" + clicks|string %}
     {% endif %}
+{% if ddpayload %}
+{#    <script>#}
+{#        console.log('Initial ddpayload:', {{ ddpayload|tojson|safe }});#}
+{#        console.log('Initial category:', {{ category|tojson|safe if category else 'null' }});#}
+{#        console.log('Initial subcategory:', {{ subcategory|tojson|safe if subcategory else 'null' }});#}
+{#    </script>#}
+{% endif %}
 
     <div id="{{ id }}" class="card border-0 shadow-sm mb-4">
         <div class="card-body p-4">
@@ -21,7 +28,13 @@
                                 <label for="{{ id }}_category_dropdown" class="form-label fw-medium">
                                     <i class="bi bi-folder me-2"></i>Skill Category
                                 </label>
-                                {{ drop_down(id, payload, ddpayload, "category", primarybyname=True) }}
+                                <select class="form-select" id="{{ id }}_category_dropdown" name="{{ id }}_category_dropdown">
+                                    <option value="">Select category...</option>
+                                    {% for cat in ddpayload['categories'] %}
+                                        <option value="{{ cat }}" {% if cat == category %}selected{% endif %}>{{ cat }}</option>
+                                    {% endfor %}
+                                    <option value="EDIT">Custom...</option>
+                                </select>
                                 <div class="form-text text-muted">
                                     Primary grouping for your skills (e.g., "Programming", "Leadership")
                                 </div>
@@ -43,9 +56,19 @@
                                 <label for="{{ id }}_subcategory_dropdown" class="form-label fw-medium">
                                     <i class="bi bi-tag me-2"></i>Subcategory
                                 </label>
-                                {{ drop_down(id, payload, ddpayload, "category", secondary="subcategory", secondaryid=id, secondarybyname=True) }}
+                                <select class="form-select" id="{{ id }}_subcategory_dropdown" name="{{ id }}_subcategory_dropdown">
+                                    <option value="">Select subcategory...</option>
+                                    {% if category and ddpayload and ddpayload.subcategories %}
+                                        {% for subcat in ddpayload.subcategories[category]|default([]) %}
+                                            <option value="{{ subcat }}" {% if subcategory and subcat == subcategory %}selected{% endif %}>
+                                                {{ subcat }}
+                                            </option>
+                                        {% endfor %}
+                                    {% endif %}
+                                    <option value="EDIT" {% if subcategory == 'EDIT' %}selected{% endif %}>Custom...</option>
+                                </select>
                                 <div class="form-text text-muted">
-                                    Specific area within the category (e.g., "Python", "Team Management")
+                                    Specific area within the category
                                 </div>
                             </div>
 
@@ -77,7 +100,12 @@
                                 <label for="{{ id }}_employer_dropdown" class="form-label fw-medium">
                                     <i class="bi bi-building me-2"></i>Associated Employer
                                 </label>
-                                {{ drop_down(id, payload, ddpayload, "employer", extra=False, primarybyname=True) }}
+                                <select class="form-select" id="{{ id }}_employer_dropdown" name="{{ id }}_employer_dropdown">
+                                    <option value="">Select employer...</option>
+                                    {% for emp in ddpayload['employers'] %}
+                                        <option value="{{ emp.id }}" {% if emp.id == employer %}selected{% endif %}>{{ emp.name }}</option>
+                                    {% endfor %}
+                                </select>
                                 <div class="form-text text-muted">
                                     Optional: Connect this skill to a specific employer
                                 </div>
@@ -87,7 +115,14 @@
                                 <label for="{{ id }}_position_dropdown" class="form-label fw-medium">
                                     <i class="bi bi-person-workspace me-2"></i>Associated Position
                                 </label>
-                                {{ drop_down(id, payload, ddpayload, "position", extra=False, primarybyname=True) }}
+                                <select class="form-select" id="{{ id }}_position_dropdown" name="{{ id }}_position_dropdown">
+                                    <option value="">Select position...</option>
+                                    {% for pos in ddpayload['positions'] %}
+                                        <option value="{{ pos.id }}" data-employer="{{ pos.employer_id }}" {% if pos.id == position %}selected{% endif %}>
+                                            {{ pos.title }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
                                 <div class="form-text text-muted">
                                     Optional: Connect this skill to a specific job position
                                 </div>
@@ -165,8 +200,8 @@
             <!-- Action Buttons Row -->
             <div class="row mt-3">
                 <div class="col-12 d-flex justify-content-end">
-                    <button class="btn btn-outline-danger" id="deleteRow" type="button">
-                        <i class="bi bi-trash"></i> Delete Skill
+                    <button type="button" class="btn btn-danger btn-sm delete-skill-btn" data-skill-id="{{ original_id }}">
+                        <i class="bi bi-trash"></i> Delete
                     </button>
                 </div>
             </div>

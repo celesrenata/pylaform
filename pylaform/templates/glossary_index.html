@@ -1,13 +1,11 @@
 {% extends "base.html" %}
-{% from "glossary_iter.html" import form_group with context %}
+{% from "glossary_iter.html" import glossary_term with context %}
 {% block content %}
 <div class="container py-4">
     <div class="row mb-4">
         <div class="col-12">
-            <h1 class="section-header">Highlighted Terms</h1>
-            <p class="lead text-muted">
-                Define technical terms, keywords, and acronyms that will be automatically highlighted in your resume.
-            </p>
+            <h1 class="section-header">Technical Glossary</h1>
+            <p class="lead text-muted">A reference of technical terms and definitions used in your resume and industry.</p>
         </div>
     </div>
 
@@ -17,26 +15,27 @@
                 <div class="card-header bg-light border-0 py-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <h2 class="h5 mb-0 text-primary">
-                            <i class="bi bi-bookmark-star me-2"></i>Term Glossary
+                            <i class="bi bi-book me-2"></i>Technical Terms
                         </h2>
                         <div class="text-muted small">
-                            <i class="bi bi-info-circle me-1"></i>These terms will be highlighted in your resume with additional context
+                            <i class="bi bi-info-circle me-1"></i>Industry terminology and definitions
                         </div>
                     </div>
                 </div>
                 <div class="card-body p-4">
                     <form method="post" id="glossaryForm">
-                        <!-- Iterate payload -->
-                        {% for i in payload %}
-                            {{ form_group(i["id"], i["term"], i["url"], i["description"], i["state"]) }}
+                        <!-- Iterate through existing glossary terms -->
+                        {% for term in payload %}
+                            {{ glossary_term(term.SK, term.term, term.definition) }}
                         {% endfor %}
 
+                        <!-- Container for new input fields -->
                         <div id="newinput"></div>
 
                         <!-- Action buttons -->
                         <div class="d-flex justify-content-between mt-4">
                             <button id="rowAdder" type="button" class="btn btn-outline-primary">
-                                <i class="bi bi-plus-circle me-2"></i>Add New Term
+                                <i class="bi bi-plus-circle me-2"></i>Add Term
                             </button>
                             <button type="submit" class="btn btn-primary px-4">
                                 <i class="bi bi-check-circle me-2"></i>Save Changes
@@ -45,67 +44,72 @@
                     </form>
                 </div>
             </div>
-
-            <!-- How it works card -->
-            <div class="card border-0 shadow-sm bg-light">
-                <div class="card-body p-4">
-                    <h3 class="h5 text-primary mb-3">
-                        <i class="bi bi-lightbulb me-2"></i>How Term Highlighting Works
-                    </h3>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h4 class="h6 mb-2">In the One-Page Resume:</h4>
-                            <p class="mb-3">Terms appear with tooltips that show your description when hovered over.</p>
-
-                            <h4 class="h6 mb-2">In the Hybrid CV:</h4>
-                            <p>Terms appear as hyperlinks that can direct to reference URLs you provide.</p>
-                        </div>
-                        <div class="col-md-6">
-                            <h4 class="h6 mb-2">Best Practices:</h4>
-                            <ul class="mb-0">
-                                <li>Highlight technical terms, skills, and methodologies</li>
-                                <li>Keep descriptions concise (1-2 sentences)</li>
-                                <li>Ensure terms match exactly how they appear in your resume</li>
-                                <li>Use URLs that point to official documentation or credible resources</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script type="text/javascript">
-    // Counter for new items
-    let clicks = 0;
+    $(function() {
+        // Counter for new items
+        var newItemCounter = 0;
 
-    // Add new glossary term
-    $("#rowAdder").click(function () {
-        clicks += 1;
-        newRowAdd = `{{ form_group("new", "", "", "", true) }}`;
-        $("#newinput").append(newRowAdd);
+        // Add new glossary term
+        $("#rowAdder").click(function () {
+            newItemCounter++;
+            var newRowId = "new" + newItemCounter;
 
-        // Smooth scroll to the new element
-        const newestElement = $('#newinput').children().last()[0];
-        if (newestElement) {
-            newestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    });
+            // Clone the template and update the IDs and names
+            var template = `
+                <div class="card mb-3" id="${newRowId}">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-11">
+                                <div class="mb-3">
+                                    <label for="${newRowId}_term" class="form-label">Term</label>
+                                    <input type="text" class="form-control" id="${newRowId}_term" name="${newRowId}_term"
+                                        value="" placeholder="e.g., API, REST, Cloud Computing">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="${newRowId}_definition" class="form-label">Definition</label>
+                                    <textarea class="form-control" id="${newRowId}_definition" name="${newRowId}_definition"
+                                        rows="3" placeholder="Provide a clear, concise definition of the term"></textarea>
+                                </div>
+                            </div>
+                            <div class="col-md-1 text-end">
+                                <button type="button" class="btn btn-sm btn-outline-danger deleteRow">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
 
-    // Handle delete button clicks
-    $("body").on("click", "#deleteRow", function () {
-        const div_id = $(this).closest("div.card").attr("id");
+            // Append the form group
+            $('#newinput').append(template);
 
-        // Confirm deletion
-        if (confirm("Are you sure you want to delete this term?")) {
-            // Fade out the element before removing
-            $("#" + div_id).fadeOut(300, function() {
-                $(this).remove();
-                $("#newinput").append(`<input type="hidden" id="` + div_id + `_delete" name="` + div_id + `_delete" value="True">`);
-            });
-        }
+            // Smooth scroll to the new element
+            const newestElement = $('#newinput').children().last()[0];
+            if (newestElement) {
+                newestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
+        // Handle delete button clicks
+        $("body").on("click", ".deleteRow", function () {
+            const div_id = $(this).closest("div.card").attr("id");
+
+            // Confirm deletion
+            if (confirm("Are you sure you want to delete this glossary term?")) {
+                // Append a hidden field with the proper name '_delete'
+                $("#glossaryForm").append(`<input type="hidden" name="_delete" value="${div_id}">`);
+                // Submit the form immediately to process the deletion
+                $("#glossaryForm").submit();
+            }
+        });
     });
 </script>
+{% include "_scripts.html" %}
 {% endblock %}

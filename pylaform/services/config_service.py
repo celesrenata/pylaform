@@ -80,39 +80,46 @@ class ConfigService:
         """
         return {
             "ai": {
-                "enabled": False,
-                "ollama": {
-                    "host": "localhost",
-                    "port": "11434",
-                    "model": "gemma3:1b"
+                "enabled": True,
+                "service_type": "AMAZON_Q",
+                "amazon_q": {
+                    "region": "us-east-1",
+                    "application_id": ""
                 }
             }
         }
 
     def get_ai_config(self):
         """
-        Get AI configuration
+        Get AI service configuration
 
-        :return: AI configuration dictionary
+        :return: Dictionary with Amazon Q service configuration
         """
-        return self.config.get("ai", self._get_default_config()["ai"])
+        return {
+            'service_type': 'AMAZON_Q',
+            'amazon_q': {
+                'region': os.environ.get('AMAZON_Q_REGION',
+                                         self.config.get('ai', {}).get('amazon_q', {}).get('region', 'us-east-1')),
+                'application_id': os.environ.get('AMAZON_Q_APPLICATION_ID',
+                                                 self.config.get('ai', {}).get('amazon_q', {}).get('application_id')),
+            }
+        }
 
-    def save_ai_config(self, enabled, host, port, model):
+    def save_ai_config(self, enabled, region, application_id):
         """
-        Save AI configuration
+        Save Amazon Q configuration
 
         :param enabled: Whether AI features are enabled
-        :param host: Ollama server host
-        :param port: Ollama server port
-        :param model: Ollama model to use
+        :param region: AWS region for Amazon Q
+        :param application_id: Amazon Q application ID
         :return: Success status
         """
         self.config["ai"] = {
             "enabled": enabled,
-            "ollama": {
-                "host": host,
-                "port": port,
-                "model": model
+            "service_type": "AMAZON_Q",
+            "amazon_q": {
+                "region": region,
+                "application_id": application_id
             }
         }
         return self._save_config(self.config)

@@ -1,181 +1,127 @@
-{% from "_dropdown.html" import drop_down with context %}
-{% from "_date_picker.html" import date_picker with context %}
-{% macro form_group(payload, ddpayload, employerid, employername, location, employerstate, positionid, positionname, startdate, enddate, positionstate, selected_position=None, hidden=True) %}
-    {# Ensure unique IDs for new rows #}
-    {% if employerid == "new" %}
-        {% set employerid = "new" %}
-        {% set positionid = "new" %}
+{% macro school_form(id, name, location, degree, graddate, state, achievements=[]) %}
+    <!-- Handle new elements -->
+    {% if id == "new" %}
+        {% set id = "new` + clicks + `"|safe %}
     {% endif %}
-
-    <div id="{{ positionid }}" class="card border-0 shadow-sm mb-4">
+    <div id="{{ id }}" class="card border-0 shadow-sm mb-4">
         <div class="card-body p-4">
-            <input type="hidden" name="{{ positionid }}_rowid" value="{{ employerid }}">
-
-            <div class="row g-4">
-                <!-- Employer Information Section -->
-                <div class="col-md-6">
-                    <div class="card h-100 bg-light border-0">
-                        <div class="card-header bg-primary bg-opacity-10 border-0">
-                            <h3 class="h6 mb-0 text-primary">
-                                <i class="bi bi-building me-2"></i>Employer Information
-                            </h3>
+            <div class="row">
+                <div class="col-md-11">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ id }}_name" class="form-label fw-medium">
+                                <i class="bi bi-building me-2"></i>School Name
+                            </label>
+                            <input
+                                type="text"
+                                name="{{ id }}_name"
+                                id="{{ id }}_name"
+                                class="form-control bg-light"
+                                value="{{ name if name is defined else "" }}"
+                                placeholder="e.g., Stanford University"
+                            >
+                            <div class="form-text text-muted">Name of the educational institution</div>
                         </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                {{ drop_down(
-                                    employerid,
-                                    payload,
-                                    ddpayload,
-                                    "employer",
-                                    primarybyname=True,
-                                    selected_value=employerid
-                                ) }}
-                            </div>
-
-                            <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}"
-                                 id="{{ employerid }}_employer_div">
-                                <div class="mb-3">
-                                    <label for="{{ employerid }}_employer" class="form-label fw-medium">
-                                        <i class="bi bi-building-fill me-2"></i>Company Name
-                                    </label>
-                                    <input type="text"
-                                           name="{{ employerid }}_employer"
-                                           id="{{ employerid }}_employer"
-                                           class="form-control bg-white"
-                                           value="{{ employername if employername is defined else '' }}"
-                                           onfocusout="commit_value('{{ employerid }}_employer');"
-                                           data-employer-name="{{ employername if employername is defined else '' }}"
-                                           placeholder="Enter company or organization name">
-                                </div>
-
-                                <div class="mb-3">
-                                    <label for="{{ employerid }}_location" class="form-label fw-medium">
-                                        <i class="bi bi-geo-alt-fill me-2"></i>Location
-                                    </label>
-                                    <input type="text"
-                                           name="{{ employerid }}_location"
-                                           id="{{ employerid }}_location"
-                                           class="form-control bg-white"
-                                           value="{{ location if location is defined else '' }}"
-                                           onfocusout="commit_value('{{ employerid }}_location');"
-                                           data-employer-location="{{ location if location is defined else '' }}"
-                                           placeholder="City, State/Province, Country">
-                                    <div class="form-text text-muted">
-                                        Company location (e.g., "San Francisco, CA")
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-check form-switch mt-3">
-                                <input type="checkbox"
-                                       class="form-check-input"
-                                       role="switch"
-                                       name="{{ employerid }}_employer_enabled"
-                                       id="{{ employerid }}_employer_enabled"
-                                       {{ "checked" if employerstate }}
-                                       data-employer-state="{{ employerstate }}">
-                                <label class="form-check-label" for="{{ employerid }}_employer_enabled">
-                                    Include this employer in resume
-                                </label>
-                            </div>
+                        <div class="col-md-6">
+                            <label for="{{ id }}_location" class="form-label fw-medium">
+                                <i class="bi bi-geo-alt me-2"></i>Location
+                            </label>
+                            <input
+                                type="text"
+                                name="{{ id }}_location"
+                                id="{{ id }}_location"
+                                class="form-control bg-light"
+                                value="{{ location if location is defined else '' }}"
+                                placeholder="e.g., Stanford, CA"
+                            >
+                            <div class="form-text text-muted">City and state/country of the institution</div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Position Information Section -->
-                <div class="col-md-6">
-                    <div class="card h-100 bg-light border-0">
-                        <div class="card-header bg-primary bg-opacity-10 border-0">
-                            <h3 class="h6 mb-0 text-primary">
-                                <i class="bi bi-person-workspace me-2"></i>Position Details
-                            </h3>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ id }}_degree" class="form-label fw-medium">
+                                <i class="bi bi-mortarboard me-2"></i>Degree
+                            </label>
+                            <input
+                                type="text"
+                                name="{{ id }}_degree"
+                                id="{{ id }}_degree"
+                                class="form-control bg-light"
+                                value="{{ degree if degree is defined else "" }}"
+                                placeholder="e.g., Bachelor of Science in Computer Science"
+                            >
+                            <div class="form-text text-muted">Degree, certificate, or program name</div>
                         </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                {% set dropdown_selected_value = selected_position if selected_position is defined and selected_position is not none else positionid %}
-                                {{ drop_down(
-                                    positionid,
-                                    payload,
-                                    ddpayload,
-                                    "employer",
-                                    secondary="position",
-                                    secondaryid=positionid,
-                                    secondarybyname=True,
-                                    selected_value=dropdown_selected_value
-                                ) }}
+                        <div class="col-md-6">
+                            <label for="{{ id }}_graddate" class="form-label fw-medium">
+                                <i class="bi bi-calendar-event me-2"></i>Graduation Date
+                            </label>
+                            <div class="position-relative">
+                                <input
+                                    type="text"
+                                    name="{{ id }}_graddate"
+                                    id="{{ id }}_graddate"
+                                    class="form-control dateInput bg-light"
+                                    value="{{ graddate if graddate is defined else '' }}"
+                                    placeholder="MM/YYYY"
+                                    aria-label="Graduation date"
+                                    aria-describedby="{{ id }}_graddate_help"
+                                    autocomplete="off"
+                                >
                             </div>
-
-                            <div class="{{ "d-none updatevalue" if hidden else "updatevalue" }}" id="{{ positionid }}_position_div">
-                                <div class="mb-3">
-                                    <label for="{{ positionid }}_position" class="form-label fw-medium">
-                                        <i class="bi bi-briefcase-fill me-2"></i>Job Title
-                                    </label>
-                                    <input type="text"
-                                           name="{{ positionid }}_position"
-                                           id="{{ positionid }}_position"
-                                           class="form-control bg-white"
-                                           value="{{ positionname if positionname is defined else '' }}"
-                                           onfocusout="commit_value('{{ positionid }}_position');"
-                                           data-position-name="{{ positionname if positionname is defined else '' }}"
-                                           placeholder="Enter your job title">
-                                    <div class="form-text text-muted">
-                                        Your official title at this organization
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="row mb-3">
-                                <div class="col-6">
-                                    {{ date_picker(
-                                        positionid + "_startdate",
-                                        "Start Date",
-                                        icon="calendar-event",
-                                        value=startdate if startdate is defined else "",
-                                        placeholder="MM/YYYY",
-                                        help_text="When you began this position"
-                                    ) }}
-                                </div>
-                                <div class="col-6">
-                                    {{ date_picker(
-                                        positionid + "_enddate",
-                                        "End Date",
-                                        icon="calendar-check",
-                                        value=enddate if enddate is defined else "",
-                                        placeholder="MM/YYYY",
-                                        help_text="When you left or expected end date",
-                                        include_present=true
-                                    ) }}
-                                </div>
-                            </div>
-
-                            <div class="form-check form-switch mt-3">
-                                <input type="checkbox"
-                                       class="form-check-input"
-                                       role="switch"
-                                       name="{{ positionid }}_position_enabled"
-                                       id="{{ positionid }}_position_enabled"
-                                       {{ "checked" if positionstate }}
-                                       data-position-state="{{ positionstate }}">
-                                <label class="form-check-label" for="{{ positionid }}_position_enabled">
-                                    Include this position in resume
-                                </label>
-                            </div>
+                            <div id="{{ id }}_graddate_help" class="form-text text-muted">Graduation date (month and year)</div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Action Buttons Row -->
-            <div class="row mt-3">
-                <div class="col-12 d-flex justify-content-end">
-                    <button class="btn btn-outline-secondary me-2 rowEditor" type="button">
-                        <i class="bi bi-pencil-square"></i> Edit
-                    </button>
-                    <button class="btn btn-outline-danger" id="deleteRow" type="button">
-                        <i class="bi bi-trash"></i> Delete
+                    <!-- Achievements Section -->
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">
+                            <i class="bi bi-trophy me-2"></i>Achievements
+                        </label>
+                        <div class="achievements" id="{{ id }}_achievements">
+                            {% if achievements %}
+                                {% for achievement in achievements %}
+                                    <div class="achievement-item card bg-light mb-2 p-2">
+                                        <div class="d-flex">
+                                            <input type="text"
+                                                class="form-control me-2"
+                                                name="{{ id }}_achievement_{{ loop.index }}"
+                                                value="{{ achievement.description }}"
+                                                placeholder="e.g., Dean's List, Scholarship Award">
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-achievement">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-achievement-button" data-school-id="{{ id }}">
+                            <i class="bi bi-plus-lg me-1"></i>Add Achievement
+                        </button>
+                        <div class="form-text text-muted">Awards, honors, or recognitions</div>
+                    </div>
+
+                    <div class="form-check form-switch mt-3">
+                        <input
+                            type="checkbox"
+                            class="form-check-input"
+                            role="switch"
+                            id="{{ id }}_enabled"
+                            name="{{ id }}_enabled"
+                            {% if state %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="{{ id }}_enabled">Include this education entry</label>
+                    </div>
+                    <input type="hidden" id="{{ id }}_rowid" name="{{ id }}_rowid" value="{{ id }}">
+                </div>
+                <div class="col-md-1 d-flex align-items-center justify-content-end">
+                    <button type="button" class="btn btn-outline-danger delete-school" data-school-id="{{ id }}">
+                        <i class="bi bi-trash"></i>
                     </button>
                 </div>
             </div>
         </div>
     </div>
-{% endmacro %}
+{%- endmacro %}

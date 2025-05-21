@@ -1,87 +1,25 @@
-
-{% macro form_group(id, term, url, description, state) %}
-    <!-- Test if new template element -->
-    {% if id == "new" %}
-        {% set id = "new` + clicks + `"|safe %}
-    {% endif %}
-    <div id="{{ id }}" class="card border-0 shadow-sm mb-3">
-        <div class="card-body p-4">
-            <div class="row">
-                <div class="col-md-11">
-                    <div class="row g-3">
-                        <input type="hidden" name="{{ id }}_rowid" value="{{ id }}">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="{{ id }}_term" class="form-label fw-medium">
-                                    <i class="bi bi-bookmark-star me-2"></i>Term or Keyword
-                                </label>
-                                <input type="text"
-                                       name="{{ id }}_term"
-                                       id="{{ id }}_term"
-                                       class="form-control bg-light"
-                                       value="{{ term if term is defined else '' }}"
-                                       placeholder="Enter important term or keyword">
-                                <div class="form-text text-muted">
-                                    Technical terms or keywords you want to highlight
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="{{ id }}_url" class="form-label fw-medium">
-                                    <i class="bi bi-link-45deg me-2"></i>Reference URL (Optional)
-                                </label>
-                                <input type="url"
-                                       name="{{ id }}_url"
-                                       id="{{ id }}_url"
-                                       class="form-control bg-light"
-                                       value="{{ url if url is defined else '' }}"
-                                       placeholder="https://example.com/reference">
-                                <div class="form-text text-muted">
-                                    Link to more information about this term
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="form-group">
-                                <label for="{{ id }}_description" class="form-label fw-medium">
-                                    <i class="bi bi-card-text me-2"></i>Description
-                                </label>
-                                <textarea name="{{ id }}_description"
-                                          id="{{ id }}_description"
-                                          class="form-control bg-light"
-                                          rows="3"
-                                          placeholder="Brief explanation of this term and its significance"
-                                >{{ description if description is defined else '' }}</textarea>
-                                <div class="form-text text-muted">
-                                    A concise explanation that will appear when the term is highlighted
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="form-check form-switch mt-2">
-                                <input type="checkbox"
-                                       class="form-check-input"
-                                       role="switch"
-                                       id="{{ id }}_description_enabled"
-                                       name="{{ id }}_description_enabled"
-                                       {% if state %}checked{% endif %}>
-                                <label class="form-check-label" for="{{ id }}_description_enabled">
-                                    Enable this term in resume documents
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+{% macro glossary_term(id, term, definition) %}
+<div class="card mb-3" id="{{ id }}">
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-11">
+                <div class="mb-3">
+                    <label for="{{ id }}_term" class="form-label">Term</label>
+                    <input type="text" class="form-control" id="{{ id }}_term" name="{{ id }}_term"
+                        value="{{ term }}" placeholder="e.g., API, REST, Cloud Computing">
                 </div>
-                <div class="col-md-1 d-flex align-items-center justify-content-end">
-                    <button class="btn btn-outline-danger"
-                            id="deleteRow"
-                            type="button"
-                            title="Delete this term">
-                        <i class="bi bi-trash"></i>
-                    </button>
+                <div class="mb-3">
+                    <label for="{{ id }}_definition" class="form-label">Definition</label>
+                    <textarea class="form-control" id="{{ id }}_definition" name="{{ id }}_definition"
+                        rows="3" placeholder="Provide a clear, concise definition of the term">{{ definition }}</textarea>
                 </div>
+            </div>
+            <div class="col-md-1 text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger deleteRow">
+                    <i class="bi bi-trash"></i>
+                </button>
             </div>
         </div>
     </div>
-{%- endmacro %}
+</div>
+{% endmacro %}

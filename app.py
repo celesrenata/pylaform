@@ -1,1140 +1,1742 @@
+from datetime import datetime
+from flask import jsonify as flask_jsonify
+from pylaform.database.templateWorker import Worker
+from datetime import timedelta
+import boto3
+import json
 import os
-from flask import redirect, session, request, url_for, flash, render_template, Flask, jsonify, send_file
-import requests
+import sys
+from flask import Flask, Blueprint, render_template, request, redirect, url_for, flash, session
+from pylaform.database.connect import db, create_user_identification
+from pylaform.auth import (
+    create_user, create_session, login_required, verify_password,
+    validate_password, password_strength_message, send_password_reset_email,
+    store_reset_token, verify_reset_token, invalidate_reset_token,
+    update_user_password, invalidate_all_sessions, get_user_by_email
+)
+from pylaform.services.resumeManager import ResumeManager
+
+import time
+import secrets
 import logging
-from pylaform.services.proxycurl_service import ProxycurlService
-from pylaform.services.import_service import ImportService
-from pylaform.commands.db.query import Queries
-from pylaform.commands.templateWorker import Worker
-from pylaform.latex_templates import hybrid, onePage
-from pylaform.utilities.commands import fatten, listify, date_adapter
-from pylaform.services.ai_service import OllamaService
-from pylaform.services import ai_service
-from pylaform.services import config_service
-from pylaform.services.config_service import ConfigService
-from pylaform.routes.linkedin_routes import linkedin_bp
 
-# Near the top of app.py, add import
-import sqlite3
-from flask import flash
-config_service = ConfigService()
-
-logging.basicConfig(level=logging.INFO)
+# Set up logging for the whole app
+logging.basicConfig(
+    level=logging.DEBUG,  # Change to DEBUG level
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)  # Ensure logs go to stdout for CloudWatch
+    ]
+)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # Explicitly set logger level to DEBUG
 
-# Check if data directory exists and is writable
-data_dir = os.path.join(os.path.abspath(os.curdir), "data")
-if not os.path.exists(data_dir):
-    try:
-        os.makedirs(data_dir, exist_ok=True)
-        os.chmod(data_dir, 0o777)  # Full permissions for debugging
-        logger.info(f"Created data directory with full permissions")
-    except Exception as e:
-        logger.error(f"Failed to create data directory: {e}")
+# Create the resume blueprint
+resume_bp = Blueprint('resume', __name__)
 
-uploads = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_FOLDER = os.path.join(BASE_DIR, 'templates')
+STATIC_FOLDER = os.path.join(BASE_DIR, 'static')
 
-# Create the Flask application
-app = Flask(__name__, template_folder='pylaform/templates', static_folder='pylaform/static')
-app.config.from_pyfile('pylaform/config.py', silent=True)
-app.secret_key = "pylaformdb"  # Required for flashing messages
 
-# Initialize database connection with fallback to read-only mode
-read_only_mode = False
-try:
-    query = Queries()
-except sqlite3.OperationalError as e:
-    if "readonly database" in str(e):
-        logger.warning("Database is read-only. Trying to initialize in read-only mode.")
-        # Monkey patch the connect function to use read-only mode
-        from pylaform.commands.db import connect
-
-        original_db = connect.db
-        connect.db = lambda disable_cache=True: original_db(disable_cache, read_only=True)
-
-        # Now try again with read-only mode
+def get_secret_key():
+    """
+    Returns the Flask secret key.
+    - In AWS Lambda, tries to load from AWS Secrets Manager (pylaform/flask-secret).
+    - Otherwise, uses the SECRET_KEY environment variable, or falls back to a dev key.
+    """
+    if 'AWS_LAMBDA_FUNCTION_NAME' in os.environ:
         try:
-            query = Queries()
-            read_only_mode = True
-            logger.warning("Application running in READ-ONLY mode. Data modifications won't be saved.")
-        except Exception as e2:
-            logger.error(f"Failed to initialize database even in read-only mode: {e2}")
-            query = None
+            secret_name = "pylaform/flask-secret"
+            region_name = os.environ.get("AWS_REGION", "us-west-2")
+            client = boto3.client('secretsmanager', region_name=region_name)
+            get_secret_value_response = client.get_secret_value(SecretId=secret_name)
+            secret = json.loads(get_secret_value_response['SecretString'])
+            return secret['FLASK_SECRET_KEY']
+        except Exception as e:
+            print(f"WARNING: Could not load Flask secret from Secrets Manager: {e}")
+            raise RuntimeError("Flask secret key not found in Secrets Manager and no fallback provided.")
     else:
-        logger.error(f"Failed to initialize database: {e}")
-        query = None
+        # Local development
+        return os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Initialize worker based on database connection status
-worker = Worker() if query else None
+app = Flask(
+    __name__,
+    template_folder=TEMPLATE_FOLDER,
+    static_folder=STATIC_FOLDER
+)
+app.secret_key = get_secret_key()
+# Recommended security settings
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
-# Display read-only warning if applicable
-if read_only_mode:
-    @app.before_request
-    def before_request():
-        flash("Application is running in READ-ONLY mode. Changes won't be saved to the database.", "warning")
-
-@app.route("/")
-def landing():
-    # Get the identification data
-    identification_data = query.get_identification()
-
-    # Return the template with the complete identification data
-    return render_template("landing.html", payload=identification_data)
-
-def get_ollama_service():
-    ai_config = config_service.get_ai_config()
-
-    # If AI is not enabled, return with default settings
-    if not ai_config.get('enabled', False):
-        return OllamaService()
-
-    # Get Ollama configuration
-    ollama_config = ai_config.get('ollama', {})
-    host = ollama_config.get('host', 'localhost')
-    port = ollama_config.get('port', '11434')
-    model = ollama_config.get('model', 'gemma3:1b')
-
-    # Create service with configuration
-    return OllamaService(host=host, port=port, model=model)
-
-@app.route("/api/ai-status", methods=["GET"])
-def ai_status():
+@resume_bp.route('/resume-management', methods=['GET'])
+@login_required
+def resume_management():
+    """
+    Route handler for the Resume Management page.
+    """
     try:
-        # Create an instance of the OllamaService
-        ollama = ai_service.OllamaService()
-        # Get the status from the service
-        status = ollama.get_status()
-        return jsonify(status)
-    except Exception as e:
-        return jsonify({"status": "error", "models": [], "message": str(e)})
+        # Get user_id from session
+        user_id = session.get('user_id')
+        logger.info(f"User ID from session: {user_id}")
 
-@app.route('/api/test-ai-connection', methods=['POST'])
-def test_ai_connection():
-    from pylaform.services.ai_service import OllamaService
-    import traceback
+        manager = ResumeManager(user_id)
+        logger.info("ResumeManager initialized")
 
-    try:
-        # Get request data
-        data = request.json
-        host = data.get('host', 'localhost')
-        port = data.get('port', '11434')
-        model = data.get('model', 'gemma3:1b')
+        # Get all resumes and active resume ID
+        resumes = manager.get_all_resumes()
+        logger.info(f"Retrieved resumes: {resumes}")
 
-        # Create Ollama service with provided configuration
-        ollama_service = OllamaService(host=host, port=port, model=model)
+        active_resume_id = manager.get_active_resume_id()
+        logger.info(f"Active resume ID: {active_resume_id}")
 
-        # Test connection
-        result = ollama_service.test_connection()
-
-        return jsonify(result)
-    except Exception as e:
-        print(f"Error testing connection: {str(e)}")
-        print(traceback.format_exc())
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route('/api/download-model', methods=['POST'])
-def download_model():
-    """API endpoint to download an Ollama model"""
-    # Get request data
-    data = request.json
-    model = data.get('model')
-
-    # Validate input
-    if not model:
-        return jsonify({"success": False, "error": "No model specified"}), 400
-
-    # Get host and port from current config
-    ai_config = config_service.get_ai_config()
-    ollama_config = ai_config.get('ollama', {})
-    host = ollama_config.get('host', 'localhost')
-    port = ollama_config.get('port', '11434')
-
-    # Create Ollama service with configuration
-    ollama_service = OllamaService(host=host, port=port, model=model)
-
-    # Initiate model download
-    result = ollama_service.download_model(model)
-
-    # Return result
-    return jsonify(result)
-
-
-@app.route('/api/model-status', methods=['GET'])
-def get_model_status():
-    """API endpoint to get the status of installed Ollama models"""
-    # Get host and port from current config
-    ai_config = config_service.get_ai_config()
-    ollama_config = ai_config.get('ollama', {})
-    host = ollama_config.get('host', 'localhost')
-    port = ollama_config.get('port', '11434')
-
-    # Create Ollama service with configuration
-    ollama_service = OllamaService(host=host, port=port)
-
-    # Get model status
-    result = ollama_service.get_model_status()
-
-    return jsonify(result)
-
-
-@app.route('/api/improve-text', methods=['POST'])
-def improve_text():
-    # Get the request data
-    data = request.json
-    text = data.get('text', '')
-    improvement_type = data.get('type', 'general')
-
-    try:
-        # Create an instance of the OllamaService
-        ollama_service = ai_service.OllamaService()
-        # Generate the improvement
-        result = ollama_service.generate_improvement(text, improvement_type)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
-@app.route("/career_customize", methods=["GET", "POST"])
-def career_customize():
-    if request.method == 'GET':
-        return render_template("career_customize.html")
-
-    # Process form submission
-    try:
-        # Log request for debugging
-        app.logger.info("Processing career customize request")
-
-        career_title = request.form.get('career_title', '')
-        job_description = request.form.get('job_description', '')
-        selected_sections = request.form.getlist('sections[]')
-        customization_style = request.form.get('customization_style', 'professional')
-
-        # Validate inputs
-        if not career_title or not job_description:
-            app.logger.warning("Missing required fields: career_title or job_description")
-            flash("Please provide both a career title and job description.", "warning")
-            return render_template("career_customize.html")
-
-        if not selected_sections:
-            app.logger.warning("No sections selected for customization")
-            flash("Please select at least one section to customize.", "warning")
-            return render_template("career_customize.html")
-
-        # Get the AI service
-        ollama_service = get_ollama_service()
-
-        # Test connection to Ollama service
-        connection_test = ollama_service.test_connection()
-        if 'error' in connection_test:
-            app.logger.error(f"Failed to connect to Ollama service: {connection_test['error']}")
-            flash(f"Could not connect to AI service: {connection_test['error']}", "danger")
-            return render_template("career_customize.html")
-
-        # Analyze the job description for key requirements
-        job_analysis = ollama_service.analyze_job_description(job_description, career_title)
-
-        # Dictionary to store customized content for each section
-        customized_data = {}
-
-        app.logger.info(f"Starting customization for sections: {selected_sections}")
-
-        # For each selected section, retrieve active entries and customize
-        if 'summary' in selected_sections:
-            # Process summary section
-            app.logger.info("Processing summary section")
-            # Get raw summary data
-            raw_summaries = query.get_summary()
-
-            # Group summaries by ID
-            summary_groups = {}
-            for summary in raw_summaries:
-                summary_id = summary["id"]
-                if summary_id not in summary_groups:
-                    summary_groups[summary_id] = {
-                        "id": summary_id,
-                        "state": summary.get("state", False)
-                    }
-
-                # Add each attribute
-                attr_name = summary["attr"]
-                if attr_name in ["shortdesc", "longdesc"]:
-                    summary_groups[summary_id][attr_name] = summary["value"]
-
-            # Convert to list
-            active_summaries = [s for s in summary_groups.values() if s.get("state", False)]
-
-            app.logger.info(f"Found {len(active_summaries)} active summaries")
-
-            # Customize summaries if there are active ones
-            if active_summaries:
-                customized_summaries = ollama_service.customize_resume_content(
-                    section_type='summary',
-                    entries=active_summaries,
-                    career_title=career_title,
-                    job_description=job_description,
-                    style=customization_style
-                )
-                customized_data['summary'] = customized_summaries
-                app.logger.info(f"Successfully customized {len(customized_summaries)} summaries")
-            else:
-                app.logger.warning("No active summaries found to customize")
-
-        # Similar processing for other sections would go here
-        # ...
-
-        app.logger.info("Customization complete, rendering preview")
-        # Return preview template with job analysis and customized content
         return render_template(
-            'career_customize_preview.html',
-            career_title=career_title,
-            job_analysis=job_analysis,
-            customized_sections=customized_data
+            "resume_management.html",
+            resumes=resumes,
+            active_resume_id=active_resume_id
         )
+    except Exception as e:
+        logger.error(f"Error in resume management route: {str(e)}")
+        logger.exception("Detailed traceback:")  # This will log the full traceback
+        flash(f"Error loading resume management: {str(e)}", "danger")
+        # Use absolute URL instead of url_for
+        return redirect('/')
+
+
+@resume_bp.route('/create-resume', methods=['POST'])
+@login_required
+def create_resume():
+    """
+    Create a new resume for the current user.
+    """
+    try:
+        user_id = session.get('user_id')
+        name = request.form.get('resume_name', '').strip()
+
+        if not name:
+            flash("Resume name is required", "warning")
+            return redirect(url_for('resume.resume_management'))
+
+        manager = ResumeManager(user_id)
+        resume_id = manager.create_resume(name)
+
+        if resume_id:
+            flash(f"Resume '{name}' created successfully", "success")
+        else:
+            flash("Failed to create resume", "danger")
+        return redirect(url_for('resume.resume_management'))
+    except Exception as e:
+        logger.error(f"Error creating resume: {str(e)}")
+        flash(f"Error creating resume: {str(e)}", "danger")
+        return redirect(url_for('resume.resume_management'))
+
+
+@resume_bp.route('/rename-resume', methods=['POST'])
+@login_required
+def rename_resume():
+    """
+    Rename an existing resume.
+    """
+    try:
+        user_id = session.get('user_id')
+        resume_id = request.form.get('resume_id')
+        new_name = request.form.get('resume_name', '').strip()
+
+        if not resume_id or not new_name:
+            flash("Resume ID and new name are required", "warning")
+            return redirect(url_for('resume.resume_management'))
+
+        manager = ResumeManager(user_id)
+        success = manager.rename_resume(resume_id, new_name)
+
+        if success:
+            flash(f"Resume renamed to '{new_name}' successfully", "success")
+        else:
+            flash("Failed to rename resume", "danger")
+        return redirect(url_for('resume.resume_management'))
+    except Exception as e:
+        logger.error(f"Error renaming resume: {str(e)}")
+        flash(f"Error renaming resume: {str(e)}", "danger")
+        return redirect(url_for('resume.resume_management'))
+
+
+@resume_bp.route('/delete-resume', methods=['POST'])
+@login_required
+def delete_resume():
+    """
+    Delete an existing resume.
+    """
+    try:
+        user_id = session.get('user_id')
+        resume_id = request.form.get('resume_id')
+
+        if not resume_id:
+            flash("Resume ID is required", "warning")
+            return redirect(url_for('resume.resume_management'))
+
+        manager = ResumeManager(user_id)
+        success = manager.delete_resume(resume_id)
+
+        if success:
+            flash("Resume deleted successfully", "success")
+        else:
+            flash("Failed to delete resume", "danger")
+        return redirect(url_for('resume.resume_management'))
+    except Exception as e:
+        logger.error(f"Error deleting resume: {str(e)}")
+        flash(f"Error deleting resume: {str(e)}", "danger")
+        return redirect(url_for('resume.resume_management'))
+
+@resume_bp.route('/set-active-resume', methods=['POST'])
+@login_required
+def set_active_resume():
+    """
+    Set a resume as the active resume for the current user.
+    """
+    try:
+        user_id = session.get('user_id')
+        resume_id = request.form.get('resume_id')
+
+        if not resume_id:
+            flash("Resume ID is required", "warning")
+            return redirect(url_for('resume.resume_management'))
+
+        manager = ResumeManager(user_id)
+        success = manager.set_active_resume(resume_id)
+
+        if success:
+            flash("Active resume updated successfully", "success")
+        else:
+            flash("Failed to update active resume", "danger")
+        return redirect(url_for('resume.resume_management'))
+    except Exception as e:
+        logger.error(f"Error setting active resume: {str(e)}")
+        flash(f"Error setting active resume: {str(e)}", "danger")
+        return redirect(url_for('resume.resume_management'))
+
+
+@resume_bp.route('/copy-resume', methods=['POST'])
+@login_required
+def copy_resume():
+    """
+    Copy an existing resume with a new name
+    """
+    logger.debug("Entering copy_resume route handler")
+    try:
+        user_id = session.get('user_id')
+        logger.debug(f"User ID from session: {user_id}")
+
+        # Log all form data for debugging
+        logger.debug(f"All form data: {request.form}")
+
+        resume_id = request.form.get('resume_id')
+        resume_name = request.form.get('resume_name')
+        make_active = 'make_active' in request.form
+
+        logger.debug(f"Form data - resume_id: {resume_id}, resume_name: {resume_name}, make_active: {make_active}")
+        logger.info(f"Copy resume request: ID={resume_id}, Name={resume_name}, MakeActive={make_active}")
+
+        if not resume_id or not resume_name:
+            logger.warning("Missing required parameters: resume_id or resume_name")
+            flash("Resume ID and name are required", "danger")
+            return redirect(url_for('resume.resume_management'))
+
+        logger.debug("Initializing ResumeManager")
+        manager = ResumeManager(user_id)
+
+        logger.debug(f"Calling manager.copy_resume with params: {resume_id}, {resume_name}, {make_active}")
+        success = manager.copy_resume(resume_id, resume_name, make_active)
+        logger.debug(f"Copy resume operation result: {success}")
+
+        if success:
+            logger.info(f"Successfully copied resume '{resume_name}'")
+            flash(f"Resume '{resume_name}' copied successfully", "success")
+        else:
+            logger.error("Failed to copy resume - manager.copy_resume returned False")
+            flash("Failed to copy resume", "danger")
+
+        logger.debug("Redirecting to resume management page")
+        return redirect(url_for('resume.resume_management'))
+    except Exception as e:
+        logger.error(f"Error copying resume: {str(e)}")
+        logger.exception("Detailed traceback:")  # This will log the full traceback
+        flash(f"Error copying resume: {str(e)}", "danger")
+        return redirect(url_for('resume.resume_management'))
+
+# Add this inside your resume blueprint routes in app.py
+
+@resume_bp.route('/switch-resume', methods=['POST'])
+@login_required
+def switch_resume():
+    """
+    Handle switching the active resume based on user selection.
+    Returns to the specified page after switching.
+    """
+    try:
+        user_id = session.get('user_id')
+        resume_id = request.form.get('resume_id')
+        return_to = request.form.get('return_to', 'resume.resume_management')
+
+        logger.debug(f"Switch resume request: resume_id={resume_id}, return_to={return_to}")
+
+        if not resume_id:
+            flash("Please select a resume", "warning")
+            return redirect_to_return_page(return_to)
+
+        manager = ResumeManager(user_id)
+        success = manager.set_active_resume(resume_id)
+
+        if success:
+            # Update the active resume in the session
+            session['active_resume_id'] = resume_id
+            flash("Active resume updated", "success")
+        else:
+            flash("Failed to update active resume", "danger")
 
     except Exception as e:
-        app.logger.error(f"Error in career_customize: {str(e)}")
-        import traceback
-        app.logger.error(traceback.format_exc())
-        flash(f"An error occurred during customization: {str(e)}", "danger")
-        return render_template("career_customize.html")
+        logger.error(f"Error switching resume: {str(e)}")
+        logger.exception("Detailed traceback:")  # This will log the full traceback
+        flash("An error occurred while switching resumes", "danger")
+        return_to = 'resume.resume_management'  # Default fallback
+
+    return redirect_to_return_page(return_to)
 
 
-@app.route("/apply_customization", methods=["POST"])
-def apply_customization():
-    """Apply the selected customized content to the resume"""
-    from datetime import datetime
-    import re  # Add this import for string cleaning
+def redirect_to_return_page(return_to):
+    """
+    Helper function to handle redirects with proper blueprint prefixes.
+    """
+    logger.debug(f"Attempting to redirect to: {return_to}")
 
-    # Track how many changes were made
-    changes_made = 0
-
-    # Get career title for labeling
-    career_title = request.form.get('career_title', 'Targeted Role')
-    timestamp = datetime.now().strftime("%Y-%m-%d")
-
-    # Clean the career title to remove problematic characters for SQL
-    clean_career_title = re.sub(r'[,\'"]', '-', career_title)
-    customized_label = f"[{clean_career_title} - {timestamp}]"
-
-    # Process summary section changes
-    for key in request.form:
-        if key.endswith('_action') and request.form[key] == 'accept':
-            # Extract section and ID from the key
-            parts = key.split('_')
-            section = parts[0]
-            entry_id = parts[1]
-
-            if section == 'summary':
-                try:
-                    # Get the original and customized content
-                    original_id = request.form.get(f'summary_{entry_id}_original_id')
-                    customized_shortdesc = request.form.get(f'summary_{entry_id}_customized_shortdesc')
-                    customized_longdesc = request.form.get(f'summary_{entry_id}_customized_longdesc')
-
-                    if not original_id or not customized_shortdesc or not customized_longdesc:
-                        app.logger.error(f"Missing required data for summary_{entry_id}")
-                        continue
-
-                    # Clean the content for SQL safety
-                    customized_shortdesc = customized_shortdesc.replace("'", "''")
-                    customized_longdesc = customized_longdesc.replace("'", "''")
-
-                    app.logger.info(f"Processing summary entry: original_id={original_id}")
-
-                    # STEP 1: Disable the original entry
-                    try:
-                        # Direct SQL update to set state=0
-                        app.logger.info(f"Disabling original entry: {original_id}")
-                        worker.cursor.execute("UPDATE summary SET state = 0 WHERE id = ?", (original_id,))
-                        worker.conn.commit()
-                    except Exception as e:
-                        app.logger.error(f"Error disabling original entry: {e}")
-                        # Try an alternative method if the first fails
-                        try:
-                            worker.update.single_item("summary", {
-                                "id": original_id,
-                                "attr": "state",
-                                "value": 0,
-                                "state": False
-                            })
-                        except Exception as e2:
-                            app.logger.error(f"Second attempt failed: {e2}")
-
-                    # STEP 2: Create a new entry with customized content and explicit state=1
-                    try:
-                        app.logger.info("Creating new customized entry")
-                        # Explicitly include state=1 in the insert
-                        worker.cursor.execute(
-                            """
-                            INSERT INTO summary
-                                (shortdesc, longdesc, summaryorder, state)
-                            VALUES (?, ?, ?, 1)
-                            """,
-                            (
-                                f"{customized_shortdesc} {customized_label}",
-                                customized_longdesc,
-                                99  # Default to end of list
-                            )
-                        )
-                        worker.conn.commit()
-                        changes_made += 1
-                        app.logger.info(f"Successfully created new entry for {original_id}")
-                    except Exception as e:
-                        app.logger.error(f"Error creating new entry: {e}")
-                        # Try an alternative method if the first fails
-                        try:
-                            worker.insert.multi_column("summary",
-                                                       shortdesc=f"{customized_shortdesc} {customized_label}",
-                                                       longdesc=customized_longdesc,
-                                                       summaryorder=99,
-                                                       state=1
-                                                       )
-                            changes_made += 1
-                        except Exception as e2:
-                            app.logger.error(f"Second insert attempt failed: {e2}")
-
-                except Exception as e:
-                    app.logger.error(f"Error processing summary entry {entry_id}: {e}")
-
-    # Make sure all changes are committed
-    worker.conn.commit()
-
-    # Clear cache to ensure changes are immediately visible
+    # Try to redirect using url_for first
     try:
-        worker.query.purge_cache("summary")
-    except:
-        pass
+        return redirect(url_for(return_to))
+    except Exception as e:
+        logger.debug(f"url_for failed with: {str(e)}")
 
-    # Redirect to appropriate page based on changes
-    if changes_made > 0:
-        flash(f"{changes_made} resume entries were successfully customized for {career_title}!", "success")
-    else:
-        flash("No changes were applied to your resume.", "info")
+        # If return_to is not a valid endpoint, try it as a direct path
+        try:
+            # Handle blueprint routes - if it's a simple name like 'summary',
+            # it's likely a blueprint route that needs the prefix
+            if not return_to.startswith('/') and '.' not in return_to:
+                # This is likely a blueprint route without the blueprint name
+                path = f'/resume/{return_to}'
+                logger.debug(f"Treating as blueprint route: {path}")
+                return redirect(path)
+            else:
+                # Use as-is if it starts with a slash, otherwise add one
+                path = return_to if return_to.startswith('/') else f'/{return_to}'
+                logger.debug(f"Using direct path: {path}")
+                return redirect(path)
+        except Exception as e:
+            logger.error(f"Direct path redirect failed: {str(e)}")
+            # If all else fails, go to resume management
+            logger.error(f"Failed to redirect to '{return_to}', falling back to resume management")
+            return redirect(url_for('resume.resume_management'))
 
-    return redirect(url_for('landing'))
+@app.route('/')
+def index():
+    # Check if user is logged in
+    user_id = session.get('user_id')
 
-@app.route("/information", methods=["GET", "POST"])
-def information():
-    if request.method == 'POST':
-        worker.identification(request.form)
-        query.purge_cache("identification")
-    return render_template("information.html", **fatten(query.get_identification()))
-
-
-# Modified version of the summary route in app.py
-@app.route("/summary", methods=["GET", "POST"])
-def summary():
-    """Summary route."""
-    if request.method == "POST":
-        worker.update_summary(request.form)
-
-        # Run cleanup after processing the form
-        worker.delete.cleanup_disabled_entries(["summary"])
-
-        # Clear cache to ensure changes are immediately visible
-        worker.query.purge_cache("summary")
-
-        return redirect(url_for("summary"))
-
-    # Get summary data
-    summary_data = worker.query.get_summary()
-
-    # Add debugging
-    print(f"Raw summary data count: {len(summary_data)}")
-    unique_ids = set(item["id"] for item in summary_data)
-    print(f"Unique summary IDs: {unique_ids}")
-
-    # Group the summary items by ID to create the payload expected by the template
-    summary_by_id = {}
-    for item in summary_data:
-        item_id = item["id"]
-
-        # Initialize the dictionary for this ID if not already present
-        if item_id not in summary_by_id:
-            summary_by_id[item_id] = {
-                "id": item_id,
-                "state": item["state"]
-            }
-
-        # Add each attribute to the grouped item
-        attr_name = item["attr"]
-        summary_by_id[item_id][attr_name] = item["value"]
-
-    # Debug the grouped data
-    print(f"Grouped summary items count: {len(summary_by_id)}")
-    for item_id, item_data in summary_by_id.items():
-        print(f"  ID {item_id}: {item_data.get('shortdesc', 'NO_SHORTDESC')} (state: {item_data.get('state')})")
-
-    # Convert the grouped data to a list
-    payload = list(summary_by_id.values())
-
-    # Debug the final payload
-    print(f"Final payload count: {len(payload)}")
-
-    # Sort by summaryorder if available (default to 0)
-    payload.sort(key=lambda x: x.get("summaryorder", 0))
-
-    # Render the template with the payload
-    return render_template("summary_index.html", payload=payload)
-
-@app.route('/ai-config', methods=['GET', 'POST'])
-@app.route('/ai-config', methods=['GET', 'POST'])
-def ai_config():
-    # Use the global config_service instead of creating a new one
-    # from pylaform.services.config_service import ConfigService
-    # config_service = ConfigService()
-
-    if request.method == 'POST':
-        # Get form data
-        ai_enabled = 'aiEnabledToggle' in request.form
-        host = request.form.get('ollamaServerHost', 'localhost')
-        port = request.form.get('ollamaServerPort', '11434')
-
-        # Handle model selection
-        model_select = request.form.get('ollamaModel')
-        if model_select == 'custom':
-            model = request.form.get('customOllamaModel', 'gemma3:1b')
-        else:
-            model = model_select
-
-        # Save configuration
-        config_service.save_ai_config(ai_enabled, host, port, model)
-
-        # Redirect to the same page to prevent form resubmission
-        return redirect(url_for('ai_config'))
-
-    # Get current configuration
-    ai_config = config_service.get_ai_config()
-
-    # Render the template with current configuration
-    return render_template('ai_config.html',
-                           ai_enabled=ai_config.get('enabled', False),
-                           ollama_server_host=ai_config.get('ollama', {}).get('host', 'localhost'),
-                           ollama_server_port=ai_config.get('ollama', {}).get('port', '11434'),
-                           ollama_model=ai_config.get('ollama', {}).get('model', 'gemma3:1b'))
-
-@app.route("/education", methods=["GET", "POST"])
-def education():
-    if request.method == 'POST':
-        # Instead of modifying the request.form object (which is immutable),
-        # we'll pass it directly to the worker and let it handle date processing
-        worker.update_education(request.form)
-        query.purge_cache("education")
-        return redirect(url_for('education'))
-
-    # For GET requests, render the template with data
-    return render_template(
-        "education_index.html",
-        ddpayload=worker.dropdowns("education"),
-        **fatten(query.get_education())
-    )
-
-
-@app.route("/certifications", methods=["GET", "POST"])
-def certifications():
-    if request.method == 'POST':
-        worker.certifications(request.form)
-        query.purge_cache("certifications")
-
-    # Custom handling for certifications
-    # Get raw data
-    raw_certs = query.get_certifications()
-
-    # Group certifications by ID
-    cert_groups = {}
-    for cert in raw_certs:
-        cert_id = cert["id"]
-        if cert_id not in cert_groups:
-            cert_groups[cert_id] = {"id": cert_id, "state": cert["state"]}
-
-        # Add the attribute (certification or year)
-        cert_groups[cert_id][cert["attr"]] = cert["value"]
-
-    # Convert grouped data to list for template
-    processed_certs = list(cert_groups.values())
-
-    # Create payload with correct structure
-    payload = {"payload": processed_certs, "attrs": ["certification", "year"]}
-
-    return render_template("certifications_index.html", **payload)
-
-
-@app.route("/skills", methods=["GET", "POST"])
-def skills():
-    if request.method == 'POST':
-        worker.update_skills(request.form)
-        query.purge_cache("skills")
-
-    # Get dropdown data
-    dropdown_data = worker.dropdowns("skills")
-
-    # Get raw skills data
-    raw_skills = query.get_skills()
-
-    # Group skills by ID
-    skills_groups = {}
-    for skill in raw_skills:
-        skill_id = skill["id"]
-        if skill_id not in skills_groups:
-            skills_groups[skill_id] = {
-                "id": skill_id,
-                "state": skill.get("state", False)
-            }
-
-        # Add each attribute to the grouped object
-        attr_name = skill["attr"]
-        skills_groups[skill_id][attr_name] = skill["value"]
-
-    # Convert grouped data to list for template
-    processed_skills = list(skills_groups.values())
-
-    # Create payload with correct structure
-    payload = {
-        "payload": processed_skills,
-        "attrs": ["category", "subcategory", "employer", "employername",
-                  "position", "positionname", "shortdesc", "longdesc"]
+    # Initialize context with default values
+    context = {
+        'user_id': user_id,
+        'identification': None,
+        'is_authenticated': user_id is not None
     }
 
-    return render_template("skills_index.html",
-                           ddpayload=dropdown_data,
-                           **payload)
+    if user_id:
+        try:
+            # Initialize the worker with the user's ID
+            worker = Worker(user_id)
+
+            # Check if the user has identification data
+            identification = worker.get_identification()
+
+            # If no identification data exists, create default identification
+            if not identification:
+                logger.info(f"No identification found for user {user_id}, creating defaults")
+                worker.create_default_identification()
+                # Fetch the newly created identification data
+                identification = worker.get_identification()
+
+            # Add identification data to context
+            context['identification'] = identification
+
+        except Exception as e:
+            logger.error(f"Error in index route: {str(e)}")
+            flash("An error occurred while loading your profile data", "error")
+
+    # Render the template with the context
+    return render_template("index.html", **context)
+
+@app.route("/landing")
+@login_required
+def landing():
+    """
+    Route handler for the homepage.
+    """
+    return render_template("landing.html")
+
+
+# Example snippet from your information route handler
+
+@resume_bp.route('/information', methods=['GET', 'POST'])
+@login_required
+def information():
+    try:
+        user_id = session.get('user_id')
+        resume_manager = ResumeManager(user_id)
+        worker = Worker(user_id)
+
+        # Get all resumes and determine active resume
+        all_resumes = resume_manager.get_all_resumes()
+        active_resume_id = resume_manager.get_active_resume_id()
+        session['active_resume_id'] = active_resume_id  # Keep session in sync
+
+        # Handle resume switch from dropdown
+        if request.method == 'POST' and 'resume_id' in request.form:
+            new_resume_id = request.form['resume_id']
+            resume_manager.set_active_resume(new_resume_id)
+            session['active_resume_id'] = new_resume_id
+            return redirect(url_for('resume.information'))
+
+        # Handle AJAX form submission for contact info
+        if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            form_data = request.form.to_dict()
+            form_data['active_resume_id'] = active_resume_id
+            success = worker.process_information_form(form_data, resume_id=active_resume_id)
+            if success:
+                return '', 200
+            else:
+                return '', 400
+
+        # Load contact info for the active resume
+        payload = worker.get_identification_safely(resume_id=active_resume_id)
+
+        # Define the desired order of attributes
+        attr_order = [
+            "name", "email", "phone", "location", "www", "linkedin", "github"
+        ]
+        # Sort payload by this order; unknown attrs go last
+        payload_sorted = sorted(
+            payload,
+            key=lambda x: attr_order.index(x.get("attr", "")) if x.get("attr", "") in attr_order else len(attr_order)
+        )
+
+        return render_template(
+            'information.html',
+            all_resumes=all_resumes,
+            active_resume_id=active_resume_id,
+            payload=payload_sorted,
+            debug=app.debug
+        )
+    except Exception as e:
+        logger.error(f"Error in information route: {str(e)}")
+        flash(f"An error occurred: {str(e)}", "danger")
+        return render_template('information.html', all_resumes=[], active_resume_id=None, payload=[], debug=app.debug)
+
+# Add more route handlers for other pages referenced in your HTML
+@resume_bp.route('/summary', methods=['GET', 'POST'])
+@login_required
+def summary():
+    try:
+        # Import Worker
+        user_id = session.get('user_id')
+        worker = Worker(user_id)
+
+        # Get the active resume ID and name
+        resume_manager = ResumeManager(user_id)
+        active_resume_id = session.get('active_resume_id')
+        if not active_resume_id:
+            active_resume_id = resume_manager.get_active_resume_id()
+            if active_resume_id:
+                session['active_resume_id'] = active_resume_id
+
+        # Get all resumes for the dropdown
+        all_resumes = resume_manager.get_all_resumes()
+
+        active_resume = resume_manager.get_resume(active_resume_id) if active_resume_id else None
+        active_resume_name = active_resume.get('name', 'Default Resume') if active_resume else 'Default Resume'
+
+        # Handle form submissions
+        if request.method == 'POST':
+            form_data = request.form
+            logger.debug(f"Received form data: {dict(form_data)}")
+
+            # Check for deletion
+            if '_delete' in form_data:
+                delete_id = form_data.get('_delete')
+                logger.debug(f"Delete request for ID: {delete_id}")
+                if delete_id:
+                    # Make sure we're using the correct resume_id
+                    resume_id = form_data.get('active_resume_id', active_resume_id)
+                    logger.debug(f"Deleting summary {delete_id} from resume {resume_id}")
+
+                    # Call delete_entry with the correct parameters
+                    success = worker.delete_entry("summary", delete_id, resume_id=resume_id)
+                    logger.debug(f"Delete operation result: {success}")
+
+                    if success:
+                        flash("Summary point deleted successfully.", "success")
+                    else:
+                        flash("Failed to delete summary point.", "danger")
+
+                    return redirect(url_for('resume.summary'))
+
+            # Process updates for existing summaries
+            updates_made = False
+            for key in form_data:
+                # Look for existing items (UUID format)
+                if '_shortdesc' in key and not key.startswith('new_'):
+                    summary_id = key.split('_')[0]
+                    if len(summary_id) == 36:  # UUID length
+                        shortdesc = form_data.get(f"{summary_id}_shortdesc", "")
+                        longdesc = form_data.get(f"{summary_id}_longdesc", "")
+                        summaryorder = form_data.get(f"{summary_id}_summaryorder", "99")
+
+                        # Convert summaryorder to integer
+                        try:
+                            summaryorder = int(summaryorder)
+                        except (ValueError, TypeError):
+                            summaryorder = 99
+
+                        # Update the summary
+                        success = worker.update_summary(
+                            summary_id,
+                            resume_id=active_resume_id,
+                            shortdesc=shortdesc,
+                            longdesc=longdesc,
+                            summaryorder=summaryorder
+                        )
+
+                        if success:
+                            updates_made = True
+                            logger.debug(f"Updated summary {summary_id}")
+                        else:
+                            logger.error(f"Failed to update summary {summary_id}")
+
+            # Process new summaries - handle array format
+            new_shortdescs = form_data.getlist('new_shortdesc')
+            new_longdescs = form_data.getlist('new_longdesc')
+            new_summaryorders = form_data.getlist('new_summaryorder')
+
+            # Make sure we have the same number of items in each list
+            min_length = min(len(new_shortdescs), len(new_longdescs), len(new_summaryorders))
+
+            for i in range(min_length):
+                shortdesc = new_shortdescs[i].strip()
+                longdesc = new_longdescs[i].strip()
+
+                # Skip empty entries
+                if not shortdesc and not longdesc:
+                    continue
+
+                # Convert summaryorder to integer
+                try:
+                    summaryorder = int(new_summaryorders[i])
+                except (ValueError, TypeError, IndexError):
+                    summaryorder = 99
+
+                # Add the new summary
+                result = worker.add_summary(
+                    shortdesc=shortdesc,
+                    longdesc=longdesc,
+                    summaryorder=summaryorder,
+                    resume_id=active_resume_id
+                )
+
+                if result:
+                    updates_made = True
+                    logger.debug(f"Added new summary with ID {result}")
+                else:
+                    logger.error("Failed to add new summary")
+
+            if updates_made:
+                flash("Summary updated successfully.", "success")
+
+            return redirect(url_for('resume.summary'))
+
+        # GET request - display the form
+        payload = worker.get_summary(resume_id=active_resume_id)
+        logger.debug(f"Retrieved {len(payload)} summaries")
+
+        return render_template(
+            'summary_index.html',
+            payload=payload,
+            all_resumes=all_resumes,
+            active_resume_id=active_resume_id,
+            active_resume_name=active_resume_name
+        )
+    except Exception as e:
+        logger.error(f"Error in summary route: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        flash("An error occurred while processing your request.", "danger")
+        return redirect(url_for('resume.dashboard'))
+
+@resume_bp.route("/education", methods=['GET'])
+@login_required
+def education():
+    user_id = session.get('user_id')
+    worker = Worker(user_id)
+    resume_manager = ResumeManager(user_id)
+
+    try:
+        # Get all resumes and determine active resume
+        all_resumes = resume_manager.get_all_resumes()
+        active_resume_id = session.get('active_resume_id')
+        if not active_resume_id:
+            active_resume_id = resume_manager.get_active_resume_id()
+            if active_resume_id:
+                session['active_resume_id'] = active_resume_id
+
+        # GET request - display the form
+        schools = worker.get_all_education(resume_id=active_resume_id)
+        logger.debug(f"Retrieved {len(schools)} schools for user {user_id}")
+
+        return render_template(
+            "education_index.html",
+            payload=schools,
+            all_resumes=all_resumes,
+            active_resume_id=active_resume_id
+        )
+    except Exception as e:
+        logger.error(f"Error in education route: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        flash("An error occurred while loading education information.", "danger")
+        return redirect(url_for('landing'))  # Change this to an existing route
+
+
+@resume_bp.route('/education', methods=['POST'])
+@login_required
+def education_post():
+    user_id = session.get('user_id')
+    worker = Worker(user_id)
+    resume_manager = ResumeManager(user_id)
+
+    form_data = request.form.to_dict()
+    logger.debug(f"Received education form data: {form_data}")
+
+    active_resume_id = form_data.get('active_resume_id')
+    if not active_resume_id:
+        active_resume_id = session.get('active_resume_id')
+        if not active_resume_id:
+            active_resume_id = resume_manager.get_active_resume_id()
+            if active_resume_id:
+                session['active_resume_id'] = active_resume_id
+
+    try:
+        # Handle deletions
+        if "_delete" in form_data:
+            delete_id = form_data.get("_delete")
+            logger.debug(f"Processing delete request for school ID: {delete_id}")
+            if delete_id and not delete_id.startswith("new"):
+                success = worker.delete_entry("school", delete_id, resume_id=active_resume_id)
+                logger.debug(f"Delete operation result: {success}")
+                if success:
+                    flash("School deleted successfully", "success")
+                else:
+                    flash("Failed to delete school", "danger")
+            return redirect(url_for("resume.education"))
+
+        # Process updates and new additions
+        school_data = {}
+        focus_data = {}
+        achievement_data = {}
+
+        for key, value in form_data.items():
+            logger.debug(f"Processing form key: {key}, value: {value}")
+            if "_" in key:
+                parts = key.split("_", 1)
+                school_id = parts[0]
+
+                if "focus_" in key:
+                    if school_id not in focus_data:
+                        focus_data[school_id] = []
+                    focus_parts = key.split("_focus_")
+                    if len(focus_parts) > 1:
+                        focus_index = focus_parts[1]
+                        focus_data[school_id].append({
+                            "index": focus_index,
+                            "description": value
+                        })
+                elif "achievement_" in key:
+                    if school_id not in achievement_data:
+                        achievement_data[school_id] = []
+                    achievement_parts = key.split("_achievement_")
+                    if len(achievement_parts) > 1:
+                        achievement_index = achievement_parts[1]
+                        achievement_data[school_id].append({
+                            "index": achievement_index,
+                            "description": value
+                        })
+                else:
+                    field = parts[1]
+                    if school_id not in school_data:
+                        school_data[school_id] = {}
+                    school_data[school_id][field] = value
+
+        logger.debug(f"Processed school data: {school_data}")
+        logger.debug(f"Processed focus data: {focus_data}")
+        logger.debug(f"Processed achievement data: {achievement_data}")
+
+        for school_id, data in school_data.items():
+            enabled = "enabled" in data
+            data["state"] = 1 if enabled else 0
+            data.pop("enabled", None)
+            data.pop("rowid", None)
+
+            if school_id.startswith("new"):
+                if "name" in data:
+                    logger.debug(f"Adding new school: {data}")
+                    new_school_id = worker.add_school(
+                        name=data.get("name", ""),
+                        location=data.get("location", ""),
+                        degree=data.get("degree", ""),
+                        graddate=data.get("graddate", ""),
+                        resume_id=active_resume_id
+                    )
+                    logger.debug(f"New school added with ID: {new_school_id}")
+                    if new_school_id:
+                        if school_id in focus_data:
+                            for focus in focus_data[school_id]:
+                                if focus["description"].strip():
+                                    worker.add_focus(new_school_id, focus["description"], resume_id=active_resume_id)
+                        if school_id in achievement_data:
+                            for achievement in achievement_data[school_id]:
+                                if achievement["description"].strip():
+                                    worker.add_achievement(new_school_id, achievement["description"], resume_id=active_resume_id)
+                    else:
+                        logger.error(f"Failed to add new school: {data}")
+                        flash("Failed to add new school", "danger")
+            else:
+                data.pop('resume_id', None)
+                logger.debug(f"Updating school: school_id={school_id}, resume_id={active_resume_id}, data={data}")
+                result = worker.update_school(school_id, resume_id=active_resume_id, **data)
+                logger.debug(f"update_school result: {result}")
+
+                if result:
+                    if school_id in focus_data:
+                        for focus in focus_data[school_id]:
+                            if focus["description"].strip():
+                                worker.update_focus(school_id, focus["index"], focus["description"], resume_id=active_resume_id)
+                    if school_id in achievement_data:
+                        for achievement in achievement_data[school_id]:
+                            if achievement["description"].strip():
+                                worker.update_achievement(school_id, achievement["index"], achievement["description"], resume_id=active_resume_id)
+                else:
+                    logger.error(f"Failed to update school: {school_id}")
+                    flash(f"Failed to update school {data.get('name', '')}", "danger")
+
+        flash("Education information updated successfully", "success")
+    except Exception as e:
+        logger.error(f"Error in education_post: {str(e)}")
+        flash("An error occurred while updating education information", "danger")
+
+    return redirect(url_for("resume.education"))
+
+@app.route('/certifications', methods=['GET', 'POST'])
+@login_required
+def certifications():
+    print("DEBUG: Beginning certifications route handler")
+    try:
+        # Import Worker
+        user_id = session.get('user_id')
+        worker = Worker(user_id)
+
+        # Handle form submissions
+        if request.method == 'POST':
+            print("DEBUG: Processing POST request for certifications")
+            form_data = request.form
+            print(f"DEBUG: Form data: {form_data}")
+
+            certifications = worker.get_all_certifications()
+            print(f"DEBUG: Retrieved {len(certifications)} certifications for display")
+
+            # Check for deletion
+            if '_delete' in form_data:
+                delete_id = form_data.get('_delete')
+                print(f"DEBUG: Delete request for certification {delete_id}")
+                if delete_id:
+                    success = worker.delete_entry("certification", delete_id)
+                    print(f"DEBUG: Delete result: {success}")
+                    # Redirect to avoid resubmission
+                    return redirect(url_for('certifications'))
+
+            # Process updates first
+            updates_made = False
+            for key, value in form_data.items():
+                # Look for existing items (not starting with "new")
+                if "_name" in key and not key.startswith("new"):
+                    item_id = key.split("_")[0]
+                    name = value
+                    authority = form_data.get(f"{item_id}_authority", "")
+                    date_achieved = form_data.get(f"{item_id}_date_achieved", "")
+                    expiration_date = form_data.get(f"{item_id}_expiration_date", "")
+
+                    # Check if there's an order value
+                    cert_order = form_data.get(f"{item_id}_certorder", 99)
+                    try:
+                        cert_order = int(cert_order)
+                    except:
+                        cert_order = 99
+
+                    print(f"DEBUG: Updating certification {item_id}")
+                    update_data = {
+                        "name": name,
+                        "authority": authority,
+                        "date_achieved": date_achieved,
+                        "certorder": cert_order
+                    }
+
+                    # Only include expiration date if it exists
+                    if expiration_date:
+                        update_data["expiration_date"] = expiration_date
+
+                    success = worker.update_certification(item_id, **update_data)
+                    if success:
+                        updates_made = True
+
+            # Process new items (starting with "new")
+            for key, value in form_data.items():
+                if "_name" in key and key.startswith("new"):
+                    new_id = key.split("_")[0]  # Extract "new1", "new2", etc.
+                    name = value
+                    authority = form_data.get(f"{new_id}_authority", "")
+                    date_achieved = form_data.get(f"{new_id}_date_achieved", "")
+                    expiration_date = form_data.get(f"{new_id}_expiration_date", "")
+
+                    # Check if there's content to add
+                    if name.strip() and authority.strip() and date_achieved.strip():
+                        print(f"DEBUG: Adding new certification {name}")
+                        success = worker.add_certification(
+                            name=name,
+                            authority=authority,
+                            date_achieved=date_achieved,
+                            expiration_date=expiration_date if expiration_date.strip() else None
+                        )
+                        if success:
+                            updates_made = True
+
+            # Redirect to avoid resubmission
+            if updates_made:
+                return redirect(url_for('certifications'))
+
+        # Get certifications
+        certifications = worker.get_all_certifications()
+        print(f"DEBUG: Retrieved {len(certifications)} certifications for display")
+
+        # Transform the data to match template expectations
+        transformed_certifications = []
+        for cert in certifications:
+            transformed_certifications.append({
+                "id": cert.get('SK'),  # Use SK as id
+                "name": cert.get('name', ''),
+                "authority": cert.get('authority', ''),
+                "date_achieved": cert.get('date_achieved', ''),
+                "expiration_date": cert.get('expiration_date', ''),
+                "state": cert.get('state', 1),
+                "certorder": cert.get('certorder', 99)
+            })
+
+        # Sort by certification order
+        transformed_certifications.sort(key=lambda x: int(x.get('certorder', 99)))
+
+        print(f"DEBUG: Rendering template with {len(transformed_certifications)} transformed certifications")
+        return render_template('certifications_index.html', payload=transformed_certifications)
+
+    except Exception as e:
+        import traceback
+        print(f"DEBUG: Exception in certifications route: {str(e)}")
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        return f"Error: {str(e)}", 500
 
 
 @app.route("/employment", methods=["GET", "POST"])
-def positions():
-    if request.method == 'POST':
-        worker.update_positions(request.form)
-        query.purge_cache("positions")
-    return render_template("employment_index.html", ddpayload=worker.dropdowns("employment"), **fatten(query.get_positions()))
+@login_required
+def employment():
+    # Initialize worker
+    user_id = session.get('user_id')
+    worker = Worker(user_id)
+
+    if request.method == "POST":
+        # Process form data
+        form_data = request.form.to_dict()
+        print(f"DEBUG: Employment POST with {len(form_data)} form fields")
+        print(f"DEBUG: Form field keys: {sorted(list(form_data.keys()))}")
+
+        # Handle achievement deletion
+        if "_delete_achievement" in form_data:
+            achievement_id = form_data.get("_delete_achievement")
+            print(f"DEBUG: Processing achievement deletion request for ID: {achievement_id}")
+
+            if achievement_id and not achievement_id.startswith("new-achievement-"):
+                # Remove any prefix if it exists
+                if achievement_id.startswith("achievement_"):
+                    achievement_id = achievement_id[12:]  # Remove "achievement_" prefix
+
+                success = worker.delete_entry("achievement", achievement_id)
+                print(f"DEBUG: Achievement deletion result: {success}")
+                if success:
+                    flash("Achievement deleted successfully", "success")
+                else:
+                    flash("Error deleting achievement", "danger")
+
+            return redirect(url_for("employment"))
+
+        # Handle position deletion
+        if "_delete_position" in form_data:
+            position_id = form_data.get("_delete_position")
+            print(f"DEBUG: Processing position deletion request for ID: {position_id}")
+
+            if position_id and not position_id.startswith("new-position-"):
+                # Remove any prefix if it exists
+                if position_id.startswith("position_"):
+                    position_id = position_id[9:]  # Remove "position_" prefix
+
+                success = worker.delete_entry("position", position_id)
+                print(f"DEBUG: Position deletion result: {success}")
+                if success:
+                    flash("Position deleted successfully", "success")
+                else:
+                    flash("Error deleting position", "danger")
+
+            return redirect(url_for("employment"))
+
+        # Handle employer deletion
+        if "_delete_employer" in form_data:
+            employer_id = form_data.get("_delete_employer")
+            print(f"DEBUG: Processing employer deletion request for ID: {employer_id}")
+
+            if employer_id and not employer_id.startswith("new"):
+                # Remove any prefix if it exists
+                if employer_id.startswith("employer_"):
+                    employer_id = employer_id[9:]  # Remove "employer_" prefix
+
+                # First, get all positions for this employer
+                positions = worker.query.get_related_items("employer", employer_id, "position", False)
+                print(f"DEBUG: Found {len(positions)} positions to delete for employer {employer_id}")
+
+                # Delete all positions first
+                for position in positions:
+                    position_id = position.get("SK")
+                    worker.delete_entry("position", position_id)
+                    print(f"DEBUG: Deleted position {position_id}")
+
+                # Then delete the employer
+                success = worker.delete_entry("employer", employer_id)
+                print(f"DEBUG: Employer deletion result: {success}")
+
+                if success:
+                    flash("Employer and all associated positions deleted successfully", "success")
+                else:
+                    flash("Error deleting employer", "danger")
+
+            return redirect(url_for("employment"))
+
+        # Process employers first
+        # Keep track of new employers with their temporary IDs
+        new_employer_map = {}  # Maps temporary ID to real DB ID
+
+        # First, process all employer entries (existing and new)
+        for key in form_data:
+            if key.startswith("employer_") and "_name" in key:
+                # Extract employer ID and check if it's new
+                parts = key.split("_", 2)
+                employer_id = parts[1]
+
+                print(f"DEBUG: Processing employer with ID: {employer_id}")
+
+                # Get employer data fields
+                name = form_data.get(f"employer_{employer_id}_name", "").strip()
+                location = form_data.get(f"employer_{employer_id}_location", "").strip()
+                enabled = f"employer_{employer_id}_enabled" in form_data
+
+                # Skip empty employers
+                if not name:
+                    print(f"DEBUG: Skipping empty employer: {employer_id}")
+                    continue
+
+                # Check if this is a new or existing employer
+                is_new = employer_id.startswith("new")
+
+                if is_new:
+                    # Add new employer to database
+                    print(f"DEBUG: Adding new employer: {name}")
+                    new_id = worker.add_employer(name=name, location=location)
+                    if new_id:
+                        print(f"DEBUG: Added employer successfully, got DB ID: {new_id}")
+                        # Store mapping of temporary ID to real DB ID
+                        new_employer_map[f"employer_{employer_id}"] = new_id
+                    else:
+                        print(f"DEBUG: Failed to add employer {name}")
+                else:
+                    # Update existing employer
+                    print(f"DEBUG: Updating employer: {employer_id}")
+                    success = worker.update_employer(
+                        employer_id,
+                        name=name,
+                        location=location,
+                        state=1 if enabled else 0
+                    )
+                    print(f"DEBUG: Update result: {success}")
+
+        # Track new position IDs for potential new achievements
+        new_position_ids = {}  # Maps temporary ID to real DB ID
+
+        # Now process positions
+        for key in form_data:
+            # Check for new position fields (new-position format)
+            if key.startswith("new-position-") and "_title" in key:
+                # Extract position ID from key
+                parts = key.split("_", 1)
+                position_temp_id = parts[0]  # e.g., "new-position-1"
+
+                print(f"DEBUG: Processing new position: {position_temp_id}")
+
+                # Get position data
+                title = form_data.get(f"{position_temp_id}_title", "").strip()
+                startdate = form_data.get(f"{position_temp_id}_startdate", "").strip()
+
+                # Check for current position checkbox
+                is_current = f"{position_temp_id}_current" in form_data
+                enddate = None if is_current else form_data.get(f"{position_temp_id}_enddate", "").strip()
+
+                # Get the employer ID - crucial part
+                employer_ref = form_data.get(f"{position_temp_id}_employer_id", "")
+                print(f"DEBUG: Position references employer: {employer_ref}")
+
+                # Skip positions with missing required data
+                if not title or not startdate:
+                    print(f"DEBUG: Skipping position with missing data - Title: '{title}', Start date: '{startdate}'")
+                    continue
+
+                # If employer_ref refers to a new employer, map to real ID
+                real_employer_id = employer_ref
+                if employer_ref in new_employer_map:
+                    real_employer_id = new_employer_map[employer_ref]
+                    print(f"DEBUG: Mapped temp employer ID {employer_ref} to real ID {real_employer_id}")
+                elif employer_ref.startswith("employer_"):
+                    real_employer_id = employer_ref.replace("employer_", "")
+                    print(f"DEBUG: Extracted employer ID from {employer_ref} to {real_employer_id}")
+
+                # Add the new position
+                print(f"DEBUG: Adding position '{title}' to employer '{real_employer_id}'")
+                print(f"DEBUG: Position data - Start: {startdate}, End: {enddate}, Current: {is_current}")
+
+                new_position_id = worker.add_position(
+                    employer_id=real_employer_id,
+                    title=title,
+                    startdate=startdate,
+                    enddate=enddate,
+                    current=is_current
+                )
+
+                if new_position_id:
+                    print(f"DEBUG: Successfully added position with ID: {new_position_id}")
+                    # Store mapping of temporary ID to real DB ID
+                    new_position_ids[position_temp_id] = new_position_id
+                else:
+                    print(f"DEBUG: Failed to add position '{title}'")
+
+            # Handle existing positions (format: position_ID_field)
+            elif key.startswith("position_") and "_title" in key:
+                # Extract position ID
+                parts = key.split("_", 2)
+                position_id = parts[1]
+
+                print(f"DEBUG: Processing existing position: {position_id}")
+
+                # Get position data
+                title = form_data.get(f"position_{position_id}_title", "").strip()
+                startdate = form_data.get(f"position_{position_id}_startdate", "").strip()
+
+                # Check for current position checkbox
+                is_current = f"position_{position_id}_current" in form_data
+                enddate = None if is_current else form_data.get(f"position_{position_id}_enddate", "").strip()
+
+                # Skip positions with missing required data
+                if not title or not startdate:
+                    print(
+                        f"DEBUG: Skipping position update with missing data - Title: '{title}', Start date: '{startdate}'")
+                    continue
+
+                # Update the position
+                print(f"DEBUG: Updating position '{title}' (ID: {position_id})")
+
+                update_data = {
+                    "title": title,
+                    "startdate": startdate,
+                    "current": 1 if is_current else 0,
+                    "state": 1 if f"position_{position_id}_enabled" in form_data else 0
+                }
+
+                if not is_current and enddate:
+                    update_data["enddate"] = enddate
+
+                success = worker.update_position(position_id, **update_data)
+                print(f"DEBUG: Position update result: {success}")
+
+        # Process achievements with achievement_newach pattern
+        for key in form_data:
+            if key.startswith("achievement_newach") and key.endswith("_description"):
+                # Extract achievement ID (without the _description part)
+                achievement_id = key.replace("_description", "")
+
+                # Get achievement data
+                description = form_data.get(key, "").strip()
+                position_id = form_data.get(f"{achievement_id}_position_id", "").strip()
+
+                print(f"DEBUG: Processing new achievement with ID: {achievement_id}")
+                print(f"DEBUG: Description: {description}")
+                print(f"DEBUG: Position ID: {position_id}")
+
+                # Skip empty achievements or those without a position
+                if not description or not position_id:
+                    print(f"DEBUG: Skipping empty achievement or missing position: {achievement_id}")
+                    continue
+
+                # If position_id refers to a new position, map to real ID
+                real_position_id = position_id
+                if position_id in new_position_ids:
+                    real_position_id = new_position_ids[position_id]
+                    print(f"DEBUG: Mapped temp position ID {position_id} to real ID {real_position_id}")
+                elif position_id.startswith("position_"):
+                    real_position_id = position_id.replace("position_", "")
+                    print(f"DEBUG: Extracted position ID from {position_id} to {real_position_id}")
+
+                # Add new achievement
+                print(f"DEBUG: Adding new achievement for position {real_position_id}: {description}")
+                new_id = worker.add_achievement(
+                    position_id=real_position_id,
+                    description=description
+                )
+                if new_id:
+                    print(f"DEBUG: Added achievement successfully, got DB ID: {new_id}")
+                else:
+                    print(f"DEBUG: Failed to add achievement")
+
+        # Process new achievements - moved outside the position loops to handle all achievements at once
+        for key in form_data:
+            if key.startswith("new-achievement-") and "_description" in key:
+                # Extract achievement temp ID
+                achievement_temp_id = key.split("_")[0]  # e.g., "new-achievement-123456"
+
+                # Get achievement data
+                description = form_data.get(key, "").strip()
+                position_id = form_data.get(f"{achievement_temp_id}_position_id", "").strip()
+
+                print(f"DEBUG: Processing new achievement: {achievement_temp_id}")
+                print(f"DEBUG: Description: {description}")
+                print(f"DEBUG: Position ID: {position_id}")
+
+                # Skip empty achievements or those without a position
+                if not description or not position_id:
+                    print(f"DEBUG: Skipping empty achievement or missing position: {achievement_temp_id}")
+                    continue
+
+                # If position_id refers to a new position, map to real ID
+                real_position_id = position_id
+                if position_id in new_position_ids:
+                    real_position_id = new_position_ids[position_id]
+                    print(f"DEBUG: Mapped temp position ID {position_id} to real ID {real_position_id}")
+                elif position_id.startswith("position_"):
+                    real_position_id = position_id.replace("position_", "")
+                    print(f"DEBUG: Extracted position ID from {position_id} to {real_position_id}")
+
+                # Add new achievement
+                print(f"DEBUG: Adding new achievement for position {real_position_id}: {description}")
+                new_id = worker.add_achievement(
+                    position_id=real_position_id,
+                    description=description
+                )
+                if new_id:
+                    print(f"DEBUG: Added achievement successfully, got DB ID: {new_id}")
+                else:
+                    print(f"DEBUG: Failed to add achievement")
+
+        flash("Employment information updated successfully", "success")
+        return redirect(url_for("employment"))
+
+    # GET request - fetch and display data
+    employers = worker.get_all_employment()
+    return render_template("employment_index.html", payload=employers)
 
 
-@app.route("/achievements", methods=["GET", "POST"])
+@app.route('/skills', methods=['GET', 'POST'])
+@login_required
+def skills():
+    """
+    Route handler for the Skills page.
+    """
+    try:
+        user_id = session.get('user_id')
+        worker = Worker(user_id)
+
+        if request.method == 'POST':
+            # Check if this is an AJAX request for skill deletion
+            if '_delete' in request.form:
+                skill_id = request.form.get('_delete')
+                if skill_id:
+                    success = worker.delete_entry("skill", skill_id)
+                    if success:
+                        flash("Skill deleted successfully", "success")
+                    else:
+                        flash("Error deleting skill", "error")
+                    return redirect(url_for('skills'))
+
+            # Process the form data
+            success, message = worker.process_skills_form(request.form)
+
+            if success:
+                flash("Skills updated successfully", "success")
+            else:
+                flash(f"Error updating skills: {message}", "error")
+
+            return redirect(url_for('skills'))
+
+        # Get all skills for display
+        skills = worker.get_all_skills()
+
+        # Group skills by category and subcategory
+        categorized_skills = {}
+        for skill in skills:
+            category = skill.get('category', 'Uncategorized')
+            subcategory = skill.get('subcategory', 'General')
+
+            if category not in categorized_skills:
+                categorized_skills[category] = {}
+
+            if subcategory not in categorized_skills[category]:
+                categorized_skills[category][subcategory] = []
+
+            categorized_skills[category][subcategory].append(skill)
+
+        # Sort categories and subcategories
+        sorted_categories = {}
+        for category in sorted(categorized_skills.keys()):
+            sorted_categories[category] = {}
+            for subcategory in sorted(categorized_skills[category].keys()):
+                # Sort skills within subcategory by short_description
+                sorted_skills = sorted(
+                    categorized_skills[category][subcategory],
+                    key=lambda x: x.get('short_description', '')
+                )
+                sorted_categories[category][subcategory] = sorted_skills
+
+        return render_template('skills_index.html', skills=sorted_categories)
+
+    except Exception as e:
+        import traceback
+        print(f"DEBUG: Exception in skills route: {str(e)}")
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        return f"Error: {str(e)}", 500
+
+
+@app.route('/api/skills', methods=['POST'])
+@login_required
+def update_skills():
+    """
+    API endpoint for updating skills via AJAX.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return flask_jsonify({'success': False, 'message': 'No data received'})
+
+        user_id = session.get('user_id')
+        worker = Worker(user_id)
+        success, message = worker.process_skills_form(data)
+
+        return flask_jsonify({'success': success, 'message': message})
+
+    except Exception as e:
+        return flask_jsonify({'success': False, 'message': str(e)})
+
+@app.route('/employment_iter')
+@login_required
+def employment_iter():
+    employer_id = request.args.get('employer_id')
+    # Default values for a new employer
+    return render_template(
+        'employment_iter.html',
+        id=employer_id,
+        name="",
+        location="",
+        state=True,
+        positions=[]
+    )
+
+
+@app.route('/achievements', methods=['GET', 'POST'])
+@login_required
 def achievements():
+    user_id = session.get('user_id')
+    worker = Worker(user_id)
+
     if request.method == 'POST':
-        worker.update_achievements(request.form)
-        query.purge_cache("achievements")
+        form_data = request.form.to_dict()
 
-    # Get dropdown data
-    dropdown_data = worker.dropdowns("achievements")
+        print(f"DEBUG: Received form data: {form_data}")
 
-    # Get raw achievement data
-    raw_achievements = query.get_achievements()
+        # Check for delete operations for standalone achievements
+        if '_delete_achievement' in form_data:
+            achievement_id = form_data['_delete_achievement']
+            print(f"DEBUG: Deleting achievement with ID: {achievement_id}")
+            result = worker.delete_entry("standalone_achievement", achievement_id)
+            print(f"DEBUG: Deletion result: {result}")
+            flash('Achievement deleted successfully', 'success')
+            return redirect(url_for('achievements'))
 
-    # Group achievements by ID
-    achievement_groups = {}
-    for achievement in raw_achievements:
-        achievement_id = achievement["id"]
-        if achievement_id not in achievement_groups:
-            achievement_groups[achievement_id] = {
-                "id": achievement_id,
-                "state": achievement.get("state", False)
-            }
+        # Process new standalone achievements
+        new_added = False
+        for key in form_data:
+            if key.startswith('new-achievement-') and key.endswith('_title'):
+                achievement_id = key.split('_')[0]
+                print(f"DEBUG: Processing new achievement with ID: {achievement_id}")
 
-        # Add each attribute to the grouped object
-        attr_name = achievement["attr"]
-        achievement_groups[achievement_id][attr_name] = achievement["value"]
+                title = form_data.get(f"{achievement_id}_title", "").strip()
+                description = form_data.get(f"{achievement_id}_description", "").strip()
+                date = form_data.get(f"{achievement_id}_date", "").strip()
+                url = form_data.get(f"{achievement_id}_url", "").strip()
+                enabled = 1 if f"{achievement_id}_enabled" in form_data else 0
 
-    # Convert grouped data to list for template
-    processed_achievements = list(achievement_groups.values())
+                try:
+                    achievement_order = int(form_data.get(f"{achievement_id}_achievement_order", 99))
+                except:
+                    achievement_order = 99
 
-    # Create payload with correct structure
-    payload = {
-        "payload": processed_achievements,
-        "attrs": ["employer", "employername", "school", "schoolname", "position", "positionname",
-                  "achievement", "shortdesc", "longdesc", "employerstate",
-                  "positionstate", "schoolstate", "achievementstate"]
-    }
+                print(f"DEBUG: New achievement data: title='{title}', desc='{description[:20]}...', enabled={enabled}")
 
-    return render_template("achievements_index.html",
-                           ddpayload=dropdown_data,
-                           **payload)
+                if title:  # Only add if title is not empty
+                    print(f"DEBUG: Adding new achievement to database")
+                    result = worker.add_standalone_achievement(
+                        title=title,
+                        description=description,
+                        date=date,
+                        url=url,
+                        achievement_order=achievement_order
+                    )
+                    if result:
+                        new_added = True
+                        print(f"DEBUG: Successfully added achievement with ID: {result}")
+                    else:
+                        print(f"DEBUG: Failed to add achievement")
 
-@app.route("/glossary", methods=["GET", "POST"])
+        # Process existing standalone achievements
+        updates_made = False
+        standalone_achievements = worker.get_all_achievements()
+        print(f"DEBUG: Found {len(standalone_achievements)} existing achievements to update")
+
+        for achievement in standalone_achievements:
+            achievement_id = achievement['SK']
+            if f"{achievement_id}_title" in form_data:
+                print(f"DEBUG: Processing existing achievement update with ID: {achievement_id}")
+
+                title = form_data.get(f"{achievement_id}_title", "").strip()
+                description = form_data.get(f"{achievement_id}_description", "").strip()
+                date = form_data.get(f"{achievement_id}_date", "").strip()
+                url = form_data.get(f"{achievement_id}_url", "").strip()
+                enabled = 1 if f"{achievement_id}_enabled" in form_data else 0
+
+                try:
+                    achievement_order = int(form_data.get(f"{achievement_id}_achievement_order", 99))
+                except:
+                    achievement_order = 99
+
+                current_title = achievement.get('title', '')
+                current_desc = achievement.get('description', '')
+                current_date = achievement.get('date', '')
+                current_url = achievement.get('url', '')
+                current_state = achievement.get('state', 0)
+                current_order = int(achievement.get('achievement_order', 99))
+
+                print(f"DEBUG: Current data: title='{current_title}', enabled={current_state}")
+                print(f"DEBUG: New data: title='{title}', enabled={enabled}")
+
+                # Update only if something changed
+                if (title != current_title or
+                        description != current_desc or
+                        date != current_date or
+                        url != current_url or
+                        enabled != current_state or
+                        achievement_order != current_order):
+
+                    print(f"DEBUG: Updating achievement in database")
+                    result = worker.update_achievement(
+                        achievement_id,
+                        title=title,
+                        description=description,
+                        date=date,
+                        url=url,
+                        state=enabled,
+                        achievement_order=achievement_order
+                    )
+                    if result:
+                        updates_made = True
+                        print(f"DEBUG: Successfully updated achievement")
+                    else:
+                        print(f"DEBUG: Failed to update achievement")
+
+        if new_added or updates_made:
+            flash('Achievements updated successfully', 'success')
+        return redirect(url_for('achievements'))
+
+    # GET request - display achievements
+    achievements_data = worker.get_combined_achievements()
+    print(f"DEBUG: Loading achievements page with {len(achievements_data)} achievements")
+
+    # Count achievements by type
+    standalone_count = sum(1 for a in achievements_data if a.get('achievement_type') == 'standalone')
+    position_count = sum(1 for a in achievements_data if a.get('achievement_type') == 'position')
+    print(f"DEBUG: Found {standalone_count} standalone and {position_count} position-related achievements")
+
+    return render_template('achievements_index.html', payload=achievements_data, debug=True)
+
+@app.route("/glossary")
+@login_required
 def glossary():
-    if request.method == 'POST':
-        worker.update_glossary(request.form)
-        query.purge_cache("glossary")
-    return render_template("glossary_index.html", **fatten(query.get_glossary()))
-
-
-# For the one_page_doc route in app.py
-@app.route('/generate/one-page')
-def one_page_doc():
-    try:
-        from pylaform.latex_templates.onePage import Generator
-        from pylaform.commands.latex import Commands
-
-        # Create data directory if it doesn't exist
-        data_dir = app.config.get('DATA_DIR', 'data')
-        os.makedirs(data_dir, exist_ok=True)
-
-        # Clean up old files
-        Commands.cleanup_latex_files(data_dir)
-
-        # Generate PDF
-        gen = Generator()
-        gen.run()
-
-        # Check if PDF was created
-        pdf_path = os.path.join(data_dir, 'one-page.pdf')
-        if os.path.exists(pdf_path):
-            return send_file(pdf_path, as_attachment=True, download_name='resume-one-page.pdf')
-        else:
-            flash("Unable to generate PDF. Please check your resume data and try again.", "danger")
-            return redirect(url_for('landing'))
-
-    except Exception as e:
-        import traceback
-        logging.error(f"Error generating one-page document: {str(e)}")
-        logging.error(traceback.format_exc())
-        flash("An error occurred while generating your document. Please try again.", "danger")
-        return redirect(url_for('landing'))
-
-
-@app.route('/generate/hybrid')
-def hybrid_doc():
-    try:
-        from pylaform.latex_templates.hybrid import Generator
-        from pylaform.commands.latex import Commands
-
-        # Create data directory if it doesn't exist
-        data_dir = app.config.get('DATA_DIR', 'data')
-        os.makedirs(data_dir, exist_ok=True)
-
-        # Clean up old files
-        Commands.cleanup_latex_files(data_dir)
-
-        # Generate PDF
-        gen = Generator()
-        gen.run()
-
-        # Check if PDF was created
-        pdf_path = os.path.join(data_dir, 'hybrid.pdf')
-        if os.path.exists(pdf_path):
-            return send_file(pdf_path, as_attachment=True, download_name='resume-hybrid.pdf')
-        else:
-            flash("Unable to generate PDF. Please check your resume data and try again.", "danger")
-            return redirect(url_for('landing'))
-
-    except Exception as e:
-        import traceback
-        logging.error(f"Error generating hybrid document: {str(e)}")
-        logging.error(traceback.format_exc())
-        flash("An error occurred while generating your document. Please try again.", "danger")
-        return redirect(url_for('landing'))
-
-@app.route("/api/delete", methods=["POST"])
-def api_delete():
-    """API endpoint to handle deletion of entries"""
-    table = request.form.get("table")
-    entry_id = request.form.get("id")
-    hard_delete = request.form.get("hard_delete", "false").lower() == "true"
-
-    if not table or not entry_id:
-        return jsonify({"success": False, "error": "Missing table or ID"}), 400
-
-    try:
-        # Convert ID to integer
-        entry_id = int(entry_id)
-    except ValueError:
-        return jsonify({"success": False, "error": f"Invalid ID: {entry_id}"}), 400
-
-    # Check if the table is valid
-    valid_tables = ["summary", "school", "focus", "employer", "position",
-                    "achievement", "skill", "certification", "glossary"]
-    if table not in valid_tables:
-        return jsonify({"success": False, "error": f"Invalid table: {table}"}), 400
-
-    result = worker.delete.delete_entry(table, entry_id, hard_delete)
-
-    if result:
-        # Clear cache for this table
-        try:
-            worker.query.purge_cache(table)
-        except:
-            app.logger.warning(f"Failed to purge cache for {table}")
-
-        return jsonify({"success": True, "message": f"Deleted entry {entry_id} from {table}"}), 200
-    else:
-        return jsonify({"success": False, "error": "Failed to delete entry"}), 500
-
-
-@app.route('/auth/linkedin/callback')
-def linkedin_callback():
-    """Handle LinkedIn OAuth callback"""
-    # Get code and state from request
-    code = request.args.get('code')
-    state = request.args.get('state')
-    error = request.args.get('error')
-
-    # Validate the state to prevent CSRF
-    if error or not code or state != session.get('linkedin_state'):
-        flash("Authentication failed or was cancelled", "danger")
-        return redirect(url_for('linkedin_import_page'))
-
-    # Clean up the state from session
-    session.pop('linkedin_state', None)
-
-    try:
-        # Exchange code for access token
-        linkedin = LinkedInService()
-        token_data = linkedin.exchange_code_for_token(code)
-
-        # Store token in session
-        session['linkedin_token'] = token_data
-
-        # Redirect to the import page
-        return redirect(url_for('linkedin_import_page'))
-    except Exception as e:
-        flash(f"Failed to complete authentication: {str(e)}", "danger")
-        return redirect(url_for('linkedin_import_page'))
-
-
-@app.route('/linkedin/import', methods=['POST'])
-def linkedin_import():
-    """Process the LinkedIn data import"""
-    # Check if we have an active token and profile data
-    token = session.get('linkedin_token')
-    profile_data = session.get('linkedin_profile_data')
-
-    if not token or not profile_data:
-        flash("LinkedIn data not available. Please reconnect your account.", "danger")
-        return redirect(url_for('linkedin_import_page'))
-
-    # Get selected sections to import
-    import_sections = request.form.getlist('import_sections')
-
-    if not import_sections:
-        flash("Please select at least one section to import", "warning")
-        return redirect(url_for('linkedin_import_page'))
-
-    try:
-        # Import basic information
-        if 'basic_info' in import_sections:
-            from pylaform.commands.db import update, query
-            updater = update.Updates()
-
-            # Create identification data packet
-            identification = []
-            if profile_data.get('firstName') and profile_data.get('lastName'):
-                identification.append({
-                    'attr': 'name',
-                    'value': f"{profile_data['firstName']} {profile_data['lastName']}",
-                    'state': 1
-                })
-
-            if profile_data.get('email'):
-                identification.append({
-                    'attr': 'email',
-                    'value': profile_data['email'],
-                    'state': 1
-                })
-
-            # Update identification data
-            for item in identification:
-                if item['value']:  # Only update if we have a value
-                    try:
-                        updater.inverted_single_item('identification', item)
-                    except Exception as e:
-                        app.logger.error(f"Error updating identification item {item['attr']}: {str(e)}")
-
-        # Import work experience
-        if 'experience' in import_sections and 'positions' in profile_data and profile_data['positions']:
-            from pylaform.commands.db import query, update, delete
-            updater = update.Updates()
-            deleter = delete.Deletes()
-
-            try:
-                # Get existing employment records
-                employment_data = query.Queries().get_positions()
-
-                # Delete existing records
-                for item in employment_data:
-                    deleter.single_row('positions', item['id'])
-            except Exception as e:
-                app.logger.error(f"Error clearing existing employment data: {str(e)}")
-
-            # Now add LinkedIn positions
-            for idx, position in enumerate(profile_data['positions']):
-                try:
-                    # Create position data
-                    position_data = {
-                        'id': idx + 1,  # Use index-based ID
-                        'company': position.get('company', {}).get('name', ''),
-                        'title': position.get('title', ''),
-                        'description': position.get('summary', ''),
-                        'startmonth': position.get('startDate', {}).get('month', ''),
-                        'startyear': position.get('startDate', {}).get('year', ''),
-                        'state': 1,
-                    }
-
-                    # Handle end date or current position
-                    if position.get('current', False):
-                        position_data['present'] = 1
-                    else:
-                        position_data['endmonth'] = position.get('endDate', {}).get('month', '')
-                        position_data['endyear'] = position.get('endDate', {}).get('year', '')
-
-                    # Insert new position
-                    updater.multi_column('positions', **position_data)
-                except Exception as e:
-                    app.logger.error(f"Error adding position {idx}: {str(e)}")
-
-        # Import education
-        if 'education' in import_sections and 'education' in profile_data and profile_data['education']:
-            from pylaform.commands.db import query, update, delete
-            updater = update.Updates()
-            deleter = delete.Deletes()
-
-            try:
-                # Get existing education records
-                education_data = query.Queries().get_education()
-
-                # Delete existing records
-                for item in education_data:
-                    deleter.single_row('education', item['id'])
-            except Exception as e:
-                app.logger.error(f"Error clearing existing education data: {str(e)}")
-
-            # Now add LinkedIn education
-            for idx, school in enumerate(profile_data['education']):
-                try:
-                    # Create education data
-                    education_data = {
-                        'id': idx + 1,  # Use index-based ID
-                        'school': school.get('schoolName', ''),
-                        'degree': school.get('degree', ''),
-                        'field': school.get('fieldOfStudy', ''),
-                        'startyear': school.get('startDate', {}).get('year', ''),
-                        'state': 1,
-                    }
-
-                    # Handle end date
-                    if 'endDate' in school and school['endDate']:
-                        education_data['endyear'] = school['endDate'].get('year', '')
-                    else:
-                        education_data['present'] = 1
-
-                    # Insert new education
-                    updater.multi_column('education', **education_data)
-                except Exception as e:
-                    app.logger.error(f"Error adding education {idx}: {str(e)}")
-
-        # Import skills
-        if 'skills' in import_sections and 'skills' in profile_data and profile_data['skills']:
-            from pylaform.commands.db import query, update, delete
-            updater = update.Updates()
-            deleter = delete.Deletes()
-
-            try:
-                # Get existing skills records
-                skills_data = query.Queries().get_skills()
-
-                # Delete existing records
-                for item in skills_data:
-                    deleter.single_row('skills', item['id'])
-            except Exception as e:
-                app.logger.error(f"Error clearing existing skills data: {str(e)}")
-
-            # Now add LinkedIn skills
-            for idx, skill in enumerate(profile_data['skills']):
-                try:
-                    # Create skill data
-                    skill_data = {
-                        'id': idx + 1,  # Use index-based ID
-                        'shortdesc': skill.get('name', ''),
-                        'longdesc': '',  # LinkedIn doesn't provide detailed skill descriptions
-                        'rating': 4,  # Default to high rating
-                        'state': 1,
-                    }
-
-                    # Insert new skill
-                    updater.multi_column('skills', **skill_data)
-                except Exception as e:
-                    app.logger.error(f"Error adding skill {idx}: {str(e)}")
-
-        flash("LinkedIn data successfully imported!", "success")
-
-        # Clear the session data to avoid duplicate imports
-        session.pop('linkedin_profile_data', None)
-
-        # Redirect to the main resume page
-        return redirect(url_for('landing'))
-
-    except Exception as e:
-        app.logger.error(f"Error importing LinkedIn data: {str(e)}")
-        flash(f"Error importing LinkedIn data: {str(e)}", "danger")
-        return redirect(url_for('linkedin_import_page'))
-
-
-@app.route('/linkedin/error')
-def linkedin_error():
-    """Display LinkedIn connection error page"""
-    error_title = request.args.get('title', 'Connection Error')
-    error_message = request.args.get('message', 'An error occurred while connecting to LinkedIn.')
-
-    return render_template(
-        'linkedin_error.html',
-        error_title=error_title,
-        error_message=error_message
-    )
-
-@app.route('/linkedin-import')
-def linkedin_import_page():
-    """LinkedIn import page"""
-    # Check if Proxycurl API key is configured
-    has_proxycurl = bool(os.environ.get('PROXYCURL_API_KEY', ''))
-    return render_template('linkedin_import.html', has_proxycurl=has_proxycurl)
-
-
-@app.route('/linkedin-import-with-proxycurl', methods=['POST'])
-def linkedin_import_with_proxycurl():
-    """Import LinkedIn data using Proxycurl API"""
-    logger.info("--- Starting LinkedIn import with Proxycurl ---")
-
-    # Get LinkedIn profile URL from form
-    linkedin_url = request.form.get('linkedin_profile_url', '')
-    logger.debug(f"LinkedIn URL submitted: {linkedin_url}")
-
-    if not linkedin_url:
-        logger.warning("No LinkedIn URL provided")
-        flash("Please provide your LinkedIn profile URL", "warning")
-        return redirect(url_for('linkedin_import_page'))
-
-    # Validate URL format
-    if not (linkedin_url.startswith('https://www.linkedin.com/') or
-            linkedin_url.startswith('https://linkedin.com/')):
-        logger.warning(f"Invalid LinkedIn URL format: {linkedin_url}")
-        flash("Please enter a valid LinkedIn profile URL", "warning")
-        return redirect(url_for('linkedin_import_page'))
-
-    # Initialize Proxycurl service
-    proxycurl_service = ProxycurlService()
-    logger.debug(f"Proxycurl API key configured: {bool(proxycurl_service.api_key)}")
-
-    # Check if API key is configured
-    if not proxycurl_service.api_key:
-        logger.warning("Proxycurl API key not configured")
-        flash("Proxycurl API key not configured. Please configure it in LinkedIn settings.", "warning")
-        return redirect(url_for('linkedin_config'))
-
-    # Fetch profile data
-    logger.info(f"Fetching LinkedIn profile data from {linkedin_url}")
-    profile_data = proxycurl_service.get_profile_data(linkedin_url)
-
-    if 'error' in profile_data:
-        logger.error(f"Error from Proxycurl API: {profile_data['error']}")
-        flash(f"Error fetching LinkedIn data: {profile_data['error']}", "danger")
-        return redirect(url_for('linkedin_import_page'))
-
-    # Log successful data retrieval
-    logger.info("Successfully retrieved LinkedIn profile data")
-    logger.debug(f"Profile data contains keys: {list(profile_data.keys())}")
-
-    # Get selected sections to import
-    import_sections = request.form.getlist('import_sections')
-    logger.debug(f"Selected sections to import: {import_sections}")
-
-    # If no sections selected, select all by default
-    if not import_sections:
-        import_sections = ['basic_info', 'experience', 'education', 'skills']
-        logger.debug(f"No sections selected, using defaults: {import_sections}")
-
-    # Process the import
-    try:
-        logger.info("Starting import processing")
-        import_service = ImportService()
-        result = import_service.process_linkedin_import(profile_data, import_sections)
-
-        if result['success']:
-            sections_imported = ', '.join(result['imported_sections'])
-            logger.info(f"LinkedIn import successful. Sections imported: {sections_imported}")
-            flash(f"Successfully imported LinkedIn data: {sections_imported}", "success")
-        else:
-            errors = ', '.join(result['errors'])
-            logger.warning(f"LinkedIn import completed with errors: {errors}")
-            flash(f"Errors during import: {errors}", "warning")
-
-        # Clear the session data
-        if 'linkedin_profile_data' in session:
-            logger.debug("Clearing LinkedIn profile data from session")
-            session.pop('linkedin_profile_data', None)
-
-        logger.info("LinkedIn import process completed, redirecting to landing page")
-        return redirect(url_for('landing'))
-
-    except Exception as e:
-        logger.exception(f"Unexpected error during LinkedIn import process: {str(e)}")
-        flash(f"Error importing LinkedIn data: {str(e)}", "danger")
-        return redirect(url_for('linkedin_import_page'))
-
-
-@app.route('/linkedin-settings', methods=['GET', 'POST'], endpoint='linkedin.settings')
-def linkedin_settings_redirect():
-
-    """LinkedIn settings page - configures Proxycurl API key"""
-    # Get current Proxycurl API key from config or environment
-    proxycurl_api_key = os.environ.get('PROXYCURL_API_KEY', '')
-
-    # Also try to get from config if using a config file
-    try:
-        if not proxycurl_api_key and query:
-            # Assuming you have a config table or method to retrieve settings
-            # Adjust this based on your actual configuration storage method
-            pass
-    except Exception as e:
-        logger.error(f"Error loading Proxycurl API key: {str(e)}")
-
-    # If it's a POST request, save the settings
-    if request.method == 'POST':
-        proxycurl_api_key = request.form.get('proxycurl_api_key', '')
-
-        # Save API key to environment variable
-        os.environ['PROXYCURL_API_KEY'] = proxycurl_api_key
-
-        # Also save to persistent storage if available
-        try:
-            if query:
-                # Example of how you might save to database
-                # Adjust this to match your actual storage method
-                # query.save_config('proxycurl_api_key', proxycurl_api_key)
+    # Initialize worker
+
+    user_id = session.get('user_id')
+    worker = Worker(user_id)
+
+    # Get all glossary terms
+    print("DEBUG: Retrieving glossary terms")
+    terms = worker.get_glossary()
+    print(f"DEBUG: Retrieved {len(terms)} glossary terms")
+
+    # Transform the terms for display if needed
+    # (Sort alphabetically by term)
+    sorted_terms = sorted(terms, key=lambda x: x.get('term', '').lower())
+
+    # Pass the terms to the glossary_index template
+    return render_template("glossary_index.html", payload=sorted_terms)
+
+
+@app.route("/glossary", methods=["POST"])
+@login_required
+def glossary_post():
+    # Initialize worker
+    from pylaform.database.templateWorker import Worker
+    user_id = session.get('user_id')
+    worker = Worker(user_id)
+
+    # Process form data
+    form_data = request.form.to_dict()
+
+    # Handle deletions first
+    if "_delete" in form_data:
+        delete_id = form_data.get("_delete")
+        if delete_id:
+            if delete_id.startswith("new"):
+                # This is a new item that was deleted before saving
+                # Nothing to do in the database
                 pass
+            else:
+                # Delete existing item
+                worker.delete_entry("glossary", delete_id)
+                flash("Glossary term deleted successfully", "success")
 
-            flash('LinkedIn API settings saved successfully', 'success')
+        # Redirect to avoid form resubmission
+        return redirect(url_for("glossary"))
+
+    # Process updates and new additions
+    # Group form data by ID
+    term_data = {}
+    for key, value in form_data.items():
+        if "_" in key:
+            id_part, field_part = key.split("_", 1)
+            if id_part not in term_data:
+                term_data[id_part] = {}
+            term_data[id_part][field_part] = value
+
+    # Update existing items and add new ones
+    for term_id, data in term_data.items():
+        if term_id.startswith("new"):
+            # Add new term
+            if "term" in data and "definition" in data:
+                worker.add_glossary(
+                    term=data["term"],
+                    definition=data["definition"]
+                )
+        else:
+            # Update existing term
+            worker.update_glossary(term_id, **data)
+
+    flash("Glossary terms updated successfully", "success")
+    return redirect(url_for("glossary"))
+
+
+@app.route("/linkedin-settings")
+@login_required
+def linkedin_settings():
+    return render_template("linkedin_settings.html")
+
+
+@app.route("/linkedin-import")
+@login_required
+def linkedin_import_page():
+    """
+    Page for importing LinkedIn data
+    """
+    return render_template("linkedin_import.html")
+
+
+# Add API routes for AI helper
+@app.route("/api/ai-status")
+@login_required
+def ai_status():
+    # Simplified status check for now
+    return {"status": "ok", "message": "Amazon Q is available"}
+
+
+@app.route("/api/improve-text", methods=["POST"])
+@login_required
+def improve_text():
+    # Placeholder for text improvement API
+    try:
+        data = request.get_json()
+        text = data.get("text", "")
+        improvement_type = data.get("type", "")
+
+        # For now, return the same text as a placeholder
+        return {"response": f"Improved text would appear here. Type: {improvement_type}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.route("/ai-config")
+@login_required
+def ai_config():
+    return render_template("ai_config.html")
+
+
+@app.route("/login", methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        table = db()
+
+        # Find user by email
+        response = table.query(
+            IndexName='EmailIndex',
+            KeyConditionExpression='email = :email',
+            ExpressionAttributeValues={':email': email}
+        )
+
+        if not response['Items']:
+            flash("Invalid email or password", "error")
+            return render_template('login.html')
+
+        user = response['Items'][0]
+
+        if not verify_password(user['password'], password):
+            flash("Invalid email or password", "error")
+            return render_template('login.html')
+
+        # Create session
+        session_id = create_session(table, user['PK'].split('#')[1])
+
+        # Store in Flask session
+        session['user_id'] = user['PK'].split('#')[1]
+        session['session_id'] = session_id
+        session['user_name'] = user.get('name', '')
+
+        next_url = request.args.get('next')
+        return redirect(next_url if next_url else url_for('landing'))
+
+    return render_template('login.html')
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """
+    Handle user registration.
+    """
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        first_name = request.form.get('first_name')
+        last_name = request.form.get('last_name')
+
+        logger.info(f"Registration attempt: {email}")
+
+        # Validate password
+        is_valid, message = validate_password(password)
+        logger.info(f"Password validation result: {is_valid}, message: {message}")
+        if not is_valid:
+            flash(message, "error")
+            logger.error(f"Password validation failed: {message}")
+            return render_template('register.html',
+                                   email=email,
+                                   first_name=first_name,
+                                   last_name=last_name)
+
+        try:
+            table = db()
+            result = create_user(table, email, password, first_name, last_name)
+            logger.info(f"create_user result: {result}")
+            if not result:
+                flash("Email already registered", "error")
+                logger.error("Email already registered")
+                return render_template('register.html',
+                                       email=email,
+                                       first_name=first_name,
+                                       last_name=last_name)
+
+            # Create default identification records for the new user
+            create_user_identification(table, result)
+            logger.info(f"Created default identification records for user {result}")
         except Exception as e:
-            flash(f'Error saving settings: {str(e)}', 'error')
+            flash(f"Error creating user: {str(e)}", "error")
+            logger.exception("Exception during user creation")
+            return render_template('register.html',
+                                   email=email,
+                                   first_name=first_name,
+                                   last_name=last_name)
 
-    # Render the template with current settings
-    return render_template(
-        'linkedin_settings.html',
-        proxycurl_api_key=proxycurl_api_key
-    )
+        try:
+            session_id = create_session(table, result)
+            logger.info(f"create_session result: {session_id}")
+            if session_id:
+                session['user_id'] = result
+                session['session_id'] = session_id
+                flash("Registration successful!", "success")
+                return redirect(url_for('index'))
+            else:
+                flash("Registration failed (session)", "error")
+                logger.error("Session creation failed")
+                return render_template('register.html')
+        except Exception as e:
+            flash(f"Error creating session: {str(e)}", "error")
+            logger.exception("Exception during session creation")
+            return render_template('register.html')
+
+    return render_template('register.html')
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """
+    Handle password reset requests.
+    GET: Display the forgot password form
+    POST: Process the form and send reset email
+    """
+    if request.method == 'POST':
+        email = request.form.get('email')
+
+        if not email:
+            flash("Please enter your email address", "warning")
+            return render_template('forgot_password.html')
+
+        try:
+            table = db()
+            # Check if user exists
+            user = get_user_by_email(table, email)
+
+            if not user:
+                # Don't reveal if email exists or not for security
+                flash("If your email is registered, you will receive a password reset link shortly.", "info")
+                return render_template('reset_email_sent.html')
+
+            # Generate a secure token
+            token = secrets.token_urlsafe(32)
+            expiration = int(time.time()) + 86400  # 24 hours from now
+
+            # Store the token in the database
+            store_reset_token(table, user['PK'], token, expiration)
+
+            # Send the reset email
+            reset_url = url_for('reset_password', token=token, _external=True)
+            send_password_reset_email(email, reset_url)
+
+            logger.info(f"Password reset requested for {email}")
+            return render_template('reset_email_sent.html')
+
+        except Exception as e:
+            logger.exception(f"Error in forgot_password: {str(e)}")
+            flash("An error occurred. Please try again later.", "danger")
+
+    return render_template('forgot_password.html')
 
 
-@app.route('/linkedin/config')
-def linkedin_config():
-    """Display LinkedIn configuration page"""
-    from pylaform.services.config_service import ConfigService
-    config_service = ConfigService()
-    config = config_service.get_config()
-    linkedin_config = config.get('linkedin', {})
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    """
+    Handle password reset with token.
+    GET: Display the password reset form if token is valid
+    POST: Process the form and update the password
+    """
+    if not token:
+        flash("Invalid reset link", "danger")
+        return render_template('reset_token_invalid.html')
 
-    proxycurl_api_key = linkedin_config.get('proxycurl_api_key', '')
+    try:
+        table = db()
+        # Verify token and get user
+        token_data = verify_reset_token(table, token)
 
-    return render_template(
-        'linkedin_config.html',
-        proxycurl_api_key=proxycurl_api_key
-    )
+        if not token_data:
+            flash("The password reset link is invalid or has expired", "danger")
+            return render_template('reset_token_invalid.html')
 
-# if __name__ == '__main__':
-#     app.run(debug=True, use_reloader=False, host='0.0.0.0')
+        user_id = token_data['user_id']
+
+        if request.method == 'POST':
+            password = request.form.get('password')
+            confirm_password = request.form.get('confirm_password')
+
+            # Validate password
+            if password != confirm_password:
+                flash("Passwords do not match", "danger")
+                return render_template('reset_password.html', token=token)
+
+            is_valid, message = validate_password(password)
+            if not is_valid:
+                flash(message, "danger")
+                return render_template('reset_password.html', token=token)
+
+            # Update the password
+            update_user_password(table, user_id, password)
+
+            # Invalidate the token
+            invalidate_reset_token(table, token)
+
+            # Invalidate all sessions (optional)
+            invalidate_all_sessions(table, user_id)
+
+            logger.info(f"Password reset successful for user {user_id}")
+            flash("Your password has been successfully reset", "success")
+            return render_template('reset_success.html')
+
+    except Exception as e:
+        logger.exception(f"Error in reset_password: {str(e)}")
+        flash("An error occurred. Please try again later.", "danger")
+        return render_template('reset_password.html', token=token)
+
+    return render_template('reset_password.html', token=token)
+
+
+@app.route('/logout')
+def logout():
+    """
+    Log out the current user by clearing their session data.
+
+    :return: Redirect to the login page
+    """
+    # Clear session data
+    session.clear()
+    flash("You have been logged out successfully", "success")
+    return redirect(url_for('login'))
+
+app.register_blueprint(resume_bp, url_prefix='/resume')
 
 if __name__ == '__main__':
-    # Check if Ollama environment variables are set
-    ollama_host = os.environ.get('OLLAMA_HOST', 'localhost')
-    ollama_port = os.environ.get('OLLAMA_PORT', '11434')
-
-    # Log application startup
-    logger.info(f"Starting application with Ollama at {ollama_host}:{ollama_port}")
-
-    # Run the Flask app
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

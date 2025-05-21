@@ -1,49 +1,35 @@
-{% macro drop_down(id, payload, ddpayload, primary, secondary=None, primarybyname=False, secondarybyname=False, extra=True, secondaryid=None, selected_value=None) %}
-{% if debug %}
-    <!-- Debug info -->
-    <div style="font-size:10px; color:gray;">
-        positionid: {{ positionid }}<br>
-        selected_value: {{ selected_value }}<br>
-        current position_id: {{ position_id }}<br>
-    </div>
-{% endif %}
-
-    {% if secondary == None %}
-        <label for="{{ id }}_{{ primary }}_dropdown">Select {{ primary.capitalize() }}:</label>
-        <br>
-        <select class="dropdown" name="{{ id }}_{{ primary }}_dropdown" id="{{ id }}_{{ primary }}_dropdown">
-        {% for i in ddpayload[primary] %}
-            <option
-                    {% if (selected_value is not none and i["id"]|string == selected_value|string)
-        or (primarybyname and id is number and (id - 1) < payload|length and i["name"] == payload[id - 1][primary + "name"])
-        or (not primarybyname and id is number and (id - 1) < payload|length and i["id"]|string == payload[id - 1][primary]|string) %}
-                        selected
-                    {% endif %}
-                        value="{{ i["id"] }}">{{ i["name"] }}</option>
-        {% endfor %}
-            {% if extra == True %}
-                <option {{ "selected" if id == "new" or id == "edit" }} value="EDIT">Edit</option>
-                <option value="ADD">New</option>
+{% macro drop_down(id, payload, ddpayload, type, secondary=None, secondaryid=None, secondarybyname=False, primarybyname=False, extra=True, selected=None) %}
+    {% if type == "employer" %}
+        <select class="form-select" id="{{ id }}_{{ type }}_dropdown" name="{{ id }}_{{ type }}_dropdown">
+            <option value="">Select Employer</option>
+            {% if extra %}
+                <option value="EDIT" {% if selected == "EDIT" %}selected{% endif %}>Add New Employer</option>
             {% endif %}
+            {% for employer in ddpayload.get('employers', []) %}
+                <option value="{{ employer.SK }}"
+                    {% if selected is not none and (selected == employer.SK or selected == employer.name) %}selected{% endif %}>
+                    {{ employer.name }}
+                </option>
+            {% endfor %}
         </select>
+        <!-- Hidden input for storing the actual value -->
+        <input type="hidden" id="{{ id }}_employer" name="{{ id }}_employer" value="">
+    {% elif type == "position" %}
+        <select class="form-select" id="{{ id }}_{{ type }}_dropdown" name="{{ id }}_{{ type }}_dropdown">
+            <option value="">Select Position</option>
+            {% if extra %}
+                <option value="EDIT" {% if selected == "EDIT" %}selected{% endif %}>Add New Position</option>
+            {% endif %}
+            {% for position in ddpayload.get('positions', []) %}
+                <option value="{{ position.SK }}"
+                    {% if selected is not none and (selected == position.SK or selected == position.title) %}selected{% endif %}>
+                    {{ position.title }}
+                </option>
+            {% endfor %}
+        </select>
+        <!-- Hidden input for storing the actual value -->
+        <input type="hidden" id="{{ id }}_position" name="{{ id }}_position" value="">
     {% else %}
-        <label for="{{ id }}_{{ secondary }}_dropdown">Select {{ secondary.capitalize() }}:</label>
-        <br>
-        <select class="dropdown" name="{{ secondaryid }}_{{ secondary }}_dropdown" id="{{ secondaryid }}_{{ secondary }}_dropdown">
-        {% for i in ddpayload[secondary] %}
-            <option
-                {% if (selected_value is not none and i["id"]|string == selected_value|string)
-                    or (secondarybyname and id is number and (id - 1) < payload|length and i["name"] == payload[id - 1][secondary + "name"])
-                    or (not secondarybyname and id is number and (id - 1) < payload|length and i["id"]|string == payload[id - 1][secondary]|string)
-                %}
-                    selected
-                {% endif %}
-                value="{{ i["id"] }}" data-employer-id="{{ i.get('employer', '') }}">{{ i["name"] }}</option>
-        {% endfor %}
-        {% if extra == True %}
-            <option {{ "selected" if id == "new" or id == "edit" }} value="EDIT">Edit</option>
-            <option value="ADD">New</option>
-        {% endif %}
-        </select>
+        <!-- Other dropdown types can be implemented here as needed -->
     {% endif %}
-{%- endmacro %}
+{% endmacro %}

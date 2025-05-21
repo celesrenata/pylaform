@@ -2,88 +2,110 @@
 {% block content %}
     <div class="container py-4">
         <div class="row mb-4">
-            <div class="col-12">
-                <h1 class="section-header">Contact Information</h1>
-                <p class="lead text-muted">Add your personal and professional contact details below.</p>
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="section-header">Contact Information</h1>
+                    <p class="lead text-muted">Update your personal contact information for your resume.</p>
+                </div>
+                <div class="d-flex align-items-center">
+                    <div class="resume-selector me-2">
+                        <form id="resumeSelectForm" method="post" action="{{ url_for('resume.switch_resume') }}">
+                            <!-- Add hidden field to return to information page -->
+                            <input type="hidden" name="return_to" value="resume.information">
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-file-earmark-text"></i>
+                                </span>
+                                <label for="resumeSelect" class="visually-hidden">Select Resume</label>
+                                <select class="form-select" name="resume_id" id="resumeSelect" aria-label="Select Resume" onchange="this.form.submit()">
+                                    <option disabled>Select Resume</option>
+                                    {% for resume in all_resumes %}
+                                    <option value="{{ resume.id }}" {% if resume.id == active_resume_id %}selected{% endif %}>
+                                        {{ resume.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-gear"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="{{ url_for('resume.resume_management') }}">Manage Resumes</a></li>
+                                </ul>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="row">
             <div class="col-12">
-                <div class="card border-0 shadow-sm">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-light border-0 py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h2 class="h5 mb-0 text-primary">
+                                <i class="bi bi-person-lines-fill me-2"></i>Personal Details
+                            </h2>
+                            <div class="text-muted small">
+                                <i class="bi bi-info-circle me-1"></i>This information will appear in the header of your resume
+                            </div>
+                        </div>
+                    </div>
                     <div class="card-body p-4">
-                        <form method="post">
-                            <div class="row g-4">
-                                {% for item in payload %}
-                                    {% set attr = item["contacttype"] %}
-                                    <div class="col-md-6">
-                                        <div class="form-group mb-3">
-                                            <label for="{{ item['id'] }}_{{ item['contacttype'] }}" class="form-label fw-medium">
-                                                <i class="bi {% if item['contacttype'] == 'name' %}bi-person
-                                                           {% elif item['contacttype'] == 'email' %}bi-envelope
-                                                           {% elif item['contacttype'] == 'phone' %}bi-telephone
-                                                           {% elif item['contacttype'] == 'linkedin' %}bi-linkedin
-                                                           {% elif item['contacttype'] == 'github' %}bi-github
-                                                           {% elif item['contacttype'] == 'website' %}bi-globe
-                                                           {% elif item['contacttype'] == 'address' %}bi-geo-alt
-                                                           {% elif item['contacttype'] == 'description' %}bi-card-text
-                                                           {% else %}bi-tag{% endif %} me-2"></i>
-                                                {{ item["contacttype"] | capitalize }}
-                                            </label>
-                                            
-                                            {% if item["contacttype"] == "description" %}
-                                                <textarea 
-                                                    name="{{ item['id'] }}_{{ item['contacttype'] }}"
-                                                    id="{{ item['id'] }}_{{ item['contacttype'] }}"
-                                                    class="form-control bg-light"
-                                                    rows="5"
-                                                >{{ item[attr] if item[attr] is defined else "" }}</textarea>
-                                                <div class="form-text text-muted">Brief professional description for your resume header.</div>
-                                            {% else %}
-                                                <div class="input-group">
-                                                    <input 
-                                                        type="text" 
-                                                        name="{{ item['id'] }}_{{ item['contacttype'] }}"
-                                                        id="{{ item['id'] }}_{{ item['contacttype'] }}"
-                                                        class="form-control bg-light"
-                                                        value="{{ item[attr] if item[attr] is defined else '' }}"
-                                                        placeholder="Enter your {{ item['contacttype'] }}"
-                                                    >
-                                                    <div class="input-group-text bg-white">
-                                                        <div class="form-check form-switch mb-0">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                class="form-check-input" 
-                                                                role="switch"
-                                                                id="{{ item['id'] }}_{{ item['contacttype'] }}_enabled"
-                                                                name="{{ item['id'] }}_{{ item['contacttype'] }}_enabled"
-                                                                {% if item["state"] %}checked{% endif %}
-                                                            >
-                                                            <label class="form-check-label small" for="{{ item['id'] }}_{{ item['contacttype'] }}_enabled">Display</label>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                {% if item['contacttype'] == 'linkedin' %}
-                                                    <div class="form-text text-muted">Example: linkedin.com/in/username</div>
-                                                {% elif item['contacttype'] == 'github' %}
-                                                    <div class="form-text text-muted">Example: github.com/username</div>
+                        <form method="post" id="contactForm">
+                            <!-- Hidden field for active resume ID -->
+                            <input type="hidden" name="active_resume_id" value="{{ active_resume_id }}">
+
+                            <!-- Iterate through existing contact information with static icons and labels -->
+                            {% for item in payload %}
+                                {% set field_id = item.attr|default('field') ~ '_' ~ loop.index %}
+                                {% set contact_type = item.contacttype|default('') %}
+                                <div class="row mb-4">
+                                    <div class="col-md-3 mb-2 mb-md-0">
+                                        <div class="d-flex align-items-center">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="{{ field_id }}_enabled" name="{{ field_id }}_enabled" {% if item.state %}checked{% endif %}>
+                                                <label class="form-check-label" for="{{ field_id }}_enabled">
+                                                    <span class="text-primary fw-medium">{{ item.label }}</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <!-- Hidden fields to store metadata -->
+                                        <input type="hidden" name="{{ field_id }}_attr" value="{{ item.attr }}">
+                                        <input type="hidden" name="{{ field_id }}_contacttype" value="{{ item.contacttype }}">
+                                        <input type="hidden" name="{{ field_id }}_label" value="{{ item.label }}">
+                                        <input type="hidden" name="{{ field_id }}_sk" value="{{ item.SK }}">
+                                    </div>
+                                    <div class="col-md-9">
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light">
+                                                {% if contact_type == 'name' %}
+                                                    <i class="bi bi-person"></i>
+                                                {% elif contact_type == 'email' %}
+                                                    <i class="bi bi-envelope"></i>
+                                                {% elif contact_type == 'phone' %}
+                                                    <i class="bi bi-telephone"></i>
+                                                {% elif contact_type == 'location' %}
+                                                    <i class="bi bi-geo-alt"></i>
+                                                {% elif contact_type == 'www' %}
+                                                    <i class="bi bi-globe"></i>
+                                                {% elif contact_type == 'linkedin' %}
+                                                    <i class="bi bi-linkedin"></i>
+                                                {% elif contact_type == 'github' %}
+                                                    <i class="bi bi-github"></i>
+                                                {% else %}
+                                                    <i class="bi bi-card-text"></i>
                                                 {% endif %}
-                                            {% endif %}
+                                            </span>
+                                            <input type="text" class="form-control" id="{{ field_id }}_value" name="{{ field_id }}_value" value="{{ item.value }}" placeholder="{{ item.label }}">
                                         </div>
                                     </div>
-                                    
-                                    {% if item["contacttype"] == "description" %}
-                                        <div class="col-12">
-                                            <hr class="my-4">
-                                        </div>
-                                    {% endif %}
-                                {% endfor %}
-                            </div>
-                            
+                                </div>
+                            {% endfor %}
+
                             <div class="d-flex justify-content-end mt-4">
-                                <button type="submit" class="btn btn-primary px-4">
-                                    <i class="bi bi-check-circle me-2"></i>Save Changes
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save me-2"></i>Save Changes
                                 </button>
                             </div>
                         </form>
@@ -92,4 +114,125 @@
             </div>
         </div>
     </div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function() {
+        // Form submission handling
+        const contactForm = document.getElementById('contactForm');
+
+        if (contactForm) {
+            contactForm.addEventListener('submit', function(e) {
+                // Prevent default form submission
+                e.preventDefault();
+
+                // Show loading state
+                const submitButton = contactForm.querySelector('button[type="submit"]');
+                const originalButtonText = submitButton.innerHTML;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving...';
+                submitButton.disabled = true;
+
+                // Create form data object
+                const formData = new FormData(contactForm);
+
+                // Submit form via AJAX
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.text();
+                })
+                .then(html => {
+                    // Show success message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        Contact information updated successfully!
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+
+                    // Insert alert before the form
+                    contactForm.parentNode.insertBefore(alertDiv, contactForm);
+
+                    // Scroll to top of form
+                    contactForm.scrollIntoView({ behavior: 'smooth' });
+
+                    // Reset button state
+                    submitButton.innerHTML = originalButtonText;
+                    submitButton.disabled = false;
+
+                    // Auto-dismiss alert after 5 seconds
+                    setTimeout(() => {
+                        const bsAlert = new bootstrap.Alert(alertDiv);
+                        bsAlert.close();
+                    }, 5000);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+
+                    // Show error message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        There was an error updating your contact information. Please try again.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+
+                    // Insert alert before the form
+                    contactForm.parentNode.insertBefore(alertDiv, contactForm);
+
+                    // Reset button state
+                    submitButton.innerHTML = originalButtonText;
+                    submitButton.disabled = false;
+                });
+            });
+        }
+
+        // Handle resume selection change
+        const resumeSelect = document.getElementById('resumeSelect');
+        if (resumeSelect) {
+            resumeSelect.addEventListener('change', function() {
+                // Show loading indicator
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center bg-white bg-opacity-75';
+                loadingDiv.style.zIndex = '9999';
+                loadingDiv.innerHTML = `
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                `;
+                document.body.appendChild(loadingDiv);
+
+                // Submit the form to switch resumes
+                document.getElementById('resumeSelectForm').submit();
+            });
+        }
+
+        // Add validation for required fields
+        const inputFields = document.querySelectorAll('input[type="text"]');
+        inputFields.forEach(field => {
+            field.addEventListener('blur', function() {
+                if (this.value.trim() === '') {
+                    this.classList.add('is-invalid');
+                } else {
+                    this.classList.remove('is-invalid');
+                    this.classList.add('is-valid');
+                }
+            });
+        });
+
+        console.log('Information page loaded');
+    });
+</script>
+{% include "_scripts.html" %}
 {% endblock %}
