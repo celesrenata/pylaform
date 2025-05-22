@@ -808,11 +808,27 @@ class Worker:
 
             logger.debug(f"Schools before processing: {schools}")
 
-            # Get focus areas and achievements for each school
+            # Process schools to ensure consistent structure
+            processed_schools = []
             for school in schools:
-                school_id = school.get('SK').split('#')[1] if resume_id else school.get('SK')
-                logger.debug(f"Processing school: {school_id}")
+                # Extract school_id based on whether it's a resume-specific entry or not
+                school_id = school.get('id')
+                if not school_id and 'SK' in school:
+                    sk = school.get('SK', '')
+                    if sk.startswith('SCHOOL#'):
+                        school_id = sk.split('#')[1]
+                        school['id'] = school_id
+
+                # Ensure all required fields exist
+                school.setdefault('name', '')
+                school.setdefault('degree', '')
+                school.setdefault('location', '')
+                school.setdefault('graddate', '')
+                school.setdefault('state', True)
+
+                # Get focus areas and achievements for this school
                 if school_id:
+                    logger.debug(f"Processing school: {school_id}")
                     if resume_id:
                         focus_areas = self.get_focus_areas_for_resume(resume_id, school_id, active_only)
                         achievements = self.get_achievements_for_resume(resume_id, school_id, active_only)
@@ -827,18 +843,53 @@ class Worker:
                         achievements = self.query.get_items_by_parent("achievement", "school_id", school_id,
                                                                       active_only)
 
-                    school['focus_areas'] = focus_areas
-                    school['achievements'] = achievements
+                    # Process focus areas to ensure consistent structure
+                    processed_focus_areas = []
+                    for focus in focus_areas:
+                        focus_id = focus.get('id')
+                        if not focus_id and 'SK' in focus:
+                            sk = focus.get('SK', '')
+                            if '#FOCUS#' in sk:
+                                focus_id = sk.split('#FOCUS#')[1]
+                                focus['id'] = focus_id
+
+                        # Ensure all required fields exist
+                        focus.setdefault('name', '')
+                        focus.setdefault('description', '')
+                        focus.setdefault('state', True)
+                        processed_focus_areas.append(focus)
+
+                    # Process achievements to ensure consistent structure
+                    processed_achievements = []
+                    for achievement in achievements:
+                        achievement_id = achievement.get('id')
+                        if not achievement_id and 'SK' in achievement:
+                            sk = achievement.get('SK', '')
+                            if '#ACHIEVEMENT#' in sk:
+                                achievement_id = sk.split('#ACHIEVEMENT#')[1]
+                                achievement['id'] = achievement_id
+
+                        # Ensure all required fields exist
+                        achievement.setdefault('description', '')
+                        achievement.setdefault('state', True)
+                        processed_achievements.append(achievement)
+
+                    school['focus_areas'] = processed_focus_areas
+                    school['achievements'] = processed_achievements
                     logger.debug(
-                        f"Found {len(focus_areas)} focus areas and {len(achievements)} achievements for school {school_id}")
+                        f"Found {len(processed_focus_areas)} focus areas and {len(processed_achievements)} achievements for school {school_id}")
+
+                processed_schools.append(school)
 
             # Sort schools by graduation date (newest first)
-            schools.sort(key=lambda s: s.get('graddate', ''), reverse=True)
+            processed_schools.sort(key=lambda s: s.get('graddate', ''), reverse=True)
 
-            logger.debug(f"Returning {len(schools)} schools: {schools}")
-            return schools
+            logger.debug(f"Returning {len(processed_schools)} schools: {processed_schools}")
+            return processed_schools
         except Exception as e:
             logger.error(f"Error getting education: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
     def get_focus_areas_for_resume(self, resume_id: str, school_id: str, active_only: bool = True) -> List[
@@ -994,13 +1045,46 @@ class Worker:
             logger.error(f"Error updating achievement {achievement_id}: {str(e)}")
             return False
 
-    def add_school(self, name: str, degree: str, graddate: str, location: str = None, resume_id: str = None) -> str:
+    def get_all_schools(self, resume_id=None):
+        """
+        Get all schools for the current user or resume.
+
+        :param resume_id: Optional resume ID to get resume-specific schools
+        :return: List of school objects
+        """
+        try:
+            logger.debug(f"Getting all schools for user_id: {self.user_id}, resume_id: {resume_id}")
+
+            schools = []
+            if resume_id:
+                # Get resume-specific schools
+                pk = f"RESUME#{resume_id}"
+                sk_prefix = "SCHOOL#"
+                response = self.table.query(
+                    KeyConditionExpression=Key('PK').eq(pk) & Key('SK').begins_with(sk_prefix),
+                    FilterExpression=Attr('type').eq('school')
+                )
+                schools = response.get('Items', [])
+            elif self.user_id:
+                # Get user-specific schools
+                schools = self.query.get_user_items_by_type("school", self.user_id)
+
+            logger.debug(f"Found {len(schools)} schools")
+            return schools
+        except Exception as e:
+            logger.error(f"Error getting schools: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return []
+
+    def add_school(self, name: str, degree: str = None, graddate: str = None, location: str = None,
+                   description: str = None, resume_id: str = None) -> str:
         try:
             import uuid
             school_id = str(uuid.uuid4())
 
             logger.debug(
-                f"Adding school: name={name}, degree={degree}, graddate={graddate}, location={location}, resume_id={resume_id}")
+                f"Adding school: name={name}, degree={degree}, graddate={graddate}, location={location}, description={description}, resume_id={resume_id}")
 
             if resume_id:
                 # Create resume-specific school entry
@@ -1011,14 +1095,21 @@ class Worker:
                     "SK": sk,
                     "id": school_id,
                     "name": name,
-                    "degree": degree,
-                    "graddate": graddate,
                     "state": True,
                     "entity_type": "school",
+                    "type": "school",  # Add this field to match the filter in get_all_schools
                     "resume_id": resume_id
                 }
+
+                # Add optional fields if they exist
+                if degree:
+                    item["degree"] = degree
+                if graddate:
+                    item["graddate"] = graddate
                 if location:
                     item["location"] = location
+                if description:
+                    item["description"] = description
 
                 self.table.put_item(Item=item)
                 logger.debug(f"Added resume-specific school: {item}")
@@ -1026,12 +1117,20 @@ class Worker:
                 # Use existing method for user-level school entries
                 data = {
                     "name": name,
-                    "degree": degree,
-                    "graddate": graddate,
-                    "state": 1
+                    "state": 1,
+                    "type": "school"  # Add this field for consistency
                 }
+
+                # Add optional fields if they exist
+                if degree:
+                    data["degree"] = degree
+                if graddate:
+                    data["graddate"] = graddate
                 if location:
                     data["location"] = location
+                if description:
+                    data["description"] = description
+
                 if self.user_id:
                     data["user_id"] = self.user_id
 
@@ -1044,12 +1143,21 @@ class Worker:
             return school_id
         except Exception as e:
             logger.error(f"Error adding school: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
-    def update_school(self, school_id: str, resume_id: str = None, **kwargs) -> bool:
+    def update_school(self, school_id: str, resume_id: str = None, **kwargs):
         try:
-            logger.debug(f"Updating school: school_id={school_id}, resume_id={resume_id}, kwargs={kwargs}")
+            logger.debug(f"Updating school: school_id={school_id}, resume_id={resume_id}, data={kwargs}")
 
+            # Check if we need to delete an achievement
+            achievement_to_delete = kwargs.pop('delete_achievement', None)
+            if achievement_to_delete:
+                logger.debug(f"Deleting achievement: {achievement_to_delete}")
+                self.delete_school_achievement(achievement_to_delete, school_id, resume_id)
+
+            # Proceed with updating the school
             if resume_id:
                 # Update resume-specific school entry
                 pk = f"RESUME#{resume_id}"
@@ -1059,24 +1167,20 @@ class Worker:
                 expression_attribute_values = {}
                 expression_attribute_names = {}
                 for key, value in kwargs.items():
-                    # Use expression attribute names for reserved keywords
+                    # Use expression attribute names for all attributes to be safe
                     attr_name = f"#{key}"
                     update_expression += f"{attr_name} = :{key}, "
                     expression_attribute_values[f":{key}"] = value
                     expression_attribute_names[attr_name] = key
                 update_expression = update_expression.rstrip(", ")
 
-                logger.debug(
-                    f"DynamoDB update parameters: PK={pk}, SK={sk}, UpdateExpression={update_expression}, ExpressionAttributeValues={expression_attribute_values}, ExpressionAttributeNames={expression_attribute_names}")
-
-                response = self.table.update_item(
+                self.table.update_item(
                     Key={"PK": pk, "SK": sk},
                     UpdateExpression=update_expression,
                     ExpressionAttributeValues=expression_attribute_values,
-                    ExpressionAttributeNames=expression_attribute_names,
-                    ReturnValues="ALL_NEW"
+                    ExpressionAttributeNames=expression_attribute_names
                 )
-                logger.debug(f"DynamoDB update response: {response}")
+                result = True
             else:
                 # Use existing method for user-level school entries
                 if self.user_id:
@@ -1085,19 +1189,106 @@ class Worker:
                     if not school or school.get('user_id') != self.user_id:
                         logger.error(f"Unauthorized attempt to update school {school_id} for user {self.user_id}")
                         return False
+
+                    # Add user_id to kwargs to ensure ownership is maintained
                     kwargs["user_id"] = self.user_id
 
-                logger.debug(f"Updating user-level school: school_id={school_id}, kwargs={kwargs}")
                 result = self.update.multi_column("school", school_id, **kwargs)
-                logger.debug(f"User-level school update result: {result}")
 
             # Clear the cache after updating
             self.query.purge_cache("school")
-            logger.debug("School cache purged")
 
-            return True
+            logger.debug(f"update_school result: {result}")
+            return result
         except Exception as e:
             logger.error(f"Error updating school {school_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+    def delete_school(self, school_id: str, resume_id: str = None) -> bool:
+        """
+        Delete a school and all associated focuses and achievements.
+
+        :param school_id: The ID of the school to delete
+        :param resume_id: Optional resume ID if deleting from a specific resume
+        :return: True if successful, False otherwise
+        """
+        try:
+            logger.debug(f"Deleting school {school_id} for resume {resume_id}")
+
+            # Get all focuses for this school
+            focuses = self.get_focuses_by_school(school_id, resume_id)
+
+            # Delete all focuses
+            for focus in focuses:
+                focus_id = focus.get('id')
+                if not focus_id and 'SK' in focus:
+                    sk = focus.get('SK', '')
+                    if '#FOCUS#' in sk:
+                        focus_id = sk.split('#FOCUS#')[1]
+
+                if focus_id:
+                    logger.debug(f"Deleting focus {focus_id} for school {school_id}")
+                    self.delete_entry("focus", focus_id, resume_id)
+
+            # Get all achievements for this school
+            achievements = []
+            if resume_id:
+                # Query for resume-specific achievements
+                pk = f"RESUME#{resume_id}"
+                sk_prefix = f"SCHOOL#{school_id}#ACHIEVEMENT#"
+                response = self.table.query(
+                    KeyConditionExpression=Key('PK').eq(pk) & Key('SK').begins_with(sk_prefix)
+                )
+                achievements = response.get('Items', [])
+            elif self.user_id:
+                # Get user-specific achievements for this school
+                achievements = self.query.get_user_items_by_parent("achievement", self.user_id, "school_id", school_id)
+            else:
+                # Get all achievements for this school
+                achievements = self.query.get_items_by_parent("achievement", "school_id", school_id)
+
+            # Delete all achievements
+            for achievement in achievements:
+                achievement_id = achievement.get('id')
+                if not achievement_id and 'SK' in achievement:
+                    sk = achievement.get('SK', '')
+                    if '#ACHIEVEMENT#' in sk:
+                        achievement_id = sk.split('#ACHIEVEMENT#')[1]
+
+                if achievement_id:
+                    logger.debug(f"Deleting achievement {achievement_id} for school {school_id}")
+                    self.delete_entry("achievement", achievement_id, resume_id)
+
+            # Finally delete the school itself
+            if resume_id:
+                # Delete resume-specific school entry
+                pk = f"RESUME#{resume_id}"
+                sk = f"SCHOOL#{school_id}"
+                self.table.delete_item(
+                    Key={
+                        'PK': pk,
+                        'SK': sk
+                    }
+                )
+                logger.debug(f"Deleted resume-specific school {school_id} from resume {resume_id}")
+                result = True
+            else:
+                # Use existing delete_entry method for user-level school
+                result = self.delete_entry("school", school_id)
+                logger.debug(f"Deleted user-level school {school_id}, result: {result}")
+
+            # Clear the cache after deletion
+            self.query.purge_cache("school")
+            self.query.purge_cache("focus")
+            self.query.purge_cache("achievement")
+
+            return result
+        except Exception as e:
+            logger.error(f"Error deleting school {school_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
 
     def add_focus(self, school_id: str, description: str, resume_id: str = None) -> str:
@@ -1205,6 +1396,261 @@ class Worker:
             return True
         except Exception as e:
             logger.error(f"Error updating focus {focus_id}: {str(e)}")
+            return False
+
+    def get_focuses_by_school(self, school_id: str, resume_id: str = None, active_only: bool = True) -> List[
+        Dict[str, Any]]:
+        """
+        Get all focus areas for a specific school.
+
+        :param school_id: The ID of the school
+        :param resume_id: Optional resume ID to get resume-specific focuses
+        :param active_only: Whether to only return active focuses
+        :return: List of focus areas
+        """
+        try:
+            logger.debug(
+                f"Getting focuses for school_id: {school_id}, resume_id: {resume_id}, active_only: {active_only}")
+
+            focuses = []
+            if resume_id:
+                # Query for resume-specific focus entries
+                pk = f"RESUME#{resume_id}"
+                sk_prefix = f"SCHOOL#{school_id}#FOCUS#"
+                response = self.table.query(
+                    KeyConditionExpression=Key('PK').eq(pk) & Key('SK').begins_with(sk_prefix),
+                    FilterExpression=Attr('state').eq(True) if active_only else Attr('state').exists()
+                )
+                focuses = response.get('Items', [])
+                logger.debug(f"Found {len(focuses)} focuses for school {school_id} in resume {resume_id}")
+            elif self.user_id:
+                # Get user-specific focuses for this school
+                focuses = self.query.get_user_items_by_parent("focus", self.user_id, "school_id", school_id,
+                                                              active_only)
+                logger.debug(f"Found {len(focuses)} focuses for school {school_id} for user {self.user_id}")
+            else:
+                # Get all focuses for this school
+                focuses = self.query.get_items_by_parent("focus", "school_id", school_id, active_only)
+                logger.debug(f"Found {len(focuses)} focuses for school {school_id} (global)")
+
+            return focuses
+        except Exception as e:
+            logger.error(f"Error getting focuses for school {school_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return []
+
+    def add_school_achievement(self, school_id: str, description: str, resume_id: str = None) -> str:
+        """
+        Add an achievement to a school.
+
+        :param school_id: The ID of the school
+        :param description: Achievement description
+        :param resume_id: Optional resume ID for resume-specific achievements
+        :return: ID of the new achievement, or None on failure
+        """
+        try:
+            import uuid
+            achievement_id = str(uuid.uuid4())
+
+            logger.debug(
+                f"Adding achievement to school: school_id={school_id}, description={description}, resume_id={resume_id}")
+
+            if resume_id:
+                # Create resume-specific achievement entry
+                pk = f"RESUME#{resume_id}"
+                sk = f"SCHOOL#{school_id}#ACHIEVEMENT#{achievement_id}"
+                item = {
+                    "PK": pk,
+                    "SK": sk,
+                    "id": achievement_id,
+                    "school_id": school_id,
+                    "description": description,
+                    "state": True,
+                    "entity_type": "achievement",
+                    "resume_id": resume_id
+                }
+                self.table.put_item(Item=item)
+                logger.debug(f"Added resume-specific school achievement: {item}")
+            else:
+                # Use existing method for user-level achievement entries
+                data = {
+                    "school_id": school_id,
+                    "description": description,
+                    "state": True
+                }
+                if self.user_id:
+                    # Verify school ownership
+                    school = self.query.get_by_id("school", school_id)
+                    if not school or school.get('user_id') != self.user_id:
+                        logger.error(
+                            f"Unauthorized attempt to add achievement to school {school_id} for user {self.user_id}")
+                        return None
+                    data["user_id"] = self.user_id
+
+                achievement_id = self.insert.multi_column("achievement", **data)
+                logger.debug(f"Added user-level school achievement: {data}")
+
+            return achievement_id
+        except Exception as e:
+            logger.error(f"Failed to add achievement: {e}")
+            return None
+
+    def update_school_achievement(self, school_id: str, achievement_id: str, description: str,
+                                  resume_id: str = None) -> bool:
+        """
+        Update an achievement for a school.
+
+        :param school_id: The ID of the school
+        :param achievement_id: The ID of the achievement to update
+        :param description: New achievement description
+        :param resume_id: Optional resume ID for resume-specific achievements
+        :return: True if successful, False otherwise
+        """
+        try:
+            logger.debug(
+                f"Updating school achievement: school_id={school_id}, achievement_id={achievement_id}, description={description}, resume_id={resume_id}")
+
+            if resume_id:
+                # Update resume-specific achievement entry
+                pk = f"RESUME#{resume_id}"
+                sk = f"SCHOOL#{school_id}#ACHIEVEMENT#{achievement_id}"
+
+                update_expression = "SET #desc = :description, #state = :state"
+                expression_attribute_values = {
+                    ":description": description,
+                    ":state": True
+                }
+                expression_attribute_names = {
+                    "#desc": "description",
+                    "#state": "state"
+                }
+
+                self.table.update_item(
+                    Key={"PK": pk, "SK": sk},
+                    UpdateExpression=update_expression,
+                    ExpressionAttributeValues=expression_attribute_values,
+                    ExpressionAttributeNames=expression_attribute_names
+                )
+                logger.debug(f"Updated resume-specific school achievement: {achievement_id}")
+            else:
+                # Use existing method for user-level achievement entries
+                data = {
+                    "description": description,
+                    "state": True
+                }
+                if self.user_id:
+                    # Verify achievement ownership
+                    achievement = self.query.get_by_id("achievement", achievement_id)
+                    if not achievement or achievement.get('user_id') != self.user_id:
+                        logger.error(
+                            f"Unauthorized attempt to update achievement {achievement_id} for user {self.user_id}")
+                        return False
+                    data["user_id"] = self.user_id
+
+                result = self.update.multi_column("achievement", achievement_id, **data)
+                if not result:
+                    logger.error(f"Failed to update achievement {achievement_id}")
+                    return False
+                logger.debug(f"Updated user-level school achievement: {achievement_id}")
+
+            # Clear the cache after updating
+            self.query.purge_cache("achievement")
+
+            return True
+        except Exception as e:
+            logger.error(f"Error updating school achievement: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+    def get_achievements_by_school(self, school_id: str, resume_id: str = None, active_only: bool = True) -> List[
+        Dict[str, Any]]:
+        """
+        Get all achievements for a specific school.
+
+        :param school_id: The ID of the school
+        :param resume_id: Optional resume ID to get resume-specific achievements
+        :param active_only: Whether to only return active achievements
+        :return: List of achievements
+        """
+        try:
+            logger.debug(
+                f"Getting achievements for school_id: {school_id}, resume_id: {resume_id}, active_only: {active_only}")
+
+            achievements = []
+            if resume_id:
+                # Query for resume-specific achievement entries
+                pk = f"RESUME#{resume_id}"
+                sk_prefix = f"SCHOOL#{school_id}#ACHIEVEMENT#"
+                response = self.table.query(
+                    KeyConditionExpression=Key('PK').eq(pk) & Key('SK').begins_with(sk_prefix),
+                    FilterExpression=Attr('state').eq(True) if active_only else Attr('state').exists()
+                )
+                achievements = response.get('Items', [])
+                logger.debug(f"Found {len(achievements)} achievements for school {school_id} in resume {resume_id}")
+            elif self.user_id:
+                # Get user-specific achievements for this school
+                achievements = self.query.get_user_items_by_parent("achievement", self.user_id, "school_id",
+                                                                   school_id, active_only)
+                logger.debug(
+                    f"Found {len(achievements)} achievements for school {school_id} for user {self.user_id}")
+            else:
+                # Get all achievements for this school
+                achievements = self.query.get_items_by_parent("achievement", "school_id", school_id, active_only)
+                logger.debug(f"Found {len(achievements)} achievements for school {school_id} (global)")
+
+            return achievements
+        except Exception as e:
+            logger.error(f"Error getting achievements for school {school_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return []
+
+    def delete_school_achievement(self, achievement_id, school_id=None, resume_id=None):
+        try:
+            logger.debug(
+                f"Deleting school achievement: achievement_id={achievement_id}, school_id={school_id}, resume_id={resume_id}")
+
+            if resume_id:
+                # Delete resume-specific achievement
+                pk = f"RESUME#{resume_id}"
+
+                if school_id:
+                    sk = f"SCHOOL#{school_id}#ACHIEVEMENT#{achievement_id}"
+                    self.table.delete_item(Key={'PK': pk, 'SK': sk})
+                else:
+                    # If school_id is not provided, we need to find the full SK
+                    response = self.table.query(
+                        KeyConditionExpression=Key('PK').eq(pk) & Key('SK').begins_with("SCHOOL#"),
+                        ProjectionExpression="SK"
+                    )
+                    items = response.get('Items', [])
+                    for item in items:
+                        sk = item['SK']
+                        if f"#ACHIEVEMENT#{achievement_id}" in sk:
+                            self.table.delete_item(Key={'PK': pk, 'SK': sk})
+                            break
+                    else:
+                        logger.error(f"Achievement {achievement_id} not found for resume {resume_id}")
+                        return False
+            else:
+                # Delete user-level achievement
+                result = self.delete_entry("achievement", achievement_id)
+                if not result:
+                    logger.error(f"Failed to delete achievement {achievement_id}")
+                    return False
+
+            logger.debug(f"Successfully deleted achievement {achievement_id}")
+
+            # Clear the cache after deletion
+            self.query.purge_cache("achievement")
+
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting school achievement: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
 
     # ==================== EMPLOYMENT/EXPERIENCE METHODS ====================
@@ -1608,97 +2054,239 @@ class Worker:
 
         # ==================== CERTIFICATIONS METHODS ====================
 
-    def get_all_certifications(self, active_only: bool = True) -> List[Dict[str, Any]]:
+    def get_all_certifications(self, resume_id=None, active_only: bool = True) -> List[Dict[str, Any]]:
         """
-        Get all certification entries for the current user.
+        Get all certification entries for the current user or a specific resume.
 
+        :param resume_id: Optional resume ID to get resume-specific certifications
         :param bool active_only: If True, only return active entries
         :return: List of certification dictionaries
         """
         try:
-            if self.user_id:
+            logger.debug(
+                f"Getting certifications for resume_id: {resume_id}, active_only: {active_only}, user_id: {self.user_id}")
+
+            certifications = []
+            if resume_id:
+                # Query for resume-specific certification entries
+                pk = f"RESUME#{resume_id}"
+                response = self.table.query(
+                    KeyConditionExpression=Key('PK').eq(pk) & Key('SK').begins_with('CERTIFICATION#'),
+                    FilterExpression=Attr('state').eq(True) if active_only else Attr('state').exists()
+                )
+                certifications = response.get('Items', [])
+                logger.debug(f"Found {len(certifications)} certifications for resume {resume_id}")
+            elif self.user_id:
                 certifications = self.query.get_user_items("certification", self.user_id, active_only)
+                logger.debug(f"Found {len(certifications)} certifications for user {self.user_id}")
             else:
                 certifications = self.query.get_all("certification", active_only)
+                logger.debug(f"Found {len(certifications)} certifications (global)")
 
-            # Sort certifications by date (newest first)
-            certifications.sort(key=lambda c: c.get('date', ''), reverse=True)
+            # Process certifications to ensure consistent structure
+            processed_certifications = []
+            for cert in certifications:
+                # Extract certification_id based on whether it's a resume-specific entry or not
+                cert_id = cert.get('id')
+                if not cert_id and 'SK' in cert:
+                    sk = cert.get('SK', '')
+                    if sk.startswith('CERTIFICATION#'):
+                        cert_id = sk.split('#')[1]
+                        cert['id'] = cert_id
 
-            return certifications
+                # Ensure all required fields exist
+                cert.setdefault('name', '')
+                cert.setdefault('authority', '')
+                cert.setdefault('date_achieved', '')
+                cert.setdefault('expiration_date', '')
+                cert.setdefault('certorder', 99)
+                cert.setdefault('state', True)
+
+                processed_certifications.append(cert)
+
+            # Sort certifications by order, then by date achieved (newest first)
+            processed_certifications.sort(key=lambda c: (int(c.get('certorder', 99)), c.get('date_achieved', '')), reverse=True)
+
+            logger.debug(f"Returning {len(processed_certifications)} certifications: {processed_certifications}")
+            return processed_certifications
         except Exception as e:
             logger.error(f"Error getting certifications: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
-    def add_certification(self, name: str, issuer: str, date: str = None, expiry: str = None,
-                          url: str = None) -> str:
+    def add_certification(self, name: str, authority: str, date_achieved: str = None,
+                         expiration_date: str = None, certorder: int = 99, resume_id: str = None) -> str:
         """
-        Add a new certification entry for the current user.
+        Add a new certification entry.
 
         :param str name: Certification name
-        :param str issuer: Certification issuer
-        :param str date: Issue date (optional)
-        :param str expiry: Expiry date (optional)
-        :param str url: Certification URL (optional)
+        :param str authority: Certification issuing authority
+        :param str date_achieved: Date the certification was achieved
+        :param str expiration_date: Date the certification expires (optional)
+        :param int certorder: Order to display the certification (lower numbers first)
+        :param str resume_id: Optional resume ID to add to a specific resume
         :return str: ID of new entry, or None on failure
         """
         try:
-            data = {
-                "name": name,
-                "issuer": issuer,
-                "state": 1
-            }
+            import uuid
+            cert_id = str(uuid.uuid4())
 
-            if date:
-                data["date"] = date
+            logger.debug(
+                f"Adding certification: name={name}, authority={authority}, date_achieved={date_achieved}, "
+                f"expiration_date={expiration_date}, certorder={certorder}, resume_id={resume_id}")
 
-            if expiry:
-                data["expiry"] = expiry
+            if resume_id:
+                # Create resume-specific certification entry
+                pk = f"RESUME#{resume_id}"
+                sk = f"CERTIFICATION#{cert_id}"
+                item = {
+                    "PK": pk,
+                    "SK": sk,
+                    "id": cert_id,
+                    "name": name,
+                    "authority": authority,
+                    "state": True,
+                    "entity_type": "certification",
+                    "resume_id": resume_id,
+                    "certorder": certorder
+                }
 
-            if url:
-                data["url"] = url
+                # Add optional fields if they exist
+                if date_achieved:
+                    item["date_achieved"] = date_achieved
+                if expiration_date:
+                    item["expiration_date"] = expiration_date
 
-            # Add user_id if available
-            if self.user_id:
-                data["user_id"] = self.user_id
+                self.table.put_item(Item=item)
+                logger.debug(f"Added resume-specific certification: {item}")
+            else:
+                # Use existing method for user-level certification entries
+                data = {
+                    "name": name,
+                    "authority": authority,
+                    "state": 1,
+                    "certorder": certorder
+                }
 
-            result = self.insert.multi_column("certification", **data)
+                # Add optional fields if they exist
+                if date_achieved:
+                    data["date_achieved"] = date_achieved
+                if expiration_date:
+                    data["expiration_date"] = expiration_date
+
+                if self.user_id:
+                    data["user_id"] = self.user_id
+
+                cert_id = self.insert.multi_column("certification", **data)
+                logger.debug(f"Added user-level certification: {data}")
 
             # Clear the cache after adding
             self.query.purge_cache("certification")
 
-            return result
+            return cert_id
         except Exception as e:
             logger.error(f"Error adding certification: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
-    def update_certification(self, certification_id: str, **kwargs) -> bool:
+    def update_certification(self, cert_id: str, resume_id: str = None, **kwargs) -> bool:
         """
-        Update a certification entry.
+        Update an existing certification entry.
 
-        :param str certification_id: ID of certification to update
+        :param str cert_id: ID of the certification to update
+        :param str resume_id: Optional resume ID if updating a resume-specific certification
         :param kwargs: Fields to update
         :return bool: True if successful, False otherwise
         """
         try:
-            if self.user_id:
-                # Verify ownership
-                certification = self.query.get_by_id("certification", certification_id)
-                if not certification or certification.get('user_id') != self.user_id:
-                    logger.error(
-                        f"Unauthorized attempt to update certification {certification_id} for user {self.user_id}")
-                    return False
+            logger.debug(f"Updating certification: cert_id={cert_id}, resume_id={resume_id}, data={kwargs}")
 
-                # Add user_id to kwargs to ensure ownership is maintained
-                kwargs["user_id"] = self.user_id
+            if resume_id:
+                # Update resume-specific certification entry
+                pk = f"RESUME#{resume_id}"
+                sk = f"CERTIFICATION#{cert_id}"
 
-            result = self.update.multi_column("certification", certification_id, **kwargs)
+                update_expression = "SET "
+                expression_attribute_values = {}
+                expression_attribute_names = {}
+                for key, value in kwargs.items():
+                    # Use expression attribute names for all attributes to be safe
+                    attr_name = f"#{key}"
+                    update_expression += f"{attr_name} = :{key}, "
+                    expression_attribute_values[f":{key}"] = value
+                    expression_attribute_names[attr_name] = key
+                update_expression = update_expression.rstrip(", ")
+
+                self.table.update_item(
+                    Key={"PK": pk, "SK": sk},
+                    UpdateExpression=update_expression,
+                    ExpressionAttributeValues=expression_attribute_values,
+                    ExpressionAttributeNames=expression_attribute_names
+                )
+                result = True
+            else:
+                # Use existing method for user-level certification entries
+                if self.user_id:
+                    # Verify ownership
+                    cert = self.query.get_by_id("certification", cert_id)
+                    if not cert or cert.get('user_id') != self.user_id:
+                        logger.error(f"Unauthorized attempt to update certification {cert_id} for user {self.user_id}")
+                        return False
+
+                    # Add user_id to kwargs to ensure ownership is maintained
+                    kwargs["user_id"] = self.user_id
+
+                result = self.update.multi_column("certification", cert_id, **kwargs)
 
             # Clear the cache after updating
             self.query.purge_cache("certification")
 
+            logger.debug(f"update_certification result: {result}")
             return result
         except Exception as e:
-            logger.error(f"Error updating certification {certification_id}: {str(e)}")
+            logger.error(f"Error updating certification {cert_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+    def delete_certification(self, cert_id: str, resume_id: str = None) -> bool:
+        """
+        Delete a certification entry.
+
+        :param str cert_id: ID of the certification to delete
+        :param str resume_id: Optional resume ID if deleting from a specific resume
+        :return bool: True if successful, False otherwise
+        """
+        try:
+            logger.debug(f"Deleting certification {cert_id} for resume {resume_id}")
+
+            if resume_id:
+                # Delete resume-specific certification entry
+                pk = f"RESUME#{resume_id}"
+                sk = f"CERTIFICATION#{cert_id}"
+                self.table.delete_item(
+                    Key={
+                        'PK': pk,
+                        'SK': sk
+                    }
+                )
+                logger.debug(f"Deleted resume-specific certification {cert_id} from resume {resume_id}")
+                result = True
+            else:
+                # Use existing delete_entry method for user-level certification
+                result = self.delete_entry("certification", cert_id)
+                logger.debug(f"Deleted user-level certification {cert_id}, result: {result}")
+
+            # Clear the cache after deletion
+            self.query.purge_cache("certification")
+
+            return result
+        except Exception as e:
+            logger.error(f"Error deleting certification {cert_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
 
         # ==================== GENERAL METHODS ====================

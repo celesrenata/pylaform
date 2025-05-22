@@ -123,29 +123,24 @@
                                             </div>
 
                                             <!-- Achievements Section -->
+                                            <!-- Achievements Section -->
                                             <div class="mb-3">
                                                 <label class="form-label fw-medium">
                                                     <i class="bi bi-trophy me-2"></i>Achievements
                                                 </label>
-                                                <div class="achievements-container" id="school_{{ school.SK }}_achievements">
+                                                <div class="achievements-container" id="{{ school.SK }}_achievements">
                                                     {% if school.achievements %}
                                                         {% for achievement in school.achievements %}
-                                                        <div class="achievement-item mb-3 border-start border-3 border-info ps-3" data-achievement-id="{{ achievement.id }}">
-                                                            <div class="d-flex align-items-start">
-                                                                <div class="flex-grow-1">
-                                                                    <div class="form-group mb-2">
-                                                                        <textarea name="{{ school.SK }}_achievement_{{ achievement.id }}_description"
-                                                                                  class="form-control"
-                                                                                  placeholder="Describe your achievement..."
-                                                                                  rows="2">{{ achievement.description }}</textarea>
-                                                                    </div>
-                                                                </div>
-                                                                <div class="ms-2">
-                                                                    <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
-                                                                            data-achievement-id="{{ achievement.id }}">
-                                                                        <i class="bi bi-trash"></i>
-                                                                    </button>
-                                                                </div>
+                                                        <div class="achievement-item mb-2" id="achievement-{{ achievement.SK }}">
+                                                            <div class="input-group">
+                                                                <textarea class="form-control bg-light"
+                                                                          name="{{ school.SK }}_achievement_{{ achievement.SK }}"
+                                                                          rows="2">{{ achievement.description }}</textarea>
+                                                                <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
+                                                                        data-achievement-id="{{ achievement.SK }}"
+                                                                        data-school-id="{{ school.SK }}">
+                                                                    <i class="bi bi-trash"></i>
+                                                                </button>
                                                             </div>
                                                         </div>
                                                         {% endfor %}
@@ -153,7 +148,7 @@
                                                         <p class="text-muted">No achievements added yet.</p>
                                                     {% endif %}
                                                 </div>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-achievement-button" data-school-id="school_{{ school.SK }}">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-achievement-button" data-school-id="{{ school.SK }}">
                                                     <i class="bi bi-plus-lg me-1"></i>Add Achievement
                                                 </button>
                                                 <div class="form-text text-muted">Add achievements related to this school</div>
@@ -204,237 +199,373 @@
 
 {% block scripts %}
 <script type="text/javascript">
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Education.js loaded');
+// Generate UUID function for creating unique IDs
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0,
+              v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
 
-    // Counter for generating unique IDs for new school entries
-    let newItemCounter = 0;
-
-    // Utility function to generate UUIDs for achievements or other unique IDs
-    function generateUUID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            let r = Math.random() * 16 | 0,
-                v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
+// Function to add a new achievement to a school
+function addNewAchievement(schoolId) {
+    // Find the achievements container
+    let achievementsContainer = document.getElementById(`${schoolId}_achievements`);
+    if (!achievementsContainer) {
+        // Try alternative format if the first attempt fails
+        achievementsContainer = document.getElementById(`school_${schoolId}_achievements`);
     }
 
-    // Initialize datepicker on a selector
-    function initializeDatepicker(selector) {
-        // Check if the element exists
-        const element = document.querySelector(selector);
-        if (!element) {
-            console.warn(`Element not found: ${selector}`);
-            return;
-        }
-
-        // Try to use flatpickr first (preferred)
-        if (typeof flatpickr === 'function') {
-            const config = {
-                dateFormat: "m/Y",
-                allowInput: true,
-                static: true
-            };
-
-            // Add monthSelect plugin if available
-            if (typeof monthSelectPlugin === 'function') {
-                config.plugins = [
-                    new monthSelectPlugin({
-                        shorthand: true,
-                        dateFormat: "m/Y",
-                        altFormat: "F Y"
-                    })
-                ];
-            }
-
-            flatpickr(selector, config);
-            console.log(`Flatpickr initialized for: ${selector}`);
-            return;
-        }
-
-        // Fallback to jQuery UI datepicker
-        if ($.fn.datepicker) {
-            $(selector).datepicker({
-                format: "mm/yyyy",
-                viewMode: "months",
-                minViewMode: "months",
-                autoclose: true
-            });
-            console.log(`jQuery datepicker initialized for: ${selector}`);
-            return;
-        }
-
-        // Last resort - use a basic input with pattern
-        element.setAttribute('type', 'month');
-        element.setAttribute('pattern', '\\d{2}/\\d{4}');
-        element.setAttribute('placeholder', 'MM/YYYY');
-        console.log(`Basic month input used for: ${selector}`);
+    if (!achievementsContainer) {
+        console.error(`Could not find achievements container for school ID: ${schoolId}`);
+        return;
     }
 
-    // Function to add a new school entry form
-    function addNewSchool() {
-        // Generate a unique ID for the new school
-        const newId = `new_school_${Date.now()}`;
+    // Generate a unique ID for the new achievement
+    const achievementUuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0,
+            v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 
-        // Create a new school form template directly instead of fetching from server
-        // This avoids the 404 errors we're seeing
-        const schoolTemplate = `
-            <div id="${newId}" class="card mb-4 school-entry">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h3 class="h6 mb-0">School Information</h3>
-                    <button type="button" class="btn btn-sm btn-outline-danger delete-school" data-school-id="${newId}">
-                        <i class="bi bi-trash"></i> Remove
+    // Create the achievement HTML with the correct naming convention
+    // Format: SCHOOL#123_achievement_UUID_description
+    const achievementHtml = `
+        <div class="achievement-item mb-3 border-start border-3 border-info ps-3" id="achievement_${achievementUuid}">
+            <div class="d-flex align-items-start">
+                <div class="flex-grow-1">
+                    <div class="form-group mb-2">
+                        <textarea name="${schoolId}_achievement_${achievementUuid}_description"
+                                class="form-control"
+                                placeholder="Describe your achievement..."
+                                rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="ms-2">
+                    <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
+                            data-achievement-id="${achievementUuid}"
+                            data-school-id="${schoolId}">
+                        <i class="bi bi-trash"></i>
                     </button>
                 </div>
-                <div class="card-body">
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="${newId}_name" class="form-label">School Name</label>
-                            <input type="text" class="form-control" id="${newId}_name" name="${newId}_name" placeholder="University or Institution Name" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="${newId}_location" class="form-label">Location</label>
-                            <input type="text" class="form-control" id="${newId}_location" name="${newId}_location" placeholder="City, State/Province, Country">
-                        </div>
-                    </div>
+            </div>
+        </div>
+    `;
 
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="${newId}_degree" class="form-label">Degree/Focus</label>
-                            <input type="text" class="form-control" id="${newId}_degree" name="${newId}_degree" placeholder="Bachelor of Science, Certificate, etc.">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="${newId}_graddate" class="form-label">Graduation Date</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control dateInput" id="${newId}_graddate" name="${newId}_graddate" placeholder="MM/YYYY">
-                                <button class="btn btn-outline-secondary set-present-btn" type="button" onclick="document.getElementById('${newId}_graddate').value='Present'">
-                                    Set to Present
-                                </button>
+    // Add the achievement to the container
+    achievementsContainer.insertAdjacentHTML('beforeend', achievementHtml);
+
+    // Focus on the new textarea
+    const newTextarea = achievementsContainer.querySelector(`textarea[name="${schoolId}_achievement_${achievementUuid}_description"]`);
+    if (newTextarea) {
+        newTextarea.focus();
+    }
+}
+
+// Add a function to handle achievement deletion
+function deleteAchievement(schoolId, achievementId) {
+    if (confirm('Are you sure you want to delete this achievement?')) {
+        console.log(`Deleting achievement: ${achievementId} for school: ${schoolId}`);
+
+        // Create a form to submit the deletion request
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/resume/delete-school-achievement';
+
+        // Add school_id input
+        const schoolIdInput = document.createElement('input');
+        schoolIdInput.type = 'hidden';
+        schoolIdInput.name = 'school_id';
+        schoolIdInput.value = schoolId;
+        form.appendChild(schoolIdInput);
+
+        // Add achievement_id input
+        const achievementIdInput = document.createElement('input');
+        achievementIdInput.type = 'hidden';
+        achievementIdInput.name = 'achievement_id';
+        achievementIdInput.value = achievementId;
+        form.appendChild(achievementIdInput);
+
+        // Add CSRF token if needed
+        if (document.querySelector('meta[name="csrf-token"]')) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+
+        // Submit the form
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Function to add a new school entry
+function addNewSchool() {
+    // Generate a unique ID for the new school
+    const newId = `new${Date.now()}`;
+
+    // Create the HTML for a new school entry
+    const schoolHtml = `
+        <div class="card border-0 shadow-sm mb-4 school-entry" id="${newId}">
+            <div class="card-body p-4">
+                <!-- School form fields -->
+                <div class="row">
+                    <div class="col-md-11">
+                        <!-- School name and location -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="${newId}_name" class="form-label fw-medium">
+                                    <i class="bi bi-building me-2"></i>School Name
+                                </label>
+                                <input
+                                    type="text"
+                                    name="${newId}_name"
+                                    id="${newId}_name"
+                                    class="form-control bg-light"
+                                    value=""
+                                    placeholder="e.g., Stanford University"
+                                    required
+                                >
+                                <div class="form-text text-muted">Name of the educational institution</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="${newId}_location" class="form-label fw-medium">
+                                    <i class="bi bi-geo-alt me-2"></i>Location
+                                </label>
+                                <input
+                                    type="text"
+                                    name="${newId}_location"
+                                    id="${newId}_location"
+                                    class="form-control bg-light"
+                                    value=""
+                                    placeholder="e.g., Stanford, CA"
+                                >
+                                <div class="form-text text-muted">City and state/country of the institution</div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="mb-3">
-                        <label for="${newId}_description" class="form-label">Description (Optional)</label>
-                        <textarea class="form-control" id="${newId}_description" name="${newId}_description" rows="2" placeholder="Additional details about your education"></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Achievements/Activities</label>
-                        <div id="${newId}_achievements" class="achievements-container">
-                            <!-- Achievements will be added here -->
+                        <!-- Degree and graduation date -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="${newId}_degree" class="form-label fw-medium">
+                                    <i class="bi bi-mortarboard me-2"></i>Degree
+                                </label>
+                                <input
+                                    type="text"
+                                    name="${newId}_degree"
+                                    id="${newId}_degree"
+                                    class="form-control bg-light"
+                                    value=""
+                                    placeholder="e.g., Bachelor of Science in Computer Science"
+                                >
+                                <div class="form-text text-muted">Degree, certificate, or program name</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="${newId}_graddate" class="form-label fw-medium">
+                                    <i class="bi bi-calendar-event me-2"></i>Graduation Date
+                                </label>
+                                <input
+                                    type="text"
+                                    name="${newId}_graddate"
+                                    id="${newId}_graddate"
+                                    class="form-control bg-light dateInput"
+                                    value=""
+                                    placeholder="e.g., May 2022 or MM/YYYY"
+                                >
+                                <div class="form-text text-muted">Graduation date (month and year)</div>
+                            </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline-secondary add-achievement-button mt-2" data-school-id="${newId}">
-                            <i class="bi bi-plus-circle"></i> Add Achievement
+
+                        <!-- Achievements Section -->
+                        <div class="mb-3">
+                            <label class="form-label fw-medium">
+                                <i class="bi bi-trophy me-2"></i>Achievements
+                            </label>
+                            <div class="achievements-container" id="${newId}_achievements">
+                                <p class="text-muted">No achievements added yet.</p>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-achievement-button" data-school-id="${newId}">
+                                <i class="bi bi-plus-lg me-1"></i>Add Achievement
+                            </button>
+                            <div class="form-text text-muted">Add achievements related to this school</div>
+                        </div>
+
+                        <!-- Include in resume toggle -->
+                        <div class="form-check form-switch mt-3">
+                            <input
+                                type="checkbox"
+                                class="form-check-input"
+                                role="switch"
+                                id="${newId}_enabled"
+                                name="${newId}_enabled"
+                                checked
+                            >
+                            <label class="form-check-label" for="${newId}_enabled">Include this education entry</label>
+                        </div>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-center justify-content-end">
+                        <button type="button" class="btn btn-sm btn-danger" onclick="deleteSchool('{{ newId }}')">
+                            <i class="bi bi-trash"></i>
                         </button>
                     </div>
                 </div>
             </div>
-        `;
+        </div>
+    `;
 
-        // Add the new school form to the container
-        document.getElementById('newinput').insertAdjacentHTML('beforeend', schoolTemplate);
+    // Add the new school to the container
+    document.getElementById('newinput').insertAdjacentHTML('beforeend', schoolHtml);
 
-        // Initialize datepicker for the new graduation date field
-        initializeDatepicker(`#${newId}_graddate`);
+    // Initialize datepicker for the new date field
+    $(`#${newId}_graddate`).datepicker({
+        format: "mm/yyyy",
+        viewMode: "months",
+        minViewMode: "months",
+        autoclose: true
+    });
 
-        // Focus on the first input field
-        document.getElementById(`${newId}_name`).focus();
+    // Focus on the school name field
+    document.getElementById(`${newId}_name`).focus();
 
-        console.log(`Added new school with ID: ${newId}`);
+    console.log(`Added new school with ID: ${newId}`);
+}
+
+// Function to delete a school
+function deleteSchool(schoolId) {
+    if (confirm('Are you sure you want to delete this school and all associated data?')) {
+        console.log(`Deleting school: ${schoolId}`);
+
+        // Create a form to submit the deletion request
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/resume/education';
+
+        // Add school_id as _delete input
+        const deleteInput = document.createElement('input');
+        deleteInput.type = 'hidden';
+        deleteInput.name = '_delete';
+        deleteInput.value = schoolId;
+        form.appendChild(deleteInput);
+
+        // Add active_resume_id if available
+        const activeResumeId = document.getElementById('active_resume_id')?.value;
+        if (activeResumeId) {
+            const resumeInput = document.createElement('input');
+            resumeInput.type = 'hidden';
+            resumeInput.name = 'active_resume_id';
+            resumeInput.value = activeResumeId;
+            form.appendChild(resumeInput);
+        }
+
+        // Add CSRF token if needed
+        if (document.querySelector('meta[name="csrf-token"]')) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+
+        // Submit the form
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Initialize everything when the DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Education.js loaded');
+
+    // Initialize Add School button
+    const addSchoolBtn = document.getElementById('rowAdder');
+    if (addSchoolBtn) {
+        addSchoolBtn.addEventListener('click', function() {
+            addNewSchool();
+        });
     }
 
-    // Function to add a new achievement input inside a school entry
-    function addNewAchievement(schoolId) {
-        const achievementsContainer = document.getElementById(`${schoolId}_achievements`);
-        const newAchievementId = `new-achievement-${generateUUID()}`;
+    // Initialize date pickers for existing fields
+    $('.dateInput').datepicker({
+        format: "mm/yyyy",
+        viewMode: "months",
+        minViewMode: "months",
+        autoclose: true
+    });
 
-        const achievementHtml = `
-            <div class="input-group mb-2" data-achievement-id="${newAchievementId}">
-                <textarea class="form-control" name="${newAchievementId}_text" rows="2" placeholder="Achievement details"></textarea>
-                <button type="button" class="btn btn-outline-danger delete-achievement" data-achievement-id="${newAchievementId}">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </div>
-        `;
-
-        achievementsContainer.insertAdjacentHTML('beforeend', achievementHtml);
+    // Handle resume selection change
+    const resumeSelect = document.getElementById('resumeSelect');
+    if (resumeSelect) {
+        resumeSelect.addEventListener('change', function() {
+            document.getElementById('resumeSelectForm').submit();
+        });
     }
 
-    // Event handler for Add School button
-    const rowAdder = document.getElementById('rowAdder');
-    if (rowAdder) {
-        rowAdder.addEventListener('click', addNewSchool);
-    }
-
-    // Event delegation for dynamic elements
+    // Set up event delegation for dynamically added elements
     document.addEventListener('click', function(event) {
-        // Handle Add Achievement buttons
+        // Handle delete school buttons
+        if (event.target.closest('.delete-school')) {
+            const button = event.target.closest('.delete-school');
+            const schoolId = button.getAttribute('data-school-id');
+            deleteSchool(schoolId);
+        }
+
+        // Handle add achievement buttons
         if (event.target.closest('.add-achievement-button')) {
             const button = event.target.closest('.add-achievement-button');
             const schoolId = button.getAttribute('data-school-id');
             addNewAchievement(schoolId);
         }
-
-        // Handle Delete Achievement buttons
-        if (event.target.closest('.delete-achievement')) {
-            const button = event.target.closest('.delete-achievement');
-            const achievementId = button.getAttribute('data-achievement-id');
-            const elements = document.querySelectorAll(`[data-achievement-id="${achievementId}"]`);
-            elements.forEach(el => el.remove());
-        }
-
-        // Handle Delete School buttons
-        if (event.target.closest('.delete-school')) {
-            const button = event.target.closest('.delete-school');
-            const schoolId = button.getAttribute('data-school-id');
-            if (confirm('Are you sure you want to delete this school entry?')) {
-                const schoolElement = document.getElementById(schoolId);
-                if (schoolElement) {
-                    schoolElement.remove();
-                }
-
-                // Add hidden input to mark deletion on form submit
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = `${schoolId}_delete`;
-                hiddenInput.value = 'True';
-                document.getElementById('educationForm').appendChild(hiddenInput);
-            }
-        }
     });
+});
+// Achievement deletion handler
+$(document).on('click', '.delete-achievement', function() {
+    console.log("Delete achievement button clicked");
 
-    // Initialize datepickers for existing graduation date inputs on page load
-    document.querySelectorAll('.dateInput').forEach(function(input) {
-        initializeDatepicker(`#${input.id}`);
-    });
+    // Get the achievement ID
+    const achievementId = $(this).data('achievement-id');
+    console.log("Achievement ID to delete:", achievementId);
 
-    // Handle resume selection change - show loading indicator
-    const resumeSelect = document.getElementById('resumeSelect');
-    if (resumeSelect) {
-        resumeSelect.addEventListener('change', function() {
-            // Show loading indicator
-            const loadingDiv = document.createElement('div');
-            loadingDiv.className = 'position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center bg-white bg-opacity-75';
-            loadingDiv.style.zIndex = '9999';
+    // Confirm deletion
+    if (confirm("Are you sure you want to delete this achievement?")) {
+        // If it's a new achievement (not yet in database), just remove from DOM
+        if (achievementId.startsWith("new-achievement-")) {
+            console.log("Removing temporary achievement from DOM");
+            $(this).closest(".achievement-item").remove();
+        } else {
+            console.log("Submitting form to delete achievement");
 
-            // Create spinner
-            const spinner = document.createElement('div');
-            spinner.className = 'spinner-border text-primary';
-            spinner.setAttribute('role', 'status');
-            spinner.innerHTML = '<span class="visually-hidden">Loading...</span>';
+            // Create a form and submit it
+            const form = $("<form>")
+                .attr("method", "post")
+                .attr("action", "/resume/education");
 
-            // Add spinner to loading div
-            loadingDiv.appendChild(spinner);
+            // Add achievement ID as _delete_achievement field
+            $("<input>")
+                .attr("type", "hidden")
+                .attr("name", "_delete_achievement")
+                .attr("value", achievementId)
+                .appendTo(form);
 
-            // Add loading div to document
-            document.body.appendChild(loadingDiv);
+            // Add to DOM and submit
+            form.appendTo("body").submit();
+        }
+    }
+});
 
-            // Submit the form
-            document.getElementById('resumeSelectForm').submit();
-        });
+// Set up event delegation for delete school buttons
+document.addEventListener('click', function(event) {
+    const deleteButton = event.target.closest('.delete-school');
+    if (deleteButton) {
+        event.preventDefault();
+        const schoolId = deleteButton.getAttribute('data-school-id');
+        console.log(`Delete school button clicked for school ${schoolId}`);
+        deleteSchool(schoolId);
     }
 });
 </script>
-{% include "_scripts.html" %}
 {% endblock %}

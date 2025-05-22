@@ -79,22 +79,26 @@
                         <label class="form-label fw-medium">
                             <i class="bi bi-trophy me-2"></i>Achievements
                         </label>
-                        <div class="achievements" id="{{ id }}_achievements">
+                        <div class="achievements-container" id="{{ id }}_achievements">
                             {% if achievements %}
                                 {% for achievement in achievements %}
-                                    <div class="achievement-item card bg-light mb-2 p-2">
-                                        <div class="d-flex">
-                                            <input type="text"
-                                                class="form-control me-2"
-                                                name="{{ id }}_achievement_{{ loop.index }}"
-                                                value="{{ achievement.description }}"
-                                                placeholder="e.g., Dean's List, Scholarship Award">
-                                            <button type="button" class="btn btn-sm btn-outline-danger remove-achievement">
-                                                <i class="bi bi-x-lg"></i>
-                                            </button>
+                                    {% if achievement is defined %}
+                                        <div class="achievement-item mb-2" id="achievement-{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else 'new') }}">
+                                            <div class="input-group">
+                                                <textarea class="form-control bg-light"
+                                                          name="{{ id }}_achievement_{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else loop.index) }}"
+                                                          rows="2">{{ achievement.description if achievement.description is defined else '' }}</textarea>
+                                                <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
+                                                        data-achievement-id="{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else loop.index) }}"
+                                                        data-school-id="{{ id }}">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
+                                    {% endif %}
                                 {% endfor %}
+                            {% else %}
+                                <p class="text-muted">No achievements added yet.</p>
                             {% endif %}
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-achievement-button" data-school-id="{{ id }}">
@@ -117,8 +121,8 @@
                     <input type="hidden" id="{{ id }}_rowid" name="{{ id }}_rowid" value="{{ id }}">
                 </div>
                 <div class="col-md-1 d-flex align-items-center justify-content-end">
-                    <button type="button" class="btn btn-outline-danger delete-school" data-school-id="{{ id }}">
-                        <i class="bi bi-trash"></i>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteSchool('{{ school.id }}')">
+                        <i class="fas fa-trash"></i> Delete School
                     </button>
                 </div>
             </div>

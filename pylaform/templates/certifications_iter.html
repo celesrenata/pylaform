@@ -1,46 +1,42 @@
-{% macro form_group(id, name, authority, date_achieved, expiration_date, state, certorder=99) %}
-<div class="card mb-3" id="{{ id }}">
-    <div class="card-body">
-        <div class="row mb-3">
-            <div class="col-md-11">
+{% macro form_group(id, name, authority, date_achieved, expiration_date, state, certorder) %}
+<div class="card mb-3 certification-item" id="{{ id }}_container" data-id="{{ id }}">
+    <div class="card-body p-4">
+        <div class="row">
+            <div class="col-md-1">
+                <div class="d-flex justify-content-center">
+                    <div class="drag-handle btn btn-light" title="Drag to reorder">
+                        <i class="bi bi-grip-vertical"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-10">
                 <div class="mb-3">
                     <label for="{{ id }}_name" class="form-label">Certification Name</label>
-                    <input type="text" class="form-control" id="{{ id }}_name" name="{{ id }}_name"
-                        value="{{ name }}" placeholder="AWS Certified Solutions Architect">
+                    <input type="text" class="form-control" id="{{ id }}_name" name="{{ id }}_name" value="{{ name }}" required>
                 </div>
                 <div class="mb-3">
-                    <label for="{{ id }}_authority" class="form-label">Issuing Organization</label>
-                    <input type="text" class="form-control" id="{{ id }}_authority" name="{{ id }}_authority"
-                        value="{{ authority }}" placeholder="Amazon Web Services">
+                    <label for="{{ id }}_authority" class="form-label">Issuing Authority</label>
+                    <input type="text" class="form-control" id="{{ id }}_authority" name="{{ id }}_authority" value="{{ authority }}" required>
                 </div>
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="{{ id }}_date_achieved" class="form-label">Date Achieved</label>
-                        <input type="text"
-                            class="form-control dateInput"
-                            id="{{ id }}_date_achieved"
-                            name="{{ id }}_date_achieved"
-                            value="{{ date_achieved }}"
-                            placeholder="MM/YYYY">
-
+                        <input type="text" class="form-control dateInput" id="{{ id }}_date_achieved" name="{{ id }}_date_achieved" value="{{ date_achieved }}" placeholder="MM/YYYY">
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label for="{{ id }}_expiration_date" class="form-label">Expiration Date (optional)</label>
-                        <input type="text"
-                            class="form-control dateInput"
-                            id="{{ id }}_expiration_date"
-                            name="{{ id }}_expiration_date"
-                            value="{{ expiration_date }}"
-                            placeholder="MM/YYYY">
-
+                        <label for="{{ id }}_expiration_date" class="form-label">Expiration Date (Optional)</label>
+                        <input type="text" class="form-control dateInput" id="{{ id }}_expiration_date" name="{{ id }}_expiration_date" value="{{ expiration_date }}" placeholder="MM/YYYY">
                     </div>
                 </div>
-                <input type="hidden" id="{{ id }}_certorder" name="{{ id }}_certorder" value="{{ certorder }}">
+                <input type="hidden" name="{{ id }}_certorder" value="{{ certorder|default(99) }}">
+                <input type="hidden" name="{{ id }}_state" value="{{ state|default(1) }}">
             </div>
-            <div class="col-md-1 text-end">
-                <button type="button" class="btn btn-sm btn-outline-danger deleteRow">
-                    <i class="bi bi-trash"></i>
-                </button>
+            <div class="col-md-1">
+                <div class="d-flex justify-content-center">
+                    <button type="button" class="btn btn-outline-danger remove-item" data-id="{{ id }}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

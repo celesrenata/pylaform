@@ -578,169 +578,398 @@ def summary():
         flash("An error occurred while processing your request.", "danger")
         return redirect(url_for('resume.dashboard'))
 
-@resume_bp.route("/education", methods=['GET'])
+
+@resume_bp.route('/education', methods=['GET'])
 @login_required
 def education():
-    user_id = session.get('user_id')
-    worker = Worker(user_id)
-    resume_manager = ResumeManager(user_id)
-
     try:
-        # Get all resumes and determine active resume
-        all_resumes = resume_manager.get_all_resumes()
-        active_resume_id = session.get('active_resume_id')
-        if not active_resume_id:
-            active_resume_id = resume_manager.get_active_resume_id()
-            if active_resume_id:
-                session['active_resume_id'] = active_resume_id
+        # Get user_id and resume_id
+        user_id = session.get('user_id')
+        resume_manager = ResumeManager(user_id)
 
-        # GET request - display the form
-        schools = worker.get_all_education(resume_id=active_resume_id)
+        # Get resume_id from query params, session, or active resume
+        resume_id = request.args.get('resume_id')
+        if not resume_id:
+            resume_id = session.get('active_resume_id')
+            if not resume_id:
+                resume_id = resume_manager.get_active_resume_id()
+                if resume_id:
+                    session['active_resume_id'] = resume_id
+
+        # Initialize worker
+        worker = Worker(user_id)
+
+        # Get all schools for this user/resume
+        schools = worker.get_all_schools(resume_id=resume_id)
         logger.debug(f"Retrieved {len(schools)} schools for user {user_id}")
 
+        # Filter out any items that aren't actually schools
+        filtered_schools = []
+        for school in schools:
+            # Ensure this is a school record by checking for required fields
+            if 'name' in school:
+                # Get achievements for this school
+                school_id = school.get('id') or school.get('SK')
+                if school_id:
+                    # Use get_achievements_for_resume instead of get_school_achievements
+                    achievements = worker.get_achievements_for_resume(resume_id, school_id)
+                    logger.debug(f"Retrieved {len(achievements)} achievements for school {school_id}")
+
+                    # Add achievements to school data
+                    school['achievements'] = achievements
+                    filtered_schools.append(school)
+
+        logger.debug(f"Filtered {len(schools)} schools down to {len(filtered_schools)} valid schools with their achievements")
+
+        # Get all resumes for the dropdown
+        all_resumes = resume_manager.get_all_resumes()
+        active_resume = resume_manager.get_resume(resume_id) if resume_id else None
+        active_resume_name = active_resume.get('name', 'Default Resume') if active_resume else 'Default Resume'
+
+        # Render the template with the schools data
         return render_template(
             "education_index.html",
-            payload=schools,
+            payload=filtered_schools,
             all_resumes=all_resumes,
-            active_resume_id=active_resume_id
+            active_resume_id=resume_id,
+            active_resume_name=active_resume_name
         )
+
     except Exception as e:
         logger.error(f"Error in education route: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         flash("An error occurred while loading education information.", "danger")
-        return redirect(url_for('landing'))  # Change this to an existing route
+        return redirect(url_for('resume.dashboard'))  # Changed to dashboard route
 
 
 @resume_bp.route('/education', methods=['POST'])
 @login_required
 def education_post():
-    user_id = session.get('user_id')
-    worker = Worker(user_id)
-    resume_manager = ResumeManager(user_id)
-
-    form_data = request.form.to_dict()
-    logger.debug(f"Received education form data: {form_data}")
-
-    active_resume_id = form_data.get('active_resume_id')
-    if not active_resume_id:
-        active_resume_id = session.get('active_resume_id')
-        if not active_resume_id:
-            active_resume_id = resume_manager.get_active_resume_id()
-            if active_resume_id:
-                session['active_resume_id'] = active_resume_id
-
     try:
-        # Handle deletions
-        if "_delete" in form_data:
-            delete_id = form_data.get("_delete")
-            logger.debug(f"Processing delete request for school ID: {delete_id}")
-            if delete_id and not delete_id.startswith("new"):
-                success = worker.delete_entry("school", delete_id, resume_id=active_resume_id)
-                logger.debug(f"Delete operation result: {success}")
-                if success:
+        user_id = session.get('user_id')
+        worker = Worker(user_id)
+        resume_manager = ResumeManager(user_id)
+
+        # Get form data as regular dict
+        form_data = request.form.to_dict()
+        logger.debug(f"Education POST request with {len(form_data)} form fields")
+        logger.debug(f"Form data keys: {list(form_data.keys())}")
+
+        # Get active resume ID
+        active_resume_id = form_data.get('active_resume_id')
+        if not active_resume_id:
+            active_resume_id = session.get('active_resume_id')
+            if not active_resume_id:
+                active_resume_id = resume_manager.get_active_resume_id()
+                if active_resume_id:
+                    session['active_resume_id'] = active_resume_id
+
+        logger.debug(f"Active resume ID: {active_resume_id}")
+
+        # Check for school deletion
+        if '_delete' in form_data:
+            school_id = form_data.get('_delete')
+            logger.debug(f"Processing school deletion: {school_id}")
+
+            if school_id:
+                # If school_id starts with 'SCHOOL#', extract the actual ID
+                if school_id.startswith('SCHOOL#'):
+                    school_id = school_id[7:]  # Remove 'SCHOOL#' prefix
+                    logger.debug(f"Extracted school ID: {school_id}")
+
+                result = worker.delete_school(school_id, resume_id=active_resume_id)
+                if result:
                     flash("School deleted successfully", "success")
                 else:
                     flash("Failed to delete school", "danger")
-            return redirect(url_for("resume.education"))
+                return redirect(url_for("resume.education"))
 
-        # Process updates and new additions
-        school_data = {}
-        focus_data = {}
-        achievement_data = {}
+        # Check for achievement deletion
+        if '_delete_achievement' in form_data:
+            achievement_id = form_data.get('_delete_achievement')
+            logger.debug(f"Processing achievement deletion: {achievement_id}")
 
-        for key, value in form_data.items():
-            logger.debug(f"Processing form key: {key}, value: {value}")
-            if "_" in key:
-                parts = key.split("_", 1)
-                school_id = parts[0]
+            # Extract school_id and achievement_id if in the format SCHOOL#<school_id>#ACHIEVEMENT#<achievement_id>
+            school_id = None
+            if achievement_id.startswith('SCHOOL#') and '#ACHIEVEMENT#' in achievement_id:
+                parts = achievement_id.split('#ACHIEVEMENT#')
+                if len(parts) == 2:
+                    school_parts = parts[0].split('SCHOOL#')
+                    if len(school_parts) == 2:
+                        school_id = school_parts[1]
+                    achievement_id = parts[1]
+                    logger.debug(f"Extracted achievement_id: {achievement_id}, school_id: {school_id}")
 
-                if "focus_" in key:
-                    if school_id not in focus_data:
-                        focus_data[school_id] = []
-                    focus_parts = key.split("_focus_")
-                    if len(focus_parts) > 1:
-                        focus_index = focus_parts[1]
-                        focus_data[school_id].append({
-                            "index": focus_index,
-                            "description": value
-                        })
-                elif "achievement_" in key:
-                    if school_id not in achievement_data:
-                        achievement_data[school_id] = []
-                    achievement_parts = key.split("_achievement_")
-                    if len(achievement_parts) > 1:
-                        achievement_index = achievement_parts[1]
-                        achievement_data[school_id].append({
-                            "index": achievement_index,
-                            "description": value
-                        })
-                else:
-                    field = parts[1]
-                    if school_id not in school_data:
-                        school_data[school_id] = {}
-                    school_data[school_id][field] = value
-
-        logger.debug(f"Processed school data: {school_data}")
-        logger.debug(f"Processed focus data: {focus_data}")
-        logger.debug(f"Processed achievement data: {achievement_data}")
-
-        for school_id, data in school_data.items():
-            enabled = "enabled" in data
-            data["state"] = 1 if enabled else 0
-            data.pop("enabled", None)
-            data.pop("rowid", None)
-
-            if school_id.startswith("new"):
-                if "name" in data:
-                    logger.debug(f"Adding new school: {data}")
-                    new_school_id = worker.add_school(
-                        name=data.get("name", ""),
-                        location=data.get("location", ""),
-                        degree=data.get("degree", ""),
-                        graddate=data.get("graddate", ""),
-                        resume_id=active_resume_id
-                    )
-                    logger.debug(f"New school added with ID: {new_school_id}")
-                    if new_school_id:
-                        if school_id in focus_data:
-                            for focus in focus_data[school_id]:
-                                if focus["description"].strip():
-                                    worker.add_focus(new_school_id, focus["description"], resume_id=active_resume_id)
-                        if school_id in achievement_data:
-                            for achievement in achievement_data[school_id]:
-                                if achievement["description"].strip():
-                                    worker.add_achievement(new_school_id, achievement["description"], resume_id=active_resume_id)
-                    else:
-                        logger.error(f"Failed to add new school: {data}")
-                        flash("Failed to add new school", "danger")
-            else:
-                data.pop('resume_id', None)
-                logger.debug(f"Updating school: school_id={school_id}, resume_id={active_resume_id}, data={data}")
-                result = worker.update_school(school_id, resume_id=active_resume_id, **data)
-                logger.debug(f"update_school result: {result}")
-
+            if school_id and achievement_id:
+                result = worker.delete_school_achievement(achievement_id, school_id, active_resume_id)
                 if result:
-                    if school_id in focus_data:
-                        for focus in focus_data[school_id]:
-                            if focus["description"].strip():
-                                worker.update_focus(school_id, focus["index"], focus["description"], resume_id=active_resume_id)
-                    if school_id in achievement_data:
-                        for achievement in achievement_data[school_id]:
-                            if achievement["description"].strip():
-                                worker.update_achievement(school_id, achievement["index"], achievement["description"], resume_id=active_resume_id)
+                    flash("Achievement deleted successfully", "success")
                 else:
-                    logger.error(f"Failed to update school: {school_id}")
-                    flash(f"Failed to update school {data.get('name', '')}", "danger")
+                    flash("Failed to delete achievement", "danger")
+                return redirect(url_for("resume.education"))
+
+        # Process new schools
+        new_schools = {}
+        existing_schools = {}
+
+        # First pass: identify all school IDs and organize data
+        for key in form_data:
+            if '_' in key:
+                parts = key.split('_', 1)
+                if len(parts) < 2:
+                    continue
+
+                prefix, field = parts
+
+                # Handle new schools
+                if prefix.startswith('new'):
+                    school_id = prefix
+                    if school_id not in new_schools:
+                        new_schools[school_id] = {'focuses': {}}
+
+                    # Check if this is a focus field
+                    if field.startswith('focus_'):
+                        focus_num = field.split('_', 1)[1]
+                        focus_value = form_data[key].strip()
+                        if focus_value:  # Only add non-empty focuses
+                            new_schools[school_id]['focuses'][focus_num] = focus_value
+                    else:
+                        new_schools[school_id][field] = form_data[key]
+
+                # Handle existing schools
+                elif prefix.startswith('SCHOOL#') or prefix.startswith('school_'):
+                    school_id = prefix
+                    if school_id not in existing_schools:
+                        existing_schools[school_id] = {}
+                    existing_schools[school_id][field] = form_data[key]
+
+        # Process new schools
+        for school_id, school_data in new_schools.items():
+            # Skip schools without names
+            if not school_data.get('name', '').strip():
+                logger.debug(f"Skipping new school with empty name: {school_id}")
+                continue
+
+            logger.debug(f"Processing new school: {school_id} with data: {school_data}")
+
+            # Extract focuses before adding school
+            focuses = school_data.pop('focuses', {})
+
+            # Set state based on enabled checkbox
+            school_data['state'] = 1 if school_data.get('enabled') == 'on' else 0
+            school_data.pop('enabled', None)
+            school_data.pop('rowid', None)
+
+            # Add the new school
+            new_school_id = worker.add_school(
+                name=school_data.get('name', ''),
+                location=school_data.get('location', ''),
+                degree=school_data.get('degree', ''),
+                graddate=school_data.get('graddate', ''),
+                resume_id=active_resume_id
+            )
+
+            if new_school_id:
+                logger.debug(f"Added new school with ID: {new_school_id}")
+
+                # Add focuses for this school
+                for focus_num, focus_name in focuses.items():
+                    logger.debug(f"Adding focus '{focus_name}' to school {new_school_id}")
+                    focus_result = worker.add_focus(new_school_id, focus_name, resume_id=active_resume_id)
+                    logger.debug(f"Focus add result: {focus_result}")
+
+                # Process achievements
+                for key in form_data:
+                    if key.startswith(f"{school_id}_achievement_") and "_description" in key:
+                        achievement_id = key.split('_achievement_')[1].split('_')[0]
+                        description = form_data[key].strip()
+
+                        if description:
+                            logger.debug(f"Adding achievement '{description}' to school {new_school_id}")
+                            achievement_result = worker.add_school_achievement(
+                                new_school_id,
+                                description,
+                                resume_id=active_resume_id
+                            )
+                            logger.debug(f"Achievement add result: {achievement_result}")
+            else:
+                logger.error(f"Failed to add new school: {school_data}")
+                flash(f"Failed to add new school {school_data.get('name', '')}", "danger")
+
+        # Process existing schools
+        for school_id, school_data in existing_schools.items():
+            # Update school state based on enabled checkbox
+            school_data['state'] = 1 if school_data.get('enabled') == 'on' else 0
+            school_data.pop('enabled', None)
+            school_data.pop('rowid', None)
+
+            # Update the school
+            logger.debug(f"Updating school: {school_id} with data: {school_data}")
+            result = worker.update_school(school_id, resume_id=active_resume_id, **school_data)
+
+            if not result:
+                logger.error(f"Failed to update school: {school_id}")
+                flash(f"Failed to update school {school_data.get('name', '')}", "danger")
+                continue
+
+            # Process achievements for this school
+            for key in form_data:
+                if key.startswith(f"{school_id}_achievement_") and "_description" in key:
+                    achievement_parts = key.split('_achievement_')[1].split('_')
+                    achievement_id = achievement_parts[0]
+                    description = form_data[key].strip()
+
+                    if not description:
+                        continue
+
+                    # For new achievements (UUID format)
+                    if len(achievement_id) == 36:  # Standard UUID length
+                        logger.debug(f"Adding new achievement for school {school_id}: {description}")
+                        result = worker.add_school_achievement(
+                            school_id,
+                            description,
+                            resume_id=active_resume_id
+                        )
+                    else:
+                        # For existing achievements
+                        logger.debug(f"Updating achievement: {achievement_id} for school {school_id}")
+                        result = worker.update_school_achievement(
+                            school_id,
+                            achievement_id,
+                            description,
+                            resume_id=active_resume_id
+                        )
+
+                    logger.debug(f"Achievement operation result: {result}")
 
         flash("Education information updated successfully", "success")
+        return redirect(url_for("resume.education"))
+
     except Exception as e:
         logger.error(f"Error in education_post: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         flash("An error occurred while updating education information", "danger")
+        return redirect(url_for("resume.education"))
 
-    return redirect(url_for("resume.education"))
 
-@app.route('/certifications', methods=['GET', 'POST'])
+@resume_bp.route('/delete-school-achievement', methods=['POST'])
+@login_required
+def delete_school_achievement():
+    try:
+        # Get user_id and resume_id
+        user_id = session.get('user_id')
+        resume_manager = ResumeManager(user_id)
+
+        # Get resume_id from session or active resume
+        resume_id = session.get('active_resume_id')
+        if not resume_id:
+            resume_id = resume_manager.get_active_resume_id()
+            if resume_id:
+                session['active_resume_id'] = resume_id
+
+        # Get achievement_id and school_id from form
+        achievement_id = request.form.get('achievement_id')
+        school_id = request.form.get('school_id')
+
+        if not achievement_id:
+            flash('Achievement ID is required', 'danger')
+            return redirect(url_for('resume.education'))
+
+        logger.debug(
+            f"Processing delete request for school achievement ID: {achievement_id}, school_id: {school_id}, resume_id: {resume_id}")
+
+        # Extract the actual achievement ID if it's in the format SCHOOL#<school_id>#ACHIEVEMENT#<achievement_id>
+        if achievement_id.startswith('SCHOOL#') and '#ACHIEVEMENT#' in achievement_id:
+            parts = achievement_id.split('#ACHIEVEMENT#')
+            if len(parts) == 2:
+                # Extract school_id if not provided separately
+                if not school_id:
+                    school_parts = parts[0].split('SCHOOL#')
+                    if len(school_parts) == 2:
+                        school_id = school_parts[1]
+
+                # Extract achievement_id
+                achievement_id = parts[1]
+                logger.debug(f"Extracted achievement_id: {achievement_id}, school_id: {school_id}")
+
+        # Get the worker instance
+        worker = Worker(user_id)
+
+        # Delete the achievement
+        result = worker.delete_school_achievement(achievement_id, school_id, resume_id)
+
+        if result:
+            logger.info(
+                f"Successfully deleted school achievement {achievement_id} for user {user_id}, resume {resume_id}")
+            flash('Achievement deleted successfully', 'success')
+        else:
+            logger.error(f"Failed to delete school achievement {achievement_id} for user {user_id}, resume {resume_id}")
+            flash('Failed to delete achievement', 'danger')
+
+        return redirect(url_for('resume.education'))
+    except Exception as e:
+        logger.error(f"Error in delete_school_achievement route: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        flash('An error occurred while deleting the achievement', 'danger')
+        return redirect(url_for('resume.education'))
+
+@resume_bp.route('/delete_achievement/<achievement_id>', methods=['POST'])
+@login_required
+def delete_achievement(achievement_id):
+    try:
+        # Get user_id and resume_id
+        user_id = session.get('user_id')
+        resume_manager = ResumeManager(user_id)
+
+        # Get resume_id from form, session, or active resume
+        resume_id = request.form.get('resume_id')
+        if not resume_id:
+            resume_id = session.get('active_resume_id')
+            if not resume_id:
+                resume_id = resume_manager.get_active_resume_id()
+                if resume_id:
+                    session['active_resume_id'] = resume_id
+
+        logger.debug(f"Processing delete request for achievement ID: {achievement_id}, resume_id: {resume_id}")
+
+        # Normalize achievement_id (remove 'ACHIEVEMENT#' prefix if present)
+        if isinstance(achievement_id, str) and achievement_id.startswith('ACHIEVEMENT#'):
+            original_id = achievement_id
+            achievement_id = achievement_id[12:]  # Remove 'ACHIEVEMENT#' prefix
+            logger.debug(f"Normalized achievement ID from {original_id} to {achievement_id}")
+
+        # Get the worker instance
+        worker = Worker(user_id)
+
+        # Delete the achievement
+        result = worker.delete_entry("achievement", achievement_id)
+
+        if result:
+            logger.info(f"Successfully deleted achievement {achievement_id} for user {user_id}, resume {resume_id}")
+            flash('Achievement deleted successfully', 'success')
+        else:
+            logger.error(f"Failed to delete achievement {achievement_id} for user {user_id}, resume {resume_id}")
+            flash('Failed to delete achievement', 'danger')
+
+        # Clear any relevant caches
+        if hasattr(worker.query, 'purge_cache'):
+            worker.query.purge_cache("achievement")
+            if resume_id:
+                worker.query.purge_cache(f"achievement_{resume_id}")
+
+        return redirect(url_for('resume.education'))
+    except Exception as e:
+        logger.error(f"Error in delete_achievement route: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        flash('An error occurred while deleting the achievement', 'danger')
+        return redirect(url_for('resume.education'))
+
+
+@resume_bp.route('/certifications', methods=['GET', 'POST'])
 @login_required
 def certifications():
     print("DEBUG: Beginning certifications route handler")
@@ -749,24 +978,44 @@ def certifications():
         user_id = session.get('user_id')
         worker = Worker(user_id)
 
+        # Get the active resume ID and name
+        resume_manager = ResumeManager(user_id)
+        active_resume_id = session.get('active_resume_id')
+        if not active_resume_id:
+            active_resume_id = resume_manager.get_active_resume_id()
+            if active_resume_id:
+                session['active_resume_id'] = active_resume_id
+
+        # Get all resumes for the dropdown
+        all_resumes = resume_manager.get_all_resumes()
+
+        active_resume = resume_manager.get_resume(active_resume_id) if active_resume_id else None
+        active_resume_name = active_resume.get('name', 'Default Resume') if active_resume else 'Default Resume'
+
         # Handle form submissions
         if request.method == 'POST':
             print("DEBUG: Processing POST request for certifications")
             form_data = request.form
             print(f"DEBUG: Form data: {form_data}")
 
-            certifications = worker.get_all_certifications()
-            print(f"DEBUG: Retrieved {len(certifications)} certifications for display")
-
             # Check for deletion
             if '_delete' in form_data:
                 delete_id = form_data.get('_delete')
                 print(f"DEBUG: Delete request for certification {delete_id}")
                 if delete_id:
-                    success = worker.delete_entry("certification", delete_id)
+                    # Make sure we're using the correct resume_id
+                    resume_id = form_data.get('active_resume_id', active_resume_id)
+                    print(f"DEBUG: Deleting certification {delete_id} from resume {resume_id}")
+
+                    success = worker.delete_entry("certification", delete_id, resume_id=resume_id)
                     print(f"DEBUG: Delete result: {success}")
-                    # Redirect to avoid resubmission
-                    return redirect(url_for('certifications'))
+
+                    if success:
+                        flash("Certification deleted successfully.", "success")
+                    else:
+                        flash("Failed to delete certification.", "danger")
+
+                    return redirect(url_for('resume.certifications'))
 
             # Process updates first
             updates_made = False
@@ -783,7 +1032,7 @@ def certifications():
                     cert_order = form_data.get(f"{item_id}_certorder", 99)
                     try:
                         cert_order = int(cert_order)
-                    except:
+                    except (ValueError, TypeError):
                         cert_order = 99
 
                     print(f"DEBUG: Updating certification {item_id}")
@@ -791,7 +1040,8 @@ def certifications():
                         "name": name,
                         "authority": authority,
                         "date_achieved": date_achieved,
-                        "certorder": cert_order
+                        "certorder": cert_order,
+                        "resume_id": active_resume_id
                     }
 
                     # Only include expiration date if it exists
@@ -801,34 +1051,61 @@ def certifications():
                     success = worker.update_certification(item_id, **update_data)
                     if success:
                         updates_made = True
+                        print(f"DEBUG: Updated certification {item_id}")
+                    else:
+                        print(f"DEBUG: Failed to update certification {item_id}")
 
             # Process new items (starting with "new")
-            for key, value in form_data.items():
-                if "_name" in key and key.startswith("new"):
-                    new_id = key.split("_")[0]  # Extract "new1", "new2", etc.
-                    name = value
-                    authority = form_data.get(f"{new_id}_authority", "")
-                    date_achieved = form_data.get(f"{new_id}_date_achieved", "")
-                    expiration_date = form_data.get(f"{new_id}_expiration_date", "")
+            new_names = form_data.getlist('new_name')
+            new_authorities = form_data.getlist('new_authority')
+            new_dates_achieved = form_data.getlist('new_date_achieved')
+            new_expiration_dates = form_data.getlist('new_expiration_date')
+            new_certorders = form_data.getlist('new_certorder')
 
-                    # Check if there's content to add
-                    if name.strip() and authority.strip() and date_achieved.strip():
-                        print(f"DEBUG: Adding new certification {name}")
-                        success = worker.add_certification(
-                            name=name,
-                            authority=authority,
-                            date_achieved=date_achieved,
-                            expiration_date=expiration_date if expiration_date.strip() else None
-                        )
-                        if success:
-                            updates_made = True
+            # Make sure we have the same number of items in each list
+            min_length = min(len(new_names), len(new_authorities), len(new_dates_achieved))
 
-            # Redirect to avoid resubmission
+            for i in range(min_length):
+                name = new_names[i].strip()
+                authority = new_authorities[i].strip()
+                date_achieved = new_dates_achieved[i].strip()
+
+                # Skip empty entries
+                if not name and not authority:
+                    continue
+
+                # Get expiration date if available
+                expiration_date = new_expiration_dates[i].strip() if i < len(new_expiration_dates) else ""
+
+                # Get cert order if available
+                try:
+                    certorder = int(new_certorders[i]) if i < len(new_certorders) else 99
+                except (ValueError, TypeError):
+                    certorder = 99
+
+                print(f"DEBUG: Adding new certification {name}")
+                result = worker.add_certification(
+                    name=name,
+                    issuer=authority,
+                    date=date_achieved,
+                    expiry=expiration_date if expiration_date else None,
+                    resume_id=active_resume_id,
+                    certorder=certorder
+                )
+
+                if result:
+                    updates_made = True
+                    print(f"DEBUG: Added new certification with ID {result}")
+                else:
+                    print(f"DEBUG: Failed to add new certification")
+
             if updates_made:
-                return redirect(url_for('certifications'))
+                flash("Certifications updated successfully.", "success")
+
+            return redirect(url_for('resume.certifications'))
 
         # Get certifications
-        certifications = worker.get_all_certifications()
+        certifications = worker.get_all_certifications(resume_id=active_resume_id)
         print(f"DEBUG: Retrieved {len(certifications)} certifications for display")
 
         # Transform the data to match template expectations
@@ -848,13 +1125,20 @@ def certifications():
         transformed_certifications.sort(key=lambda x: int(x.get('certorder', 99)))
 
         print(f"DEBUG: Rendering template with {len(transformed_certifications)} transformed certifications")
-        return render_template('certifications_index.html', payload=transformed_certifications)
+        return render_template(
+            'certifications_index.html',
+            payload=transformed_certifications,
+            all_resumes=all_resumes,
+            active_resume_id=active_resume_id,
+            active_resume_name=active_resume_name
+        )
 
     except Exception as e:
         import traceback
         print(f"DEBUG: Exception in certifications route: {str(e)}")
         print(f"DEBUG: Traceback: {traceback.format_exc()}")
-        return f"Error: {str(e)}", 500
+        flash("An error occurred while processing your request.", "danger")
+        return redirect(url_for('resume.dashboard'))
 
 
 @app.route("/employment", methods=["GET", "POST"])
