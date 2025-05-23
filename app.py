@@ -6,6 +6,7 @@ import boto3
 import json
 import os
 import sys
+import traceback
 from flask import Flask, Blueprint, render_template, request, redirect, url_for, flash, session
 from pylaform.database.connect import db, create_user_identification
 from pylaform.auth import (
@@ -573,7 +574,6 @@ def summary():
         )
     except Exception as e:
         logger.error(f"Error in summary route: {str(e)}")
-        import traceback
         logger.error(traceback.format_exc())
         flash("An error occurred while processing your request.", "danger")
         return redirect(url_for('resume.dashboard'))
@@ -611,15 +611,37 @@ def education():
                 # Get achievements for this school
                 school_id = school.get('id') or school.get('SK')
                 if school_id:
+                    # Extract the actual school ID if it contains SCHOOL#
+                    if isinstance(school_id, str) and school_id.startswith('SCHOOL#'):
+                        school_id = school_id[7:]  # Remove 'SCHOOL#' prefix
+                        logger.debug(f"Extracted school ID: {school_id}")
+
                     # Use get_achievements_for_resume instead of get_school_achievements
                     achievements = worker.get_achievements_for_resume(resume_id, school_id)
                     logger.debug(f"Retrieved {len(achievements)} achievements for school {school_id}")
+
+                    # Sort achievements by order if available
+                    if achievements:
+                        # Ensure achievement_order is treated as an integer for sorting
+                        for achievement in achievements:
+                            if 'achievement_order' in achievement:
+                                try:
+                                    achievement['achievement_order'] = int(achievement['achievement_order'])
+                                except (ValueError, TypeError):
+                                    achievement['achievement_order'] = 99
+                            else:
+                                achievement['achievement_order'] = 99
+
+                        # Sort by achievement_order
+                        achievements.sort(key=lambda x: x.get('achievement_order', 99))
+                        logger.debug(f"Sorted {len(achievements)} achievements by order")
 
                     # Add achievements to school data
                     school['achievements'] = achievements
                     filtered_schools.append(school)
 
-        logger.debug(f"Filtered {len(schools)} schools down to {len(filtered_schools)} valid schools with their achievements")
+        logger.debug(
+            f"Filtered {len(schools)} schools down to {len(filtered_schools)} valid schools with their achievements")
 
         # Get all resumes for the dropdown
         all_resumes = resume_manager.get_all_resumes()
@@ -637,7 +659,6 @@ def education():
 
     except Exception as e:
         logger.error(f"Error in education route: {str(e)}")
-        import traceback
         logger.error(traceback.format_exc())
         flash("An error occurred while loading education information.", "danger")
         return redirect(url_for('resume.dashboard'))  # Changed to dashboard route
@@ -655,6 +676,8 @@ def education_post():
         form_data = request.form.to_dict()
         logger.debug(f"Education POST request with {len(form_data)} form fields")
         logger.debug(f"Form data keys: {list(form_data.keys())}")
+        logger.debug(f"Form data values for achievement fields: {[(k, v) for k, v in form_data.items() if 'achievement' in k]}")
+
 
         # Get active resume ID
         active_resume_id = form_data.get('active_resume_id')
@@ -756,6 +779,32 @@ def education_post():
             # Extract focuses before adding school
             focuses = school_data.pop('focuses', {})
 
+            # Extract achievements before adding school
+            achievements = {}
+            for key, value in list(school_data.items()):
+                if 'achievement_' in key:
+                    parts = key.split('achievement_')
+                    if len(parts) == 2:
+                        achievement_part = parts[1]
+                        # Handle both formats:
+                        # - achievement_uuid_description
+                        # - achievement_uuid_order
+                        if '_description' in achievement_part:
+                            achievement_id = achievement_part.split('_description')[0]
+                            if achievement_id not in achievements:
+                                achievements[achievement_id] = {'description': value}
+                            else:
+                                achievements[achievement_id]['description'] = value
+                        elif '_order' in achievement_part:
+                            achievement_id = achievement_part.split('_order')[0]
+                            if achievement_id not in achievements:
+                                achievements[achievement_id] = {'order': value}
+                            else:
+                                achievements[achievement_id]['order'] = value
+
+                    # Remove this key from school_data
+                    school_data.pop(key)
+
             # Set state based on enabled checkbox
             school_data['state'] = 1 if school_data.get('enabled') == 'on' else 0
             school_data.pop('enabled', None)
@@ -780,75 +829,101 @@ def education_post():
                     logger.debug(f"Focus add result: {focus_result}")
 
                 # Process achievements
-                for key in form_data:
-                    if key.startswith(f"{school_id}_achievement_") and "_description" in key:
-                        achievement_id = key.split('_achievement_')[1].split('_')[0]
-                        description = form_data[key].strip()
+                for achievement_id, achievement_data in achievements.items():
+                    description = achievement_data.get('description', '').strip()
 
-                        if description:
-                            logger.debug(f"Adding achievement '{description}' to school {new_school_id}")
-                            achievement_result = worker.add_school_achievement(
-                                new_school_id,
-                                description,
-                                resume_id=active_resume_id
-                            )
-                            logger.debug(f"Achievement add result: {achievement_result}")
+                    # Get achievement order if available
+                    try:
+                        achievement_order = int(achievement_data.get('order', 99))
+                    except (ValueError, TypeError):
+                        achievement_order = 99
+
+                    logger.debug(f"Achievement order for {achievement_id}: {achievement_order}")
+
+                    if description:
+                        logger.debug(f"Adding achievement '{description}' to school {new_school_id}")
+                        achievement_result = worker.add_school_achievement(
+                            new_school_id,
+                            description,
+                            resume_id=active_resume_id,
+                            achievement_order=achievement_order
+                        )
+                        logger.debug(f"Achievement add result: {achievement_result}")
             else:
                 logger.error(f"Failed to add new school: {school_data}")
                 flash(f"Failed to add new school {school_data.get('name', '')}", "danger")
 
         # Process existing schools
         for school_id, school_data in existing_schools.items():
-            # Update school state based on enabled checkbox
+            # Skip schools without names
+            if not school_data.get('name', '').strip():
+                logger.debug(f"Skipping existing school with empty name: {school_id}")
+                continue
+
+            # Extract the actual school ID if it contains SCHOOL#
+            actual_school_id = school_id
+            if isinstance(school_id, str) and school_id.startswith('SCHOOL#'):
+                actual_school_id = school_id[7:]  # Remove 'SCHOOL#' prefix
+                logger.debug(f"Extracted school ID: {actual_school_id} from {school_id}")
+
+            # Set state based on enabled checkbox
             school_data['state'] = 1 if school_data.get('enabled') == 'on' else 0
             school_data.pop('enabled', None)
             school_data.pop('rowid', None)
 
-            # Update the school
-            logger.debug(f"Updating school: {school_id} with data: {school_data}")
-            result = worker.update_school(school_id, resume_id=active_resume_id, **school_data)
+            logger.debug(f"Updating school: {actual_school_id} with data: {school_data}")
 
-            if not result:
-                logger.error(f"Failed to update school: {school_id}")
-                flash(f"Failed to update school {school_data.get('name', '')}", "danger")
-                continue
+            # Update the school
+            worker.update_school(
+                school_id=actual_school_id,
+                name=school_data.get('name', ''),
+                location=school_data.get('location', ''),
+                degree=school_data.get('degree', ''),
+                graddate=school_data.get('graddate', ''),
+                resume_id=active_resume_id
+            )
 
             # Process achievements for this school
             for key in form_data:
-                if key.startswith(f"{school_id}_achievement_") and "_description" in key:
-                    achievement_parts = key.split('_achievement_')[1].split('_')
-                    achievement_id = achievement_parts[0]
+                # Check if this is an achievement field for this school
+                if key.startswith(f"{school_id}_achievement_") and not key.endswith('_order'):
+                    # Extract achievement ID from the key
+                    achievement_key_part = key.split(f"{school_id}_achievement_")[1]
+
+                    # Handle the complex achievement ID format
+                    achievement_id = achievement_key_part
+                    if '#ACHIEVEMENT#' in achievement_key_part:
+                        parts = achievement_key_part.split('#ACHIEVEMENT#')
+                        if len(parts) == 2:
+                            achievement_id = parts[1]
+
                     description = form_data[key].strip()
 
-                    if not description:
-                        continue
+                    # Get achievement order if available
+                    order_key = f"{school_id}_achievement_{achievement_key_part}_order"
+                    achievement_order = form_data.get(order_key, "99")
+                    try:
+                        achievement_order = int(achievement_order)
+                    except (ValueError, TypeError):
+                        achievement_order = 99
 
-                    # For new achievements (UUID format)
-                    if len(achievement_id) == 36:  # Standard UUID length
-                        logger.debug(f"Adding new achievement for school {school_id}: {description}")
-                        result = worker.add_school_achievement(
-                            school_id,
-                            description,
-                            resume_id=active_resume_id
-                        )
-                    else:
-                        # For existing achievements
-                        logger.debug(f"Updating achievement: {achievement_id} for school {school_id}")
-                        result = worker.update_school_achievement(
-                            school_id,
-                            achievement_id,
-                            description,
-                            resume_id=active_resume_id
-                        )
+                    logger.debug(
+                        f"Updating achievement {achievement_id} for school {actual_school_id} with description: {description}, order: {achievement_order}")
 
-                    logger.debug(f"Achievement operation result: {result}")
+                    # Update the achievement
+                    worker.update_school_achievement(
+                        achievement_id=achievement_id,
+                        school_id=actual_school_id,
+                        description=description,
+                        achievement_order=achievement_order,
+                        resume_id=active_resume_id
+                    )
 
         flash("Education information updated successfully", "success")
         return redirect(url_for("resume.education"))
 
     except Exception as e:
         logger.error(f"Error in education_post: {str(e)}")
-        import traceback
         logger.error(traceback.format_exc())
         flash("An error occurred while updating education information", "danger")
         return redirect(url_for("resume.education"))
@@ -901,6 +976,9 @@ def delete_school_achievement():
         result = worker.delete_school_achievement(achievement_id, school_id, resume_id)
 
         if result:
+            # Explicitly clear all achievement caches
+            worker.clear_achievement_caches(school_id, resume_id)
+
             logger.info(
                 f"Successfully deleted school achievement {achievement_id} for user {user_id}, resume {resume_id}")
             flash('Achievement deleted successfully', 'success')
@@ -911,7 +989,6 @@ def delete_school_achievement():
         return redirect(url_for('resume.education'))
     except Exception as e:
         logger.error(f"Error in delete_school_achievement route: {str(e)}")
-        import traceback
         logger.error(traceback.format_exc())
         flash('An error occurred while deleting the achievement', 'danger')
         return redirect(url_for('resume.education'))
@@ -963,7 +1040,6 @@ def delete_achievement(achievement_id):
         return redirect(url_for('resume.education'))
     except Exception as e:
         logger.error(f"Error in delete_achievement route: {str(e)}")
-        import traceback
         logger.error(traceback.format_exc())
         flash('An error occurred while deleting the achievement', 'danger')
         return redirect(url_for('resume.education'))
@@ -1055,40 +1131,88 @@ def certifications():
                     else:
                         print(f"DEBUG: Failed to update certification {item_id}")
 
-            # Process new items (starting with "new")
+            # Process new items - handle both formats (new_name and new1_name, new2_name, etc.)
+            # First, check for the list format (new_name)
+            new_items = []
+
+            # Try the list format first
             new_names = form_data.getlist('new_name')
-            new_authorities = form_data.getlist('new_authority')
-            new_dates_achieved = form_data.getlist('new_date_achieved')
-            new_expiration_dates = form_data.getlist('new_expiration_date')
-            new_certorders = form_data.getlist('new_certorder')
+            if new_names:
+                new_authorities = form_data.getlist('new_authority')
+                new_dates_achieved = form_data.getlist('new_date_achieved')
+                new_expiration_dates = form_data.getlist('new_expiration_date')
+                new_certorders = form_data.getlist('new_certorder')
 
-            # Make sure we have the same number of items in each list
-            min_length = min(len(new_names), len(new_authorities), len(new_dates_achieved))
+                # Make sure we have the same number of items in each list
+                min_length = min(len(new_names), len(new_authorities), len(new_dates_achieved))
 
-            for i in range(min_length):
-                name = new_names[i].strip()
-                authority = new_authorities[i].strip()
-                date_achieved = new_dates_achieved[i].strip()
+                for i in range(min_length):
+                    new_items.append({
+                        'name': new_names[i].strip(),
+                        'authority': new_authorities[i].strip(),
+                        'date_achieved': new_dates_achieved[i].strip(),
+                        'expiration_date': new_expiration_dates[i].strip() if i < len(new_expiration_dates) else "",
+                        'certorder': new_certorders[i] if i < len(new_certorders) else "99"
+                    })
+
+            # Then check for the indexed format (new1_name, new2_name, etc.)
+            else:
+                # Find all keys that match the pattern newX_name
+                new_item_indices = set()
+                for key in form_data:
+                    if key.startswith('new') and '_name' in key:
+                        # Extract the index (e.g., "1" from "new1_name")
+                        try:
+                            idx = key.split('_')[0][3:]  # Remove "new" prefix
+                            if idx.isdigit() or idx == "":
+                                new_item_indices.add(idx)
+                        except (IndexError, ValueError):
+                            continue
+
+                print(f"DEBUG: Found new item indices: {new_item_indices}")
+
+                # Process each new item
+                for idx in new_item_indices:
+                    prefix = f"new{idx}_"
+                    name = form_data.get(f"{prefix}name", "").strip()
+                    authority = form_data.get(f"{prefix}authority", "").strip()
+                    date_achieved = form_data.get(f"{prefix}date_achieved", "").strip()
+                    expiration_date = form_data.get(f"{prefix}expiration_date", "").strip()
+
+                    # Get cert order if available
+                    certorder = form_data.get(f"{prefix}certorder", "99")
+
+                    new_items.append({
+                        'name': name,
+                        'authority': authority,
+                        'date_achieved': date_achieved,
+                        'expiration_date': expiration_date,
+                        'certorder': certorder
+                    })
+
+            # Process all collected new items
+            for item in new_items:
+                name = item['name']
+                authority = item['authority']
+                date_achieved = item['date_achieved']
+                expiration_date = item['expiration_date']
 
                 # Skip empty entries
                 if not name and not authority:
                     continue
 
-                # Get expiration date if available
-                expiration_date = new_expiration_dates[i].strip() if i < len(new_expiration_dates) else ""
-
-                # Get cert order if available
+                # Parse certorder
                 try:
-                    certorder = int(new_certorders[i]) if i < len(new_certorders) else 99
+                    certorder = int(item['certorder'])
                 except (ValueError, TypeError):
                     certorder = 99
 
                 print(f"DEBUG: Adding new certification {name}")
                 result = worker.add_certification(
                     name=name,
-                    issuer=authority,
-                    date=date_achieved,
-                    expiry=expiration_date if expiration_date else None,
+                    authority=authority,  # Changed from issuer to authority
+                    date_achieved=date_achieved,  # Changed from date to date_achieved
+                    expiration_date=expiration_date if expiration_date else None,  # Changed from expiry to expiration_date
                     resume_id=active_resume_id,
                     certorder=certorder
                 )
@@ -1134,7 +1258,6 @@ def certifications():
         )
 
     except Exception as e:
-        import traceback
         print(f"DEBUG: Exception in certifications route: {str(e)}")
         print(f"DEBUG: Traceback: {traceback.format_exc()}")
         flash("An error occurred while processing your request.", "danger")
@@ -1516,7 +1639,6 @@ def skills():
         return render_template('skills_index.html', skills=sorted_categories)
 
     except Exception as e:
-        import traceback
         print(f"DEBUG: Exception in skills route: {str(e)}")
         print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return f"Error: {str(e)}", 500

@@ -121,32 +121,53 @@
                                                     <div class="form-text text-muted">Graduation date (month and year)</div>
                                                 </div>
                                             </div>
-
-                                            <!-- Achievements Section -->
                                             <!-- Achievements Section -->
                                             <div class="mb-3">
                                                 <label class="form-label fw-medium">
                                                     <i class="bi bi-trophy me-2"></i>Achievements
                                                 </label>
-                                                <div class="achievements-container" id="{{ school.SK }}_achievements">
-                                                    {% if school.achievements %}
-                                                        {% for achievement in school.achievements %}
-                                                        <div class="achievement-item mb-2" id="achievement-{{ achievement.SK }}">
-                                                            <div class="input-group">
-                                                                <textarea class="form-control bg-light"
-                                                                          name="{{ school.SK }}_achievement_{{ achievement.SK }}"
-                                                                          rows="2">{{ achievement.description }}</textarea>
-                                                                <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
-                                                                        data-achievement-id="{{ achievement.SK }}"
-                                                                        data-school-id="{{ school.SK }}">
-                                                                    <i class="bi bi-trash"></i>
-                                                                </button>
+                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                    <div class="text-muted small">
+                                                        <i class="bi bi-info-circle me-1"></i>Drag to reorder achievements
+                                                    </div>
+                                                </div>
+                                                    <div class="achievements-container sortable-achievements" id="{{ school.SK }}_achievements">
+                                                        {% if school.achievements %}
+                                                            {% for achievement in school.achievements %}
+                                                            <div class="achievement-item mb-2" id="achievement-{{ achievement.SK }}" data-achievement-id="{{ achievement.SK }}">
+                                                                <div class="input-group">
+                                                                    <div class="input-group-text bg-light">
+                                                                        <div class="d-flex flex-column">
+                                                                            <button type="button" class="btn btn-sm btn-link p-0 mb-1 move-up" title="Move up">
+                                                                                <i class="bi bi-arrow-up"></i>
+                                                                            </button>
+                                                                            <button type="button" class="btn btn-sm btn-link p-0 move-down" title="Move down">
+                                                                                <i class="bi bi-arrow-down"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <textarea class="form-control bg-light"
+                                                                              id="{{ school.SK }}_achievement_{{ achievement.SK }}"
+                                                                              name="{{ school.SK }}_achievement_{{ achievement.SK }}"
+                                                                              rows="2">{{ achievement.description }}</textarea>
+                                                                    <div class="input-group-text bg-light">
+                                                                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                                                onclick="openAiHelper('{{ school.SK }}_achievement_{{ achievement.SK }}', 'sentence_restructure', document.getElementById('{{ school.SK }}_achievement_{{ achievement.SK }}').value)">
+                                                                            <i class="bi bi-magic"></i> Improve
+                                                                        </button>
+                                                                    </div>
+                                                                    <input type="hidden" name="{{ school.SK }}_achievement_{{ achievement.SK }}_order" value="{{ loop.index0 }}" class="achievement-order">
+                                                                    <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
+                                                                            data-achievement-id="{{ achievement.SK }}"
+                                                                            data-school-id="{{ school.SK }}">
+                                                                        <i class="bi bi-trash"></i>
+                                                                    </button>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                        {% endfor %}
-                                                    {% else %}
-                                                        <p class="text-muted">No achievements added yet.</p>
-                                                    {% endif %}
+                                                            {% endfor %}
+                                                        {% else %}
+                                                            <p class="text-muted">No achievements added yet.</p>
+                                                        {% endif %}
                                                 </div>
                                                 <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-achievement-button" data-school-id="{{ school.SK }}">
                                                     <i class="bi bi-plus-lg me-1"></i>Add Achievement
@@ -195,6 +216,53 @@
         </div>
     </div>
 </div>
+<!-- Toast notification for success messages -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="toastMessage">
+                <i class="bi bi-check-circle me-2"></i>Education updated successfully!
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+    <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="bi bi-exclamation-triangle me-2"></i>Error updating education. Please try again.
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+
+<!-- AI Improvement Modal -->
+<div class="modal fade" id="aiImprovementModal" tabindex="-1" aria-labelledby="aiImprovementModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aiImprovementModalLabel">AI Achievement Improvement</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <p>Our AI will help improve your educational achievements to make them more impactful and professional.</p>
+                </div>
+                <div id="aiImprovementContent">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="applyAiImprovements">Apply Improvements</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -222,33 +290,47 @@ function addNewAchievement(schoolId) {
         return;
     }
 
-    // Generate a unique ID for the new achievement
-    const achievementUuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0,
-            v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
+    // Remove "No achievements" message if it exists
+    const noAchievementsMsg = achievementsContainer.querySelector('p.text-muted');
+    if (noAchievementsMsg) {
+        noAchievementsMsg.remove();
+    }
 
-    // Create the achievement HTML with the correct naming convention
-    // Format: SCHOOL#123_achievement_UUID_description
+    // Generate a unique ID for the new achievement
+    const achievementUuid = generateUUID();
+    const achievementFieldId = `${schoolId}_achievement_${achievementUuid}_description`;
+
+    // Create the achievement HTML with up/down arrows instead of grip handle
     const achievementHtml = `
-        <div class="achievement-item mb-3 border-start border-3 border-info ps-3" id="achievement_${achievementUuid}">
-            <div class="d-flex align-items-start">
-                <div class="flex-grow-1">
-                    <div class="form-group mb-2">
-                        <textarea name="${schoolId}_achievement_${achievementUuid}_description"
-                                class="form-control"
-                                placeholder="Describe your achievement..."
-                                rows="2"></textarea>
+        <div class="achievement-item mb-3 border-start border-3 border-info ps-3" id="achievement_${achievementUuid}" data-achievement-id="${achievementUuid}">
+            <div class="input-group">
+                <div class="input-group-text bg-light">
+                    <div class="d-flex flex-column">
+                        <button type="button" class="btn btn-sm btn-link p-0 mb-1 move-up" title="Move up">
+                            <i class="bi bi-arrow-up"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-link p-0 move-down" title="Move down">
+                            <i class="bi bi-arrow-down"></i>
+                        </button>
                     </div>
                 </div>
-                <div class="ms-2">
-                    <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
-                            data-achievement-id="${achievementUuid}"
-                            data-school-id="${schoolId}">
-                        <i class="bi bi-trash"></i>
+                <textarea name="${achievementFieldId}"
+                        id="${achievementFieldId}"
+                        class="form-control"
+                        placeholder="Describe your achievement..."
+                        rows="2"></textarea>
+                <div class="input-group-text bg-light">
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="openAiHelper('${achievementFieldId}', 'sentence_restructure')">
+                        <i class="bi bi-magic"></i> Improve
                     </button>
                 </div>
+                <input type="hidden" name="${schoolId}_achievement_${achievementUuid}_order" value="999" class="achievement-order">
+                <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
+                        data-achievement-id="${achievementUuid}"
+                        data-school-id="${schoolId}">
+                    <i class="bi bi-trash"></i>
+                </button>
             </div>
         </div>
     `;
@@ -257,11 +339,200 @@ function addNewAchievement(schoolId) {
     achievementsContainer.insertAdjacentHTML('beforeend', achievementHtml);
 
     // Focus on the new textarea
-    const newTextarea = achievementsContainer.querySelector(`textarea[name="${schoolId}_achievement_${achievementUuid}_description"]`);
+    const newTextarea = achievementsContainer.querySelector(`textarea[name="${achievementFieldId}"]`);
     if (newTextarea) {
         newTextarea.focus();
     }
+
+    // Reinitialize sortable for this container
+    initSortable(achievementsContainer);
+
+    // Update order values
+    updateAchievementOrder(schoolId);
 }
+
+function updateAchievementOrder(schoolId) {
+    const container = document.getElementById(`${schoolId}_achievements`);
+    if (!container) return;
+
+    const items = container.querySelectorAll('.achievement-item');
+    items.forEach((item, index) => {
+        const orderInput = item.querySelector('.achievement-order');
+        if (orderInput) {
+            orderInput.value = index;
+        }
+    });
+}
+
+function initSortable(element) {
+    if (!element) return;
+
+    const schoolId = element.id.replace('_achievements', '');
+    updateAchievementOrder(schoolId);
+}
+
+// Function to handle AI improvement for achievements
+function improveAchievements(schoolId, schoolName, degree) {
+    // Show loading state
+    const button = document.querySelector(`.ai-improve-button[data-school-id="${schoolId}"]`);
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Improving...';
+    button.disabled = true;
+
+    // Get all achievements for this school
+    const container = document.getElementById(`${schoolId}_achievements`);
+    const achievementTextareas = container.querySelectorAll('textarea');
+    const achievements = Array.from(achievementTextareas).map(textarea => textarea.value).filter(text => text.trim());
+
+    if (achievements.length === 0) {
+        alert('Please add at least one achievement to improve.');
+        button.innerHTML = originalText;
+        button.disabled = false;
+        return;
+    }
+
+    // Prepare data for the AI request
+    const data = {
+        school_id: schoolId,
+        school_name: schoolName,
+        degree: degree,
+        achievements: achievements
+    };
+
+    // Send request to the server
+    fetch('/resume/ai-improve-achievements', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success && data.improved_achievements) {
+            // Update the achievements with improved versions
+            achievementTextareas.forEach((textarea, index) => {
+                if (data.improved_achievements[index]) {
+                    textarea.value = data.improved_achievements[index];
+                    textarea.classList.add('bg-success-subtle');
+                    setTimeout(() => {
+                        textarea.classList.remove('bg-success-subtle');
+                    }, 3000);
+                }
+            });
+
+            // Show success message
+            const toast = new bootstrap.Toast(document.getElementById('successToast'));
+            document.getElementById('toastMessage').textContent = 'Achievements improved successfully!';
+            toast.show();
+        } else {
+            throw new Error(data.message || 'Failed to improve achievements');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to improve achievements. Please try again later.');
+    })
+    .finally(() => {
+        // Reset button state
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Initialize everything when the DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Education.js loaded');
+
+    // Initialize Add School button - remove any existing listeners first
+    const addSchoolBtn = document.getElementById('rowAdder');
+    if (addSchoolBtn) {
+        // Remove any existing click listeners to prevent duplicates
+        const newAddSchoolBtn = addSchoolBtn.cloneNode(true);
+        addSchoolBtn.parentNode.replaceChild(newAddSchoolBtn, addSchoolBtn);
+
+        // Add the click listener to the new button
+        newAddSchoolBtn.addEventListener('click', function() {
+            addNewSchool();
+        });
+    }
+
+    // Initialize date pickers for existing fields
+    $('.dateInput').datepicker({
+        format: "mm/yyyy",
+        startView: "months", // Changed from viewMode to startView
+        minViewMode: "months",
+        autoclose: true
+    });
+
+    // Initialize sortable for all achievement containers
+    document.querySelectorAll('.sortable-achievements').forEach(container => {
+        initSortable(container);
+    });
+
+    // Set up event delegation for achievement buttons
+    document.addEventListener('click', function(event) {
+        // Add achievement button
+        if (event.target.closest('.add-achievement-button')) {
+            const button = event.target.closest('.add-achievement-button');
+            const schoolId = button.dataset.schoolId;
+            addNewAchievement(schoolId);
+        }
+
+        // Delete achievement button
+        if (event.target.closest('.delete-achievement')) {
+            const button = event.target.closest('.delete-achievement');
+            const achievementId = button.dataset.achievementId;
+            const schoolId = button.dataset.schoolId;
+            deleteAchievement(schoolId, achievementId);
+        }
+
+        // AI improve button
+        if (event.target.closest('.ai-improve-button')) {
+            const button = event.target.closest('.ai-improve-button');
+            const schoolId = button.dataset.schoolId;
+            const schoolCard = button.closest('.card');
+            const schoolName = schoolCard.querySelector(`#${schoolId}_name`).value;
+            const degree = schoolCard.querySelector(`#${schoolId}_degree`).value;
+            improveAchievements(schoolId, schoolName, degree);
+        }
+
+        // Move up button
+        if (event.target.closest('.move-up')) {
+            const item = event.target.closest('.achievement-item');
+            const prevItem = item.previousElementSibling;
+            if (prevItem && prevItem.classList.contains('achievement-item')) {
+                item.parentNode.insertBefore(item, prevItem);
+                // Update order after moving
+                const container = item.closest('[id$="_achievements"]');
+                const schoolId = container ? container.id.replace('_achievements', '') : '';
+                if (schoolId) {
+                    updateAchievementOrder(schoolId);
+                }
+            }
+        }
+
+        // Move down button
+        if (event.target.closest('.move-down')) {
+            const item = event.target.closest('.achievement-item');
+            const nextItem = item.nextElementSibling;
+            if (nextItem && nextItem.classList.contains('achievement-item')) {
+                item.parentNode.insertBefore(nextItem, item);
+                // Update order after moving
+                const container = item.closest('[id$="_achievements"]');
+                const schoolId = container ? container.id.replace('_achievements', '') : '';
+                if (schoolId) {
+                    updateAchievementOrder(schoolId);
+                }
+            }
+        }
+    });
+});
 
 // Add a function to handle achievement deletion
 function deleteAchievement(schoolId, achievementId) {
@@ -476,96 +747,5 @@ function deleteSchool(schoolId) {
         form.submit();
     }
 }
-
-// Initialize everything when the DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Education.js loaded');
-
-    // Initialize Add School button
-    const addSchoolBtn = document.getElementById('rowAdder');
-    if (addSchoolBtn) {
-        addSchoolBtn.addEventListener('click', function() {
-            addNewSchool();
-        });
-    }
-
-    // Initialize date pickers for existing fields
-    $('.dateInput').datepicker({
-        format: "mm/yyyy",
-        viewMode: "months",
-        minViewMode: "months",
-        autoclose: true
-    });
-
-    // Handle resume selection change
-    const resumeSelect = document.getElementById('resumeSelect');
-    if (resumeSelect) {
-        resumeSelect.addEventListener('change', function() {
-            document.getElementById('resumeSelectForm').submit();
-        });
-    }
-
-    // Set up event delegation for dynamically added elements
-    document.addEventListener('click', function(event) {
-        // Handle delete school buttons
-        if (event.target.closest('.delete-school')) {
-            const button = event.target.closest('.delete-school');
-            const schoolId = button.getAttribute('data-school-id');
-            deleteSchool(schoolId);
-        }
-
-        // Handle add achievement buttons
-        if (event.target.closest('.add-achievement-button')) {
-            const button = event.target.closest('.add-achievement-button');
-            const schoolId = button.getAttribute('data-school-id');
-            addNewAchievement(schoolId);
-        }
-    });
-});
-// Achievement deletion handler
-$(document).on('click', '.delete-achievement', function() {
-    console.log("Delete achievement button clicked");
-
-    // Get the achievement ID
-    const achievementId = $(this).data('achievement-id');
-    console.log("Achievement ID to delete:", achievementId);
-
-    // Confirm deletion
-    if (confirm("Are you sure you want to delete this achievement?")) {
-        // If it's a new achievement (not yet in database), just remove from DOM
-        if (achievementId.startsWith("new-achievement-")) {
-            console.log("Removing temporary achievement from DOM");
-            $(this).closest(".achievement-item").remove();
-        } else {
-            console.log("Submitting form to delete achievement");
-
-            // Create a form and submit it
-            const form = $("<form>")
-                .attr("method", "post")
-                .attr("action", "/resume/education");
-
-            // Add achievement ID as _delete_achievement field
-            $("<input>")
-                .attr("type", "hidden")
-                .attr("name", "_delete_achievement")
-                .attr("value", achievementId)
-                .appendTo(form);
-
-            // Add to DOM and submit
-            form.appendTo("body").submit();
-        }
-    }
-});
-
-// Set up event delegation for delete school buttons
-document.addEventListener('click', function(event) {
-    const deleteButton = event.target.closest('.delete-school');
-    if (deleteButton) {
-        event.preventDefault();
-        const schoolId = deleteButton.getAttribute('data-school-id');
-        console.log(`Delete school button clicked for school ${schoolId}`);
-        deleteSchool(schoolId);
-    }
-});
 </script>
 {% endblock %}

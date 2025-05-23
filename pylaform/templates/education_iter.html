@@ -83,11 +83,29 @@
                             {% if achievements %}
                                 {% for achievement in achievements %}
                                     {% if achievement is defined %}
-                                        <div class="achievement-item mb-2" id="achievement-{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else 'new') }}">
+                                        <div class="achievement-item mb-2" id="achievement-{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else 'new') }}" data-achievement-id="{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else loop.index) }}">
                                             <div class="input-group">
+                                                <div class="input-group-text bg-light">
+                                                    <div class="d-flex flex-column">
+                                                        <button type="button" class="btn btn-sm btn-link p-0 mb-1 move-up" title="Move up">
+                                                            <i class="bi bi-arrow-up"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-link p-0 move-down" title="Move down">
+                                                            <i class="bi bi-arrow-down"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
                                                 <textarea class="form-control bg-light"
+                                                          id="{{ id }}_achievement_{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else loop.index) }}"
                                                           name="{{ id }}_achievement_{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else loop.index) }}"
                                                           rows="2">{{ achievement.description if achievement.description is defined else '' }}</textarea>
+                                                <div class="input-group-text bg-light">
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                            onclick="openAiHelper('{{ id }}_achievement_{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else loop.index) }}', 'sentence_restructure')">
+                                                        <i class="bi bi-magic"></i> Improve
+                                                    </button>
+                                                </div>
+                                                <input type="hidden" name="{{ id }}_achievement_{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else loop.index) }}_order" value="{{ loop.index0 }}" class="achievement-order">
                                                 <button type="button" class="btn btn-sm btn-outline-danger delete-achievement"
                                                         data-achievement-id="{{ achievement.SK if achievement.SK is defined else (achievement.id if achievement.id is defined else loop.index) }}"
                                                         data-school-id="{{ id }}">
